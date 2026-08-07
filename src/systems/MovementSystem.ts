@@ -1,0 +1,72 @@
+// SRC/systems/MovementSystem.ts
+
+import { World } from '../ecs/World';
+import { CollisionSystem } from './CollisionSystem';
+import { PLAYER_ID } from '../config/Constants';
+
+export class MovementSystem {
+  private collisionSystem: CollisionSystem = new CollisionSystem();
+  private readonly ROTATION_SPEED = 5; // Radians per second
+
+  public update(world: World, keys: Record<string, boolean>, dt: number): void {
+    const w = world as any;
+    if (!w.active || !w.active[PLAYER_ID]) return;
+
+    let dirX = 0;
+    let dirY = 0;
+
+    if (keys['w'] || keys['W'] || keys['ArrowUp'] || keys['arrowup']) dirY -= 1;
+    if (keys['s'] || keys['S'] || keys['ArrowDown'] || keys['arrowdown']) dirY += 1;
+    if (keys['a'] || keys['A'] || keys['ArrowLeft'] || keys['arrowleft']) dirX -= 1;
+    if (keys['d'] || keys['D'] || keys['ArrowRight'] || keys['arrowright']) dirX += 1;
+
+    const length = Math.hypot(dirX, dirY);
+    if (length > 0) {
+      dirX /= length;
+      dirY /= length;
+
+      if (w.rotation) {
+        const targetAngle = Math.atan2(dirY, dirX);
+        const currentAngle = w.rotation[PLAYER_ID] || 0;
+        
+        // Calculate the shortest angular distance
+        let angleDiff = targetAngle - currentAngle;
+        
+        // Normalize to [-PI, PI]
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        
+        // Smoothly interpolate towards target angle
+        const maxRotation = this.ROTATION_SPEED * dt;
+        const clampedDiff = Math.max(-maxRotation, Math.min(maxRotation, angleDiff));
+        
+        w.rotation[PLAYER_ID] = currentAngle + clampedDiff;
+      }
+    }
+
+    const speed = w.speed ? w.speed[PLAYER_ID] : 200;
+    const vx = dirX * speed;
+    const vy = dirY * speed;
+
+    if (w.vx) w.vx[PLAYER_ID] = vx;
+    if (w.vy) w.vy[PLAYER_ID] = vy;
+
+    const currentX = w.x ? w.x[PLAYER_ID] : 0;
+    const currentY = w.y ? w.y[PLAYER_ID] : 0;
+    const width = w.w ? w.w[PLAYER_ID] : 32;
+    const height = w.h ? w.h[PLAYER_ID] : 32;
+
+    const nextPos = (this.collisionSystem as any).moveAndSlide(
+      currentX,
+      currentY,
+      vx,
+      vy,
+      width,
+      height,
+      dt
+    );
+
+    if (w.x) w.x[PLAYER_ID] = nextPos.x;
+    if (w.y) w.y[PLAYER_ID] = nextPos.y;
+  }
+}

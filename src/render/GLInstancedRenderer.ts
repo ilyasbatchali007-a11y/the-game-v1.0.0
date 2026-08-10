@@ -206,6 +206,7 @@ export class GLInstancedRenderer {
   private mapDataTextureLoc: WebGLUniformLocation | null;
   private mapDimensionsLoc: WebGLUniformLocation | null;
   private seedLoc: WebGLUniformLocation | null;
+  private sessionSeed: number = 0; // Store seed for the entire session
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -240,6 +241,9 @@ export class GLInstancedRenderer {
     this.mapDataTextureLoc = gl.getUniformLocation(this.program, 'u_mapDataTexture');
     this.mapDimensionsLoc = gl.getUniformLocation(this.program, 'u_mapDimensions');
     this.seedLoc = gl.getUniformLocation(this.program, 'u_seed');
+    
+    // Generate initial random seed for this session (changes only on reload/new game)
+    this.sessionSeed = Math.random() * 10000.0;
     
     // Create map data texture from MAP_TILE_DATA
     this.createMapDataTexture();
@@ -617,9 +621,8 @@ export class GLInstancedRenderer {
     gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
     gl.uniform1i(this.variationRangeEndLoc, 1023);
     gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
-    // Generate a random seed for this session (changes on reload)
-    const seed = Math.random() * 10000.0;
-    gl.uniform1f(this.seedLoc, seed);
+    // Use the stored session seed (consistent throughout gameplay, changes on reload)
+    gl.uniform1f(this.seedLoc, this.sessionSeed);
 
     // Bind atlas texture to TEXTURE0
     gl.activeTexture(gl.TEXTURE0);

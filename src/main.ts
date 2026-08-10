@@ -258,6 +258,11 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnNewGame.addEventListener('click', () => {
+  // Generate new random seed for the renderer (new map layout)
+  if (renderer) {
+    renderer['sessionSeed'] = Math.random() * 10000.0;
+  }
+  
   // Reset world and start new game
   if (world) {
     world = new World();

@@ -89,13 +89,14 @@ uniform int u_variationRangeEnd;   // End of variation tile range
 // Map data texture for static/varying tile info
 uniform sampler2D u_mapDataTexture;
 uniform vec2 u_mapDimensions;      // Map dimensions in tiles (32, 32)
+uniform float u_seed;              // Random seed for variation tiles (changes on reload)
 
 out vec4 fragColor;
 
-// Hash function for deterministic random selection based on tile coordinates
-float hash(vec2 p) {
+// Hash function for deterministic random selection based on tile coordinates and seed
+float hash(vec2 p, float seed) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-  p3 += dot(p3, p3.yzx + 33.33);
+  p3 += dot(p3, p3.yzx + 33.33 + seed);
   return fract((p3.x + p3.y) * p3.z);
 }
 
@@ -151,8 +152,8 @@ void main() {
       // Static tile: use exact tile ID from map data
       tileId = baseTileId;
     } else {
-      // Variation tile: use hash to select random tile from variation range
-      float hashVal = hash(vec2(tileX, tileY));
+      // Variation tile: use hash with seed to select random tile from variation range
+      float hashVal = hash(vec2(tileX, tileY), u_seed);
       float variationCount = float(u_variationRangeEnd - u_variationRangeStart + 1);
       tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
     }
@@ -204,6 +205,7 @@ export class GLInstancedRenderer {
   private variationRangeEndLoc: WebGLUniformLocation | null;
   private mapDataTextureLoc: WebGLUniformLocation | null;
   private mapDimensionsLoc: WebGLUniformLocation | null;
+  private seedLoc: WebGLUniformLocation | null;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -237,6 +239,7 @@ export class GLInstancedRenderer {
     this.variationRangeEndLoc = gl.getUniformLocation(this.program, 'u_variationRangeEnd');
     this.mapDataTextureLoc = gl.getUniformLocation(this.program, 'u_mapDataTexture');
     this.mapDimensionsLoc = gl.getUniformLocation(this.program, 'u_mapDimensions');
+    this.seedLoc = gl.getUniformLocation(this.program, 'u_seed');
     
     // Create map data texture from MAP_TILE_DATA
     this.createMapDataTexture();
@@ -614,6 +617,9 @@ export class GLInstancedRenderer {
     gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
     gl.uniform1i(this.variationRangeEndLoc, 1023);
     gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
+    // Generate a random seed for this session (changes on reload)
+    const seed = Math.random() * 10000.0;
+    gl.uniform1f(this.seedLoc, seed);
 
     // Bind atlas texture to TEXTURE0
     gl.activeTexture(gl.TEXTURE0);

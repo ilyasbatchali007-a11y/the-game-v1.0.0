@@ -77,11 +77,22 @@ canvas.height = window.innerHeight;
   // Initialize camera position to player position so map is visible on first frame
   camera.snapToTarget();
 
-  // 3. Load Placeholder Texture (1x1 White Pixel fallback)
-  const texture = await AssetLoader.loadTexture(
-    ctx,
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-  );
+  // 3. Load Atlas Texture (atlas floor.jpg from /src/atlas pictures/)
+  let texture: WebGLTexture;
+  try {
+    texture = await AssetLoader.loadTexture(
+      ctx,
+      'src/atlas pictures/atlas floor.jpg'
+    );
+    console.log('[Engine] Atlas texture loaded successfully');
+  } catch (error) {
+    console.warn('[Engine] Failed to load atlas texture, using placeholder', error);
+    // Fallback to a simple placeholder texture
+    texture = await AssetLoader.loadTexture(
+      ctx,
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    );
+  }
 
   // 4. Main Game Loop with Fixed Delta Time
   const inputState: Record<string, boolean> = {};

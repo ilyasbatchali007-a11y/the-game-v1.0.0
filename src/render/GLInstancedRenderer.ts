@@ -1,5 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
+import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -17,6 +19,7 @@ uniform vec2 u_cameraOffset;              // Camera offset for scrolling
 
 out float v_faceId;
 out vec2 v_uv;
+out vec2 v_worldPos;  // Pass world position to fragment shader for tile calculation
 
 void main() {
   // Step A: Rotate the local footprint around the entity center so the cube faces movement direction.
@@ -58,19 +61,43 @@ void main() {
   gl_Position = vec4(clipSpace.x, -clipSpace.y, 0.0, 1.0);
   v_faceId = a_vertex.w;
   v_uv = a_vertex.xy;
+  v_worldPos = worldPos;  // Pass world position for floor tile calculation
 }
 `;
 
-// Fragment Shader Source - supports both floor and entity colors with per-face shading
+// Fragment Shader Source - Atlas texture with static and random variation tiles
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
 in float v_faceId;
 in vec2 v_uv;
+in vec2 v_worldPos;  // World position for floor tile calculation
+
 uniform sampler2D u_texture;
-uniform int u_renderMode;  // 0 = floor, 1 = entity
+uniform int u_renderMode;     // 0 = floor, 1 = entity
 uniform vec4 u_entityColor;
+
+// Atlas configuration uniforms
+uniform int u_atlasTileCount;      // Number of tiles per row/column in atlas (32)
+uniform float u_tileSizePixels;    // Size of each tile in pixels (64)
+uniform float u_worldTileSize;     // Size of each game tile in pixels (64)
+uniform int u_staticRangeStart;    // Start of static tile range
+uniform int u_staticRangeEnd;      // End of static tile range
+uniform int u_variationRangeStart; // Start of variation tile range
+uniform int u_variationRangeEnd;   // End of variation tile range
+
+// Map data texture for static/varying tile info
+uniform sampler2D u_mapDataTexture;
+uniform vec2 u_mapDimensions;      // Map dimensions in tiles (32, 32)
+
 out vec4 fragColor;
+
+// Hash function for deterministic random selection based on tile coordinates
+float hash(vec2 p) {
+  vec3 p3 = fract(p3 * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 
 void main() {
   if (u_renderMode == 1) {
@@ -101,16 +128,50 @@ void main() {
     
     fragColor = u_entityColor * brightness;
   } else {
-    // Render as green checkered floor pattern
-    float gridX = mod(floor(v_uv.x * 8.0), 2.0);
-    float gridY = mod(floor(v_uv.y * 8.0), 2.0);
-    float checker = mod(gridX + gridY, 2.0);
+    // FLOOR RENDERING: Calculate tile UVs from world position
     
-    if (checker < 0.5) {
-      fragColor = vec4(0.2, 0.6, 0.2, 1.0);  // Dark green
+    // Calculate which game tile we're in
+    float tileX = floor(v_worldPos.x / u_worldTileSize);
+    float tileY = floor(v_worldPos.y / u_worldTileSize);
+    
+    // Get local position within the tile [0, 1]
+    float localX = fract(v_worldPos.x / u_worldTileSize);
+    float localY = fract(v_worldPos.y / u_worldTileSize);
+    
+    // Determine tile ID from map data or hash
+    float tileId = 0.0;
+    
+    // Sample map data texture to get tile info
+    vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
+    vec4 mapData = texture(u_mapDataTexture, mapUV);
+    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
+    float isStatic = mapData.g;              // Static flag stored in G channel
+    
+    if (isStatic > 0.5) {
+      // Static tile: use exact tile ID from map data
+      tileId = baseTileId;
     } else {
-      fragColor = vec4(0.3, 0.7, 0.3, 1.0);  // Light green
+      // Variation tile: use hash to select random tile from variation range
+      float hashVal = hash(vec2(tileX, tileY));
+      float variationCount = float(u_variationRangeEnd - u_variationRangeStart + 1);
+      tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
     }
+    
+    // Convert tile ID to atlas UV coordinates
+    float tilesPerRow = float(u_atlasTileCount);
+    float tileCol = mod(tileId, tilesPerRow);
+    float tileRow = floor(tileId / tilesPerRow);
+    
+    // Calculate base UV for this tile in atlas
+    float tileUVSize = 1.0 / tilesPerRow;
+    float baseU = tileCol * tileUVSize;
+    float baseV = tileRow * tileUVSize;
+    
+    // Final UV: base tile position + local position within tile
+    vec2 finalUV = vec2(baseU + localX * tileUVSize, baseV + localY * tileUVSize);
+    
+    // Sample the atlas texture
+    fragColor = texture(u_texture, finalUV);
   }
 }
 `;
@@ -123,6 +184,7 @@ export class GLInstancedRenderer {
   private cubeBuffer: WebGLBuffer;             // Static cube geometry buffer
   private floorBuffer: WebGLBuffer;            // Static floor quad buffer
   private instanceBuffer: WebGLBuffer;
+  private mapDataTexture: WebGLTexture | null = null;  // Texture for map tile data
 
   private instanceData: Float32Array;
   private resolutionLoc: WebGLUniformLocation | null;
@@ -131,6 +193,17 @@ export class GLInstancedRenderer {
   private cameraOffsetLoc: WebGLUniformLocation | null;
   private renderModeLoc: WebGLUniformLocation | null;
   private entityColorLoc: WebGLUniformLocation | null;
+  
+  // Atlas texture uniforms
+  private atlasTileCountLoc: WebGLUniformLocation | null;
+  private tileSizePixelsLoc: WebGLUniformLocation | null;
+  private worldTileSizeLoc: WebGLUniformLocation | null;
+  private staticRangeStartLoc: WebGLUniformLocation | null;
+  private staticRangeEndLoc: WebGLUniformLocation | null;
+  private variationRangeStartLoc: WebGLUniformLocation | null;
+  private variationRangeEndLoc: WebGLUniformLocation | null;
+  private mapDataTextureLoc: WebGLUniformLocation | null;
+  private mapDimensionsLoc: WebGLUniformLocation | null;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -153,6 +226,20 @@ export class GLInstancedRenderer {
     this.cameraOffsetLoc = gl.getUniformLocation(this.program, 'u_cameraOffset');
     this.renderModeLoc = gl.getUniformLocation(this.program, 'u_renderMode');
     this.entityColorLoc = gl.getUniformLocation(this.program, 'u_entityColor');
+    
+    // Atlas uniform locations
+    this.atlasTileCountLoc = gl.getUniformLocation(this.program, 'u_atlasTileCount');
+    this.tileSizePixelsLoc = gl.getUniformLocation(this.program, 'u_tileSizePixels');
+    this.worldTileSizeLoc = gl.getUniformLocation(this.program, 'u_worldTileSize');
+    this.staticRangeStartLoc = gl.getUniformLocation(this.program, 'u_staticRangeStart');
+    this.staticRangeEndLoc = gl.getUniformLocation(this.program, 'u_staticRangeEnd');
+    this.variationRangeStartLoc = gl.getUniformLocation(this.program, 'u_variationRangeStart');
+    this.variationRangeEndLoc = gl.getUniformLocation(this.program, 'u_variationRangeEnd');
+    this.mapDataTextureLoc = gl.getUniformLocation(this.program, 'u_mapDataTexture');
+    this.mapDimensionsLoc = gl.getUniformLocation(this.program, 'u_mapDimensions');
+    
+    // Create map data texture from MAP_TILE_DATA
+    this.createMapDataTexture();
 
     // 1. Static Cube Buffer (36 vertices: 6 vertices / 2 triangles per face × 6 faces)
     // Each vertex: x, y, z (local [0..1]), faceId (float) packed into vec4
@@ -393,6 +480,66 @@ export class GLInstancedRenderer {
     // Leave culling disabled while the cube is drawn; other draws re-enable as needed
   }
 
+  /**
+   * Create a texture from MAP_TILE_DATA for the fragment shader to sample
+   * Each pixel stores: R = tileId/1024, G = isStatic (0 or 1)
+   */
+  private createMapDataTexture(): void {
+    const gl = this.gl;
+    
+    // Create a texture with dimensions matching the map (32x32)
+    const texture = gl.createTexture();
+    if (!texture) {
+      console.error('Failed to create map data texture');
+      return;
+    }
+    
+    // Convert MAP_TILE_DATA to RGBA format for texture
+    // R channel: tileId / 1024 (normalized)
+    // G channel: isStatic (0 or 1)
+    // B and A channels: unused (set to 0)
+    const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
+    
+    for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
+      const srcIdx = i * 2;
+      const dstIdx = i * 4;
+      
+      const tileId = MAP_TILE_DATA[srcIdx];
+      const isStatic = MAP_TILE_DATA[srcIdx + 1];
+      
+      // Normalize tileId to [0, 1] range (max 1024 tiles)
+      textureData[dstIdx] = Math.floor((tileId / 1024.0) * 255.0);  // R
+      textureData[dstIdx + 1] = isStatic > 0.5 ? 255 : 0;           // G
+      textureData[dstIdx + 2] = 0;                                   // B
+      textureData[dstIdx + 3] = 255;                                 // A
+    }
+    
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    // Upload texture data - use NEAREST filtering for exact pixel values
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      MAP_COLS,
+      MAP_ROWS,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      textureData
+    );
+    
+    // Use NEAREST filtering to avoid interpolation between tile data
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    this.mapDataTexture = texture;
+  }
+
   private createShader(type: number, source: string): WebGLShader {
     const gl = this.gl;
     const shader = gl.createShader(type);
@@ -457,9 +604,28 @@ export class GLInstancedRenderer {
     gl.uniform1f(this.isoScaleLoc, this.isoScale);
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
+    
+    // Set atlas configuration uniforms
+    gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
+    gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
+    gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
+    gl.uniform1i(this.staticRangeStartLoc, 0);          // Static tiles: 0-99
+    gl.uniform1i(this.staticRangeEndLoc, 99);
+    gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
+    gl.uniform1i(this.variationRangeEndLoc, 1023);
+    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
 
+    // Bind atlas texture to TEXTURE0
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    // Bind map data texture to TEXTURE1
+    gl.activeTexture(gl.TEXTURE1);
+    if (this.mapDataTexture) {
+      gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
+    }
+    // Tell shader which texture unit to use for map data
+    gl.uniform1i(this.mapDataTextureLoc, 1);
 
     gl.bindVertexArray(this.floorVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1); // Draw 1 instance (the floor)

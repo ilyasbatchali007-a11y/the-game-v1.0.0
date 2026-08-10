@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "canvas": "^3.2.3",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
   }

@@ -70,7 +70,19 @@ in vec2 v_uv;
 uniform sampler2D u_texture;
 uniform int u_renderMode;  // 0 = floor, 1 = entity
 uniform vec4 u_entityColor;
+
+// Floor atlas uniforms
+uniform vec2 u_atlasTileSize;     // Size of one tile in atlas texture (1/32, 1/32)
+uniform vec2 u_worldTileCount;    // Number of tiles in world (32, 32)
+uniform float u_variationRange;   // Number of variation tiles (512)
+uniform float u_staticStart;      // Starting index for static tiles (512)
+
 out vec4 fragColor;
+
+// Deterministic hash function for random tile selection
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 void main() {
   if (u_renderMode == 1) {
@@ -101,16 +113,29 @@ void main() {
     
     fragColor = u_entityColor * brightness;
   } else {
-    // Render as green checkered floor pattern
-    float gridX = mod(floor(v_uv.x * 8.0), 2.0);
-    float gridY = mod(floor(v_uv.y * 8.0), 2.0);
-    float checker = mod(gridX + gridY, 2.0);
+    // FLOOR RENDERING: Atlas-based texturing with deterministic variation
     
-    if (checker < 0.5) {
-      fragColor = vec4(0.2, 0.6, 0.2, 1.0);  // Dark green
-    } else {
-      fragColor = vec4(0.3, 0.7, 0.3, 1.0);  // Light green
-    }
+    // Calculate which world tile we're on based on UV coordinates
+    // v_uv ranges from 0 to 1 across the entire floor
+    vec2 worldTileCoord = floor(v_uv * u_worldTileCount);
+    
+    // Get fractional position within the tile (for smooth sampling)
+    vec2 tileLocalUV = fract(v_uv * u_worldTileCount);
+    
+    // Determine tile type: use hash for variation tiles
+    // Hash gives us a value 0-1, multiply by variation range to get tile index
+    float variationIndex = floor(hash(worldTileCoord) * u_variationRange);
+    
+    // Convert tile index to atlas UV coordinates
+    // Atlas is 32x32 grid, so each tile is 1/32 of the texture
+    float atlasCol = mod(variationIndex, 32.0);
+    float atlasRow = floor(variationIndex / 32.0);
+    
+    // Calculate final UV: atlas tile offset + local position within tile
+    vec2 atlasUV = (vec2(atlasCol, atlasRow) + tileLocalUV) * u_atlasTileSize;
+    
+    // Sample the atlas texture
+    fragColor = texture(u_texture, atlasUV);
   }
 }
 `;
@@ -131,6 +156,12 @@ export class GLInstancedRenderer {
   private cameraOffsetLoc: WebGLUniformLocation | null;
   private renderModeLoc: WebGLUniformLocation | null;
   private entityColorLoc: WebGLUniformLocation | null;
+  
+  // Atlas texture uniforms for floor rendering
+  private atlasTileSizeLoc: WebGLUniformLocation | null;
+  private worldTileCountLoc: WebGLUniformLocation | null;
+  private variationRangeLoc: WebGLUniformLocation | null;
+  private staticStartLoc: WebGLUniformLocation | null;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -153,6 +184,12 @@ export class GLInstancedRenderer {
     this.cameraOffsetLoc = gl.getUniformLocation(this.program, 'u_cameraOffset');
     this.renderModeLoc = gl.getUniformLocation(this.program, 'u_renderMode');
     this.entityColorLoc = gl.getUniformLocation(this.program, 'u_entityColor');
+    
+    // Get atlas texture uniform locations
+    this.atlasTileSizeLoc = gl.getUniformLocation(this.program, 'u_atlasTileSize');
+    this.worldTileCountLoc = gl.getUniformLocation(this.program, 'u_worldTileCount');
+    this.variationRangeLoc = gl.getUniformLocation(this.program, 'u_variationRange');
+    this.staticStartLoc = gl.getUniformLocation(this.program, 'u_staticStart');
 
     // 1. Static Cube Buffer (36 vertices: 6 vertices / 2 triangles per face × 6 faces)
     // Each vertex: x, y, z (local [0..1]), faceId (float) packed into vec4
@@ -460,6 +497,16 @@ export class GLInstancedRenderer {
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    // Set atlas texture uniforms for floor rendering
+    // Atlas is 32x32 grid, so each tile is 1/32 of the texture
+    gl.uniform2f(this.atlasTileSizeLoc, 1.0 / 32.0, 1.0 / 32.0);
+    // World is 32x32 tiles
+    gl.uniform2f(this.worldTileCountLoc, 32.0, 32.0);
+    // Variation range: 512 tiles (indices 0-511)
+    gl.uniform1f(this.variationRangeLoc, 512.0);
+    // Static tiles start at index 512
+    gl.uniform1f(this.staticStartLoc, 512.0);
 
     gl.bindVertexArray(this.floorVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1); // Draw 1 instance (the floor)

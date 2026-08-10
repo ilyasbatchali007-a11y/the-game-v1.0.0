@@ -17,6 +17,7 @@ uniform vec2 u_cameraOffset;              // Camera offset for scrolling
 
 out float v_faceId;
 out vec2 v_uv;
+out vec2 v_worldPos;  // Pass world position for floor shader
 
 void main() {
   // Step A: Rotate the local footprint around the entity center so the cube faces movement direction.
@@ -58,19 +59,38 @@ void main() {
   gl_Position = vec4(clipSpace.x, -clipSpace.y, 0.0, 1.0);
   v_faceId = a_vertex.w;
   v_uv = a_vertex.xy;
+  v_worldPos = worldPos;
 }
 `;
 
 // Fragment Shader Source - supports both floor and entity colors with per-face shading
+// Updated to use atlas texture for floor rendering with deterministic tile variation
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
 in float v_faceId;
 in vec2 v_uv;
+in vec2 v_worldPos;  // World position for floor shader
+
 uniform sampler2D u_texture;
 uniform int u_renderMode;  // 0 = floor, 1 = entity
 uniform vec4 u_entityColor;
+
+// Atlas configuration uniforms
+uniform float u_atlasGridSize;      // e.g., 32.0 for 32x32 grid
+uniform float u_tileSize;           // World tile size (64.0)
+uniform float u_variationStart;     // Start of variation tile range
+uniform float u_variationCount;     // Number of variation tiles
+
 out vec4 fragColor;
+
+// Deterministic hash function for random tile selection
+float hashTileCoord(float x, float y, float maxRange) {
+  vec2 p = vec2(x, y);
+  float h = dot(p, vec2(73856093.0, 19349663.0));
+  h = fract(h * 81356093.0);
+  return floor(h * maxRange);
+}
 
 void main() {
   if (u_renderMode == 1) {
@@ -101,16 +121,35 @@ void main() {
     
     fragColor = u_entityColor * brightness;
   } else {
-    // Render as green checkered floor pattern
-    float gridX = mod(floor(v_uv.x * 8.0), 2.0);
-    float gridY = mod(floor(v_uv.y * 8.0), 2.0);
-    float checker = mod(gridX + gridY, 2.0);
+    // Floor rendering with atlas texture
+    // Calculate which tile we're in based on world position
+    float tileX = floor(v_worldPos.x / u_tileSize);
+    float tileY = floor(v_worldPos.y / u_tileSize);
     
-    if (checker < 0.5) {
-      fragColor = vec4(0.2, 0.6, 0.2, 1.0);  // Dark green
-    } else {
-      fragColor = vec4(0.3, 0.7, 0.3, 1.0);  // Light green
-    }
+    // Use deterministic hash to select a variation tile from the atlas
+    float variationIndex = hashTileCoord(tileX, tileY, u_variationCount);
+    float tileIndex = u_variationStart + variationIndex;
+    
+    // Convert tile index to UV coordinates in the atlas
+    float atlasCols = u_atlasGridSize;
+    float col = mod(tileIndex, atlasCols);
+    float row = floor(tileIndex / atlasCols);
+    
+    // Calculate UV within the specific atlas tile
+    float uvTileSize = 1.0 / atlasCols;
+    float localUVX = fract(v_worldPos.x / u_tileSize);
+    float localUVY = fract(v_worldPos.y / u_tileSize);
+    
+    vec2 atlasUV = vec2(
+      col * uvTileSize + localUVX * uvTileSize,
+      row * uvTileSize + localUVY * uvTileSize
+    );
+    
+    // Sample the atlas texture
+    vec4 texColor = texture(u_texture, atlasUV);
+    
+    // Apply a slight tint to distinguish from pure white placeholder
+    fragColor = texColor * vec4(0.95, 1.0, 0.95, 1.0);
   }
 }
 `;
@@ -131,6 +170,12 @@ export class GLInstancedRenderer {
   private cameraOffsetLoc: WebGLUniformLocation | null;
   private renderModeLoc: WebGLUniformLocation | null;
   private entityColorLoc: WebGLUniformLocation | null;
+  
+  // Atlas texture uniforms
+  private atlasGridSizeLoc: WebGLUniformLocation | null;
+  private tileSizeLoc: WebGLUniformLocation | null;
+  private variationStartLoc: WebGLUniformLocation | null;
+  private variationCountLoc: WebGLUniformLocation | null;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -153,6 +198,12 @@ export class GLInstancedRenderer {
     this.cameraOffsetLoc = gl.getUniformLocation(this.program, 'u_cameraOffset');
     this.renderModeLoc = gl.getUniformLocation(this.program, 'u_renderMode');
     this.entityColorLoc = gl.getUniformLocation(this.program, 'u_entityColor');
+    
+    // Atlas texture uniform locations
+    this.atlasGridSizeLoc = gl.getUniformLocation(this.program, 'u_atlasGridSize');
+    this.tileSizeLoc = gl.getUniformLocation(this.program, 'u_tileSize');
+    this.variationStartLoc = gl.getUniformLocation(this.program, 'u_variationStart');
+    this.variationCountLoc = gl.getUniformLocation(this.program, 'u_variationCount');
 
     // 1. Static Cube Buffer (36 vertices: 6 vertices / 2 triangles per face × 6 faces)
     // Each vertex: x, y, z (local [0..1]), faceId (float) packed into vec4
@@ -428,7 +479,12 @@ export class GLInstancedRenderer {
     height: number,
     texture: WebGLTexture,
     cameraX: number = 0,
-    cameraY: number = 0
+    cameraY: number = 0,
+    // Atlas configuration parameters (optional, defaults for 32x32 grid, 64px tiles)
+    atlasGridSize: number = 32.0,
+    tileSize: number = 64.0,
+    variationStart: number = 256.0,
+    variationCount: number = 768.0
   ): void {
     const gl = this.gl;
 
@@ -457,6 +513,12 @@ export class GLInstancedRenderer {
     gl.uniform1f(this.isoScaleLoc, this.isoScale);
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
+    
+    // Set atlas texture uniforms for shader-based tile selection
+    gl.uniform1f(this.atlasGridSizeLoc, atlasGridSize);
+    gl.uniform1f(this.tileSizeLoc, tileSize);
+    gl.uniform1f(this.variationStartLoc, variationStart);
+    gl.uniform1f(this.variationCountLoc, variationCount);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);

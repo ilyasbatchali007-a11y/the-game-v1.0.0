@@ -10,6 +10,7 @@ import { GLInstancedRenderer } from './render/GLInstancedRenderer';
 import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+import { ARENA_FLOOR } from './config/FloorMap';
 // 💡 ADDITION: Initialize MapRenderer
 const mapRenderer = new MapRenderer();
 
@@ -77,11 +78,23 @@ canvas.height = window.innerHeight;
   // Initialize camera position to player position so map is visible on first frame
   camera.snapToTarget();
 
-  // 3. Load Placeholder Texture (1x1 White Pixel fallback)
-  const texture = await AssetLoader.loadTexture(
-    ctx,
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-  );
+  // 3. Load Atlas Texture (with space in filename: "atlas floor.png")
+  // The AssetLoader handles URLs with spaces correctly via encoding
+  let texture: WebGLTexture;
+  try {
+    texture = await AssetLoader.loadTexture(
+      ctx,
+      ARENA_FLOOR.texturePath
+    );
+    console.log('[Engine] Atlas texture loaded successfully:', ARENA_FLOOR.texturePath);
+  } catch (error) {
+    console.warn('[Engine] Failed to load atlas texture, using placeholder:', error);
+    // Fallback to 1x1 white pixel if atlas is not available
+    texture = await AssetLoader.loadTexture(
+      ctx,
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    );
+  }
 
   // 4. Main Game Loop with Fixed Delta Time
   const inputState: Record<string, boolean> = {};
@@ -133,14 +146,18 @@ canvas.height = window.innerHeight;
         canvas.height
       );
 
-      // 2. Render seamless floor in ONE draw call
+      // 2. Render seamless floor in ONE draw call with atlas configuration
       renderer.renderFloor(
         floorData,
         canvas.width,
         canvas.height,
         texture,
         camX,
-        camY
+        camY,
+        ARENA_FLOOR.atlasGridSize || 32.0,
+        ARENA_FLOOR.atlasTilePixels || 64.0,
+        ARENA_FLOOR.variationTileStart || 256.0,
+        ARENA_FLOOR.variationTileEnd ? (ARENA_FLOOR.variationTileEnd - (ARENA_FLOOR.variationTileStart || 256) + 1) : 768.0
       );
     } else {
       // Re-render floor without recalculating data
@@ -150,7 +167,11 @@ canvas.height = window.innerHeight;
         canvas.height,
         texture,
         camX,
-        camY
+        camY,
+        ARENA_FLOOR.atlasGridSize || 32.0,
+        ARENA_FLOOR.atlasTilePixels || 64.0,
+        ARENA_FLOOR.variationTileStart || 256.0,
+        ARENA_FLOOR.variationTileEnd ? (ARENA_FLOOR.variationTileEnd - (ARENA_FLOOR.variationTileStart || 256) + 1) : 768.0
       );
     }
 

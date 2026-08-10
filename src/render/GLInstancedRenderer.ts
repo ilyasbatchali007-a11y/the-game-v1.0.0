@@ -1,5 +1,6 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
+import { IFloorRenderData } from './MapRenderer';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -71,6 +72,7 @@ uniform sampler2D u_texture;
 uniform int u_renderMode;  // 0 = floor, 1 = entity
 uniform vec4 u_entityColor;
 uniform vec4 u_atlasParams; // (uOffset, vOffset, uScale, vScale) for atlas sampling
+uniform vec2 u_tileRepeat;  // Number of times to repeat tiles (width/32, height/32)
 out vec4 fragColor;
 
 void main() {
@@ -103,13 +105,31 @@ void main() {
     fragColor = u_entityColor * brightness;
   } else {
     // Floor rendering with atlas texture
-    // Sample UV coordinates with atlas offset and scale
-    vec2 atlasUV = (v_uv * u_atlasParams.zw) + u_atlasParams.xy;
+    // Calculate tiled UV coordinates
+    vec2 tiledUV = v_uv * u_tileRepeat;
+    
+    // Get the fractional part (which tile we're in) and integer part (which variation)
+    vec2 tileIndex = floor(tiledUV);
+    vec2 tileUV = fract(tiledUV);
+    
+    // Use deterministic randomness based on tile position to pick a random tile from the atlas
+    // This creates variety without flickering
+    float hash = fract(sin(dot(tileIndex, vec2(12.9898, 78.233))) * 43758.5453);
+    
+    // For a 32x32 grid, each tile is 1/32 of the atlas
+    float gridScale = 1.0 / 32.0;
+    
+    // Pick a random column and row based on the hash
+    float randomCol = floor(hash * 32.0);
+    float randomRow = floor(fract(hash * 100.0) * 32.0);
+    
+    // Calculate final UV: offset to the random tile + local UV within that tile
+    vec2 atlasUV = vec2(randomCol * gridScale, randomRow * gridScale) + (tileUV * gridScale);
     
     // Sample the atlas texture
     vec4 texColor = texture(u_texture, atlasUV);
     
-    // If texture has alpha, use it; otherwise use full opacity
+    // If texture has alpha, use it; otherwise use fallback checkerboard
     if (texColor.a < 0.1) {
       // Fallback to green checkerboard if no texture loaded
       float gridX = mod(floor(v_uv.x * 8.0), 2.0);
@@ -145,12 +165,17 @@ export class GLInstancedRenderer {
   private renderModeLoc: WebGLUniformLocation | null;
   private entityColorLoc: WebGLUniformLocation | null;
   private atlasParamsLoc: WebGLUniformLocation | null;
+  private tileRepeatLoc: WebGLUniformLocation | null;
   
   // Atlas texture parameters (uOffset, vOffset, uScale, vScale)
   private atlasUOffset: number = 0;
   private atlasVOffset: number = 0;
   private atlasUScale: number = 1;
   private atlasVScale: number = 1;
+  
+  // Tile repeat for floor rendering (how many tiles across/down)
+  private tileRepeatX: number = 64;  // 2048 / 32 = 64 tiles
+  private tileRepeatY: number = 64;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -174,6 +199,7 @@ export class GLInstancedRenderer {
     this.renderModeLoc = gl.getUniformLocation(this.program, 'u_renderMode');
     this.entityColorLoc = gl.getUniformLocation(this.program, 'u_entityColor');
     this.atlasParamsLoc = gl.getUniformLocation(this.program, 'u_atlasParams');
+    this.tileRepeatLoc = gl.getUniformLocation(this.program, 'u_tileRepeat');
 
     // 1. Static Cube Buffer (36 vertices: 6 vertices / 2 triangles per face × 6 faces)
     // Each vertex: x, y, z (local [0..1]), faceId (float) packed into vec4
@@ -371,6 +397,70 @@ export class GLInstancedRenderer {
   }
   
   /**
+   * Render floor as a single quad with atlas texture support
+   * @param floorData Floor render data (null to reuse previous data)
+   * @param width Canvas width
+   * @param height Canvas height
+   * @param texture WebGL texture
+   * @param cameraX Camera X offset
+   * @param cameraY Camera Y offset
+   */
+  public renderFloor(
+    floorData: IFloorRenderData | null,
+    width: number,
+    height: number,
+    texture: WebGLTexture,
+    cameraX: number = 0,
+    cameraY: number = 0
+  ): void {
+    const gl = this.gl;
+    
+    // Use default floor data if none provided
+    const data = floorData || {
+      x: 0,
+      y: 0,
+      width: 2048,
+      height: 2048,
+      texturePath: '',
+      repeatX: 64,  // 2048 / 32 = 64 tiles
+      repeatZ: 64
+    };
+    
+    gl.useProgram(this.program);
+    gl.uniform2f(this.resolutionLoc, width, height);
+    gl.uniform1f(this.isoAngleLoc, this.isoAngle);
+    gl.uniform1f(this.isoScaleLoc, this.isoScale);
+    gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
+    
+    // Set atlas parameters (not used in current shader but kept for future static tile support)
+    gl.uniform4f(this.atlasParamsLoc, this.atlasUOffset, this.atlasVOffset, this.atlasUScale, this.atlasVScale);
+    
+    // Set tile repeat uniform for the shader to calculate proper tiling
+    gl.uniform2f(this.tileRepeatLoc, data.repeatX, data.repeatZ);
+    
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    // Floor is a single entity covering the whole map
+    // Pack floor instance data: px, py, width, height, cubeHeight=0, rotation=0, elevation=0
+    this.instanceData[0] = data.x;
+    this.instanceData[1] = data.y;
+    this.instanceData[2] = data.width;
+    this.instanceData[3] = data.height;
+    this.instanceData[4] = 0.0; // cubeHeight
+    this.instanceData[5] = 0.0; // rotation
+    this.instanceData[6] = 0.0; // elevation
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
+    
+    // Use the floor VAO for flat entities (quad = 6 vertices, 1 instance)
+    gl.bindVertexArray(this.floorVAO);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1);
+    gl.bindVertexArray(null);
+  }
+  
+  /**
    * Set atlas texture parameters for sampling specific regions
    * @param uOffset UV offset U (0-1)
    * @param vOffset UV offset V (0-1)
@@ -457,51 +547,5 @@ export class GLInstancedRenderer {
       throw new Error(`Program link failed: ${info}`);
     }
     return prog;
-  }
-
-  public renderFloor(
-    floorData: { x: number; y: number; width: number; height: number } | null,
-    width: number,
-    height: number,
-    texture: WebGLTexture,
-    cameraX: number = 0,
-    cameraY: number = 0
-  ): void {
-    const gl = this.gl;
-
-    // Only update floor data if provided (camera moved)
-    if (floorData !== null) {
-      // Pack floor data: x, y, width, height, height=0
-      this.instanceData[0] = floorData.x;
-      this.instanceData[1] = floorData.y;
-      this.instanceData[2] = floorData.width;
-      this.instanceData[3] = floorData.height;
-      this.instanceData[4] = 0.0; // cubeHeight = 0 for floor
-      this.instanceData[5] = 0.0; // rotation = 0 for floor
-      this.instanceData[6] = 0.0; // elevation = 0 for floor
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
-    }
-
-    // Disable culling for floor rendering
-    gl.disable(gl.CULL_FACE);
-
-    // Draw single quad for the entire floor
-    gl.useProgram(this.program);
-    gl.uniform2f(this.resolutionLoc, width, height);
-    gl.uniform1f(this.isoAngleLoc, this.isoAngle);
-    gl.uniform1f(this.isoScaleLoc, this.isoScale);
-    gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
-    gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
-    // Set atlas parameters for texture sampling
-    gl.uniform4f(this.atlasParamsLoc, this.atlasUOffset, this.atlasVOffset, this.atlasUScale, this.atlasVScale);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-
-    gl.bindVertexArray(this.floorVAO);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1); // Draw 1 instance (the floor)
-    gl.bindVertexArray(null);
   }
 }

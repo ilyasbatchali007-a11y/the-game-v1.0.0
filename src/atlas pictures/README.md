@@ -60,29 +60,61 @@ The game automatically picks different variations based on world coordinates.
 
 ## Shader Integration
 
-The fragment shader now samples the atlas using:
+The fragment shader now uses procedural random tiling with deterministic hash-based variation:
+
 ```glsl
-vec2 atlasUV = (v_uv * u_atlasParams.zw) + u_atlasParams.xy;
+// Calculate tiled UV coordinates
+vec2 tiledUV = v_uv * u_tileRepeat;
+
+// Get the fractional part (which tile we're in) and integer part (tile index)
+vec2 tileIndex = floor(tiledUV);
+vec2 tileUV = fract(tiledUV);
+
+// Use deterministic randomness based on tile position
+float hash = fract(sin(dot(tileIndex, vec2(12.9898, 78.233))) * 43758.5453);
+
+// For a 32x32 grid, each tile is 1/32 of the atlas
+float gridScale = 1.0 / 32.0;
+
+// Pick a random column and row based on the hash
+float randomCol = floor(hash * 32.0);
+float randomRow = floor(fract(hash * 100.0) * 32.0);
+
+// Calculate final UV: offset to the random tile + local UV within that tile
+vec2 atlasUV = vec2(randomCol * gridScale, randomRow * gridScale) + (tileUV * gridScale);
+
 vec4 texColor = texture(u_texture, atlasUV);
 ```
 
-Where `u_atlasParams` = `(uOffset, vOffset, uScale, vScale)`
+Where `u_tileRepeat` = `(width/32, height/32)` - number of tiles across the map.
 
 ## Code Usage Example
 
 ```typescript
 import { GLInstancedRenderer } from './render/GLInstancedRenderer';
-import { getTileUV, FLOOR_ATLAS } from './config/AtlasConfig';
+import { MapRenderer } from './render/MapRenderer';
 
-// Get UV params for grass
-const uv = getTileUV('grass_1', FLOOR_ATLAS);
+// Create renderers
+const mapRenderer = new MapRenderer();
+const renderer = new GLInstancedRenderer(gl, MAX_ENTITIES);
 
-// Set atlas parameters before rendering
-renderer.setAtlasParams(uv.uOffset, uv.vOffset, uv.uScale, uv.uScale);
+// Load your atlas texture
+const texture = await AssetLoader.loadTexture(gl, 'src/atlas pictures/atlas floor.png');
 
-// Render with atlas texture
-renderer.render(world, width, height, texture, cameraX, cameraY);
+// In your render loop:
+const floorData = mapRenderer.getFloorData(cameraX, cameraY, canvas.width, canvas.height);
+
+renderer.renderFloor(
+  floorData,
+  canvas.width,
+  canvas.height,
+  texture,
+  cameraX,
+  cameraY
+);
 ```
+
+**Note:** The current implementation uses automatic random variation for all tiles. Future updates will add support for static tiles via the AtlasConfig system.
 
 ## File Structure
 

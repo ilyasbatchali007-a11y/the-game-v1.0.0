@@ -70,6 +70,7 @@ in vec2 v_uv;
 uniform sampler2D u_texture;
 uniform int u_renderMode;  // 0 = floor, 1 = entity
 uniform vec4 u_entityColor;
+uniform vec4 u_atlasParams; // (uOffset, vOffset, uScale, vScale) for atlas sampling
 out vec4 fragColor;
 
 void main() {
@@ -101,15 +102,27 @@ void main() {
     
     fragColor = u_entityColor * brightness;
   } else {
-    // Render as green checkered floor pattern
-    float gridX = mod(floor(v_uv.x * 8.0), 2.0);
-    float gridY = mod(floor(v_uv.y * 8.0), 2.0);
-    float checker = mod(gridX + gridY, 2.0);
+    // Floor rendering with atlas texture
+    // Sample UV coordinates with atlas offset and scale
+    vec2 atlasUV = (v_uv * u_atlasParams.zw) + u_atlasParams.xy;
     
-    if (checker < 0.5) {
-      fragColor = vec4(0.2, 0.6, 0.2, 1.0);  // Dark green
+    // Sample the atlas texture
+    vec4 texColor = texture(u_texture, atlasUV);
+    
+    // If texture has alpha, use it; otherwise use full opacity
+    if (texColor.a < 0.1) {
+      // Fallback to green checkerboard if no texture loaded
+      float gridX = mod(floor(v_uv.x * 8.0), 2.0);
+      float gridY = mod(floor(v_uv.y * 8.0), 2.0);
+      float checker = mod(gridX + gridY, 2.0);
+      
+      if (checker < 0.5) {
+        fragColor = vec4(0.2, 0.6, 0.2, 1.0);  // Dark green
+      } else {
+        fragColor = vec4(0.3, 0.7, 0.3, 1.0);  // Light green
+      }
     } else {
-      fragColor = vec4(0.3, 0.7, 0.3, 1.0);  // Light green
+      fragColor = texColor;
     }
   }
 }
@@ -131,6 +144,13 @@ export class GLInstancedRenderer {
   private cameraOffsetLoc: WebGLUniformLocation | null;
   private renderModeLoc: WebGLUniformLocation | null;
   private entityColorLoc: WebGLUniformLocation | null;
+  private atlasParamsLoc: WebGLUniformLocation | null;
+  
+  // Atlas texture parameters (uOffset, vOffset, uScale, vScale)
+  private atlasUOffset: number = 0;
+  private atlasVOffset: number = 0;
+  private atlasUScale: number = 1;
+  private atlasVScale: number = 1;
   
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
@@ -153,6 +173,7 @@ export class GLInstancedRenderer {
     this.cameraOffsetLoc = gl.getUniformLocation(this.program, 'u_cameraOffset');
     this.renderModeLoc = gl.getUniformLocation(this.program, 'u_renderMode');
     this.entityColorLoc = gl.getUniformLocation(this.program, 'u_entityColor');
+    this.atlasParamsLoc = gl.getUniformLocation(this.program, 'u_atlasParams');
 
     // 1. Static Cube Buffer (36 vertices: 6 vertices / 2 triangles per face × 6 faces)
     // Each vertex: x, y, z (local [0..1]), faceId (float) packed into vec4
@@ -334,6 +355,8 @@ export class GLInstancedRenderer {
     gl.uniform1f(this.isoAngleLoc, this.isoAngle);
     gl.uniform1f(this.isoScaleLoc, this.isoScale);
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
+    // Set atlas parameters for texture sampling
+    gl.uniform4f(this.atlasParamsLoc, this.atlasUOffset, this.atlasVOffset, this.atlasUScale, this.atlasVScale);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -345,6 +368,20 @@ export class GLInstancedRenderer {
     gl.bindVertexArray(this.floorVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
     gl.bindVertexArray(null);
+  }
+  
+  /**
+   * Set atlas texture parameters for sampling specific regions
+   * @param uOffset UV offset U (0-1)
+   * @param vOffset UV offset V (0-1)
+   * @param uScale UV scale U (0-1)
+   * @param vScale UV scale V (0-1)
+   */
+  public setAtlasParams(uOffset: number, vOffset: number, uScale: number, vScale: number): void {
+    this.atlasUOffset = uOffset;
+    this.atlasVOffset = vOffset;
+    this.atlasUScale = uScale;
+    this.atlasVScale = vScale;
   }
   
   /**
@@ -457,6 +494,8 @@ export class GLInstancedRenderer {
     gl.uniform1f(this.isoScaleLoc, this.isoScale);
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
+    // Set atlas parameters for texture sampling
+    gl.uniform4f(this.atlasParamsLoc, this.atlasUOffset, this.atlasVOffset, this.atlasUScale, this.atlasVScale);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);

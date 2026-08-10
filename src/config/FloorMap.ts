@@ -10,7 +10,7 @@ export interface FloorConfig {
 export const ARENA_FLOOR: FloorConfig = {
   width: 2048.0,
   depth: 2048.0,
-  texturePath: 'assets/textures/floor.png',
+  texturePath: 'src/atlas pictures/atlas floor.png',
   repeatX: 32.0,
   repeatZ: 32.0,
 };

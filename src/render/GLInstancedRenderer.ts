@@ -168,8 +168,13 @@ void main() {
     float baseU = tileCol * tileUVSize;
     float baseV = tileRow * tileUVSize;
     
-    // Final UV: base tile position + local position within tile
-    vec2 finalUV = vec2(baseU + localX * tileUVSize, baseV + localY * tileUVSize);
+    // Apply a small margin to prevent texture bleeding (chessboard lines)
+    // This shrinks the UV sample area slightly away from the tile edges
+    float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
+    
+    // Final UV: base tile position + local position within tile (with margin)
+    vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
+    vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);
     
     // Sample the atlas texture
     fragColor = texture(u_texture, finalUV);

@@ -138,6 +138,7 @@ void main() {
     // Get local position within the tile [0, 1]
     float localX = fract(v_worldPos.x / u_worldTileSize);
     float localY = fract(v_worldPos.y / u_worldTileSize);
+    vec2 localUV = vec2(localX, localY);
     
     // Determine tile ID from map data or hash
     float tileId = 0.0;

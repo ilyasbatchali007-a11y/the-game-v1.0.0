@@ -1,6 +1,6 @@
 export const TILE_SIZE = 64;
-export const MAP_COLS = 32;
-export const MAP_ROWS = 32;
+export const MAP_COLS = 160;
+export const MAP_ROWS = 160;
 export const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 export const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 
@@ -19,7 +19,7 @@ export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2);
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
 
 export function generateTestMap(): void {
-  // Create a 16x16 pattern within the 32x32 map
+  // Create a 16x16 pattern within the 160x160 map
   // 1 = Original Atlas Floor (ID 100), 0 = Void (nothing rendered)
   // Pattern has ~15% void holes in an interconnected design
   

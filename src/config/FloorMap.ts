@@ -14,13 +14,13 @@ export interface FloorConfig {
   variationTileRangeEnd: number;
 }
 
-// Floor dimensions match the world size (32 tiles x 64px = 2048px)
+// Floor dimensions match the world size (160 tiles x 64px = 10240px)
 export const ARENA_FLOOR: FloorConfig = {
-  width: 2048.0,
-  depth: 2048.0,
+  width: 10240.0,
+  depth: 10240.0,
   texturePath: 'src/atlas pictures/atlas floor.jpg',
-  repeatX: 32.0,
-  repeatZ: 32.0,
+  repeatX: 160.0,
+  repeatZ: 160.0,
   // Atlas configuration
   useAtlas: true,
   atlasTileCountX: 32,  // 32x32 grid in atlas

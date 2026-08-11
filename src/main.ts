@@ -319,17 +319,21 @@ function renderSaveSlots() {
       
       if (slotData.occupied) {
         // Load existing save - engine should already be initialized
+        console.log(`[UI] Attempting to load save slot ${i}`);
         const buffer = SaveSlotManager.loadFromSlot(i);
         if (buffer && world) {
+          console.log(`[UI] Buffer loaded, size: ${buffer.byteLength} bytes`);
           SaveManager.loadWorld(world, buffer);
           currentSlotId = i;
-          console.log(`[UI] Loaded save slot ${i}`);
+          console.log(`[UI] Successfully loaded save slot ${i}, starting game`);
           startGame();
         } else {
           console.error('[UI] Failed to load save slot', i, 'buffer:', !!buffer, 'world:', !!world);
+          alert('Failed to load save file. The save data may be corrupted.');
         }
       } else {
         // Start new game in this slot - engine should already be initialized
+        console.log(`[UI] Starting new game in slot ${i}`);
         startNewGameInSlot(i);
       }
     });

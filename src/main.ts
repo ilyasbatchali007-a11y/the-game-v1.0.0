@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA } from './config/MapData';
+import { generateTestMap, MAP_DATA, getTileData, TILE_SIZE, MAP_COLS, MAP_ROWS } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';

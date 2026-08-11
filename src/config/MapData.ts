@@ -80,18 +80,7 @@ export function generateTestMap(): void {
     }
   }
   
-  // Add border walls (unchanged from original)
-  for (let row = 0; row < MAP_ROWS; row++) {
-    for (let col = 0; col < MAP_COLS; col++) {
-      if (row === 0 || row === MAP_ROWS - 1 || col === 0 || col === MAP_COLS - 1) {
-        const idx = row * MAP_COLS + col;
-        const dataIdx = idx * 2;
-        MAP_DATA[idx] = 2; // Wall
-        MAP_TILE_DATA[dataIdx] = 5;     // Use tile ID 5 from atlas for walls
-        MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
-      }
-    }
-  }
+  // No border walls - pattern floats in void space
 }
 
 export function isTileBlocking(col: number, row: number): boolean {

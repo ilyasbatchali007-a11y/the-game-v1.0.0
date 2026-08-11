@@ -149,6 +149,11 @@ void main() {
     float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
     float isStatic = mapData.g;              // Static flag stored in G channel
     
+    // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
+    if (baseTileId < 0.5 && isStatic > 0.5) {
+      discard; // Void tile - don't render anything
+    }
+    
     if (isStatic > 0.5) {
       // Static tile: use exact tile ID from map data
       tileId = baseTileId;

@@ -19,39 +19,78 @@ export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2);
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
 
 export function generateTestMap(): void {
-  // Fill entire map with floor tiles (0 = passable floor)
-  MAP_DATA.fill(0);
+  // Create a 16x16 pattern within the 32x32 map
+  // 1 = Original Atlas Floor (ID 100), 0 = Void (nothing rendered)
+  // Pattern has ~15% void holes in an interconnected design
   
-  // Initialize atlas tile data
-  // For variation tiles (grass), we set isStatic=false and use a variation range
-  // For static tiles (walls, paths), we set isStatic=true with specific tileId
+  const patternSize = 16;
+  const offsetX = Math.floor((MAP_COLS - patternSize) / 2);
+  const offsetY = Math.floor((MAP_ROWS - patternSize) / 2);
+  
+  // The interconnected pattern with ~15% void (38 voids out of 256)
+  const floorPattern: number[][] = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,0,0,1,1,0,0,1,1,1,1,1],
+    [1,1,1,1,1,0,0,1,1,0,0,1,1,1,1,1],
+    [1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1],
+    [1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1],
+    [1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1],
+    [1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1],
+    [1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1],
+    [1,1,1,1,1,1,0,0,1,1,0,0,1,1,1,1],
+    [1,1,1,1,1,1,0,0,1,1,0,0,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  ];
+  
+  // Initialize all tiles as void (0) first
+  MAP_DATA.fill(0);
+  MAP_TILE_DATA.fill(0);
+  
+  // Apply the pattern
   for (let row = 0; row < MAP_ROWS; row++) {
     for (let col = 0; col < MAP_COLS; col++) {
       const idx = row * MAP_COLS + col;
       const dataIdx = idx * 2;
       
-      if (row === 0 || row === MAP_ROWS - 1 || col === 0 || col === MAP_COLS - 1) {
-        // Border walls - static tiles with specific ID
-        MAP_DATA[idx] = 2; // Wall
-        MAP_TILE_DATA[dataIdx] = 5;     // Use tile ID 5 from atlas for walls
-        MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
+      // Check if within pattern area
+      let tileValue = 0; // Default void
+      if (row >= offsetY && row < offsetY + patternSize &&
+          col >= offsetX && col < offsetX + patternSize) {
+        const patternRow = row - offsetY;
+        const patternCol = col - offsetX;
+        tileValue = floorPattern[patternRow][patternCol];
+      }
+      
+      if (tileValue === 1) {
+        // Original Atlas Floor - use ID 100 (variation tile)
+        MAP_DATA[idx] = 0; // Floor type
+        MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
+        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
       } else {
-        // Floor tiles - use random variations
-        MAP_DATA[idx] = 0; // Floor
-        MAP_TILE_DATA[dataIdx] = 100;    // Start of variation range (grass tiles)
-        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false, use hash-based selection
+        // Void - nothing will be rendered here
+        MAP_DATA[idx] = 0;
+        MAP_TILE_DATA[dataIdx] = 0;      // Tile ID 0 (void)
+        MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
       }
     }
   }
   
-  // Add some static path tiles as an example
-  const pathY = Math.floor(MAP_ROWS / 2);
-  for (let col = 1; col < MAP_COLS - 1; col++) {
-    const idx = pathY * MAP_COLS + col;
-    const dataIdx = idx * 2;
-    MAP_DATA[idx] = 1; // Decoration/path
-    MAP_TILE_DATA[dataIdx] = 10;     // Use tile ID 10 from atlas for path
-    MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
+  // Add border walls (unchanged from original)
+  for (let row = 0; row < MAP_ROWS; row++) {
+    for (let col = 0; col < MAP_COLS; col++) {
+      if (row === 0 || row === MAP_ROWS - 1 || col === 0 || col === MAP_COLS - 1) {
+        const idx = row * MAP_COLS + col;
+        const dataIdx = idx * 2;
+        MAP_DATA[idx] = 2; // Wall
+        MAP_TILE_DATA[dataIdx] = 5;     // Use tile ID 5 from atlas for walls
+        MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
+      }
+    }
   }
 }
 

@@ -37,8 +37,10 @@ export function generateTestMap(): void {
         MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
       } else {
         // Floor tiles - use random variations from the new larger range
+        // Each tile gets a different base ID in the variation range
+        const randomOffset = Math.floor(Math.random() * 130); // 0-129
         MAP_DATA[idx] = 0; // Floor
-        MAP_TILE_DATA[dataIdx] = 51;     // Start of variation range (tiles 51-181)
+        MAP_TILE_DATA[dataIdx] = 51 + randomOffset; // Random tile ID between 51-180
         MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false, use hash-based selection
       }
     }

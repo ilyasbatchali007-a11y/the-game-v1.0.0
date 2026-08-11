@@ -8,42 +8,40 @@ export interface SaveSlot {
   data: ArrayBuffer;
 }
 
+export interface SlotInfo {
+  id: number;
+  occupied: boolean;
+  name?: string;
+  timestamp?: number;
+}
+
 export class SaveSlotManager {
   private static STORAGE_PREFIX = 'ecs_save_';
-  private static MAX_SLOTS = 10;
+  private static NUM_SLOTS = 3;
 
-  public static getSaveSlots(): SaveSlot[] {
-    const slots: SaveSlot[] = [];
+  public static getSlotInfo(slotId: number): SlotInfo {
+    const key = `${this.STORAGE_PREFIX}${slotId}`;
+    const savedData = localStorage.getItem(key);
     
-    for (let i = 0; i < this.MAX_SLOTS; i++) {
-      const key = `${this.STORAGE_PREFIX}${i}`;
-      const savedData = localStorage.getItem(key);
-      
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData);
-          const binaryString = atob(parsed.data);
-          const buffer = new ArrayBuffer(binaryString.length);
-          const view = new Uint8Array(buffer);
-          
-          for (let j = 0; j < binaryString.length; j++) {
-            view[j] = binaryString.charCodeAt(j);
-          }
-          
-          slots.push({
-            id: i,
-            name: parsed.name || `Save ${i + 1}`,
-            timestamp: parsed.timestamp || 0,
-            data: buffer
-          });
-        } catch (e) {
-          console.warn(`Failed to load save slot ${i}:`, e);
-          localStorage.removeItem(key);
-        }
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        return {
+          id: slotId,
+          occupied: true,
+          name: parsed.name || `Save ${slotId + 1}`,
+          timestamp: parsed.timestamp || 0
+        };
+      } catch (e) {
+        console.warn(`Failed to load save slot ${slotId}:`, e);
+        localStorage.removeItem(key);
       }
     }
     
-    return slots.sort((a, b) => b.timestamp - a.timestamp);
+    return {
+      id: slotId,
+      occupied: false
+    };
   }
 
   public static saveToSlot(world: World, slotId: number, name?: string): boolean {

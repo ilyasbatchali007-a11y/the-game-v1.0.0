@@ -1,1 +1,24 @@
-(src/render/GLInstancedRenderer.ts)
+```
+# Build artifacts
+dist/
+build/
+*.js
+*.css
+*.map
+
+# Dependencies
+node_modules/
+
+# Editors
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+```

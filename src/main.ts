@@ -235,9 +235,9 @@ window.addEventListener('keydown', (e) => {
   // Quick save shortcut (Ctrl+S)
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
-    if (world && currentSlotId !== null) {
-      SaveSlotManager.saveToSlot(world, currentSlotId, `Save Slot ${currentSlotId + 1}`);
-      console.log('[UI] Quick saved to slot', currentSlotId);
+    if (world && currentSlotId !== null && renderer) {
+      SaveSlotManager.saveToSlot(world, currentSlotId, `Save Slot ${currentSlotId + 1}`, renderer['sessionSeed']);
+      console.log('[UI] Quick saved to slot', currentSlotId, 'with seed', renderer['sessionSeed']);
     }
   }
 });
@@ -321,14 +321,17 @@ function renderSaveSlots() {
         // Load existing save - engine should already be initialized
         console.log(`[UI] Attempting to load save slot ${i}`);
         const buffer = SaveSlotManager.loadFromSlot(i);
-        if (buffer && world) {
+        if (buffer && world && renderer) {
           console.log(`[UI] Buffer loaded, size: ${buffer.byteLength} bytes`);
-          SaveManager.loadWorld(world, buffer);
+          const loadResult = SaveManager.loadWorld(world, buffer);
           currentSlotId = i;
-          console.log(`[UI] Successfully loaded save slot ${i}, starting game`);
+          
+          // Restore the seed from the saved data to ensure same map layout
+          renderer['sessionSeed'] = loadResult.seed;
+          console.log(`[UI] Successfully loaded save slot ${i} with seed ${loadResult.seed}, starting game`);
           startGame();
         } else {
-          console.error('[UI] Failed to load save slot', i, 'buffer:', !!buffer, 'world:', !!world);
+          console.error('[UI] Failed to load save slot', i, 'buffer:', !!buffer, 'world:', !!world, 'renderer:', !!renderer);
           alert('Failed to load save file. The save data may be corrupted.');
         }
       } else {

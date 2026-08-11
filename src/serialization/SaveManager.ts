@@ -1,11 +1,11 @@
 import { World } from '../ecs/World';
 
 // Binary Layout Constants (Offsets in Bytes)
-const HEADER_SIZE = 8;
+const HEADER_SIZE = 12; // Added 4 bytes for seed (was 8)
 const BYTES_PER_ENTITY = 29; // 7 Floats (28 bytes) + 1 Uint8 (1 byte)
 
 export class SaveManager {
-  public static saveWorld(world: World): ArrayBuffer {
+  public static saveWorld(world: World, seed: number): ArrayBuffer {
     const worldAny = world as any;
     const count = worldAny.set.count;
     const bufferSize = HEADER_SIZE + count * BYTES_PER_ENTITY;
@@ -13,8 +13,9 @@ export class SaveManager {
 
     const view = new DataView(buffer);
 
-    // 1. Write Header (Entity count)
+    // 1. Write Header (Entity count + seed)
     view.setUint32(0, count, true);
+    view.setFloat32(4, seed, true); // Save the seed
 
     let offset = HEADER_SIZE;
     const { dense } = worldAny.set;
@@ -38,9 +39,10 @@ export class SaveManager {
     return buffer;
   }
 
-  public static loadWorld(world: World, buffer: ArrayBuffer): void {
+  public static loadWorld(world: World, buffer: ArrayBuffer): { seed: number } {
     const view = new DataView(buffer);
     const count = view.getUint32(0, true);
+    const seed = view.getFloat32(4, true); // Load the seed
 
     // Clear current active entities
     const worldAny = world as any;
@@ -65,5 +67,7 @@ export class SaveManager {
 
       offset += BYTES_PER_ENTITY;
     }
+
+    return { seed };
   }
 }

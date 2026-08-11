@@ -44,9 +44,9 @@ export class SaveSlotManager {
     };
   }
 
-  public static saveToSlot(world: World, slotId: number, name?: string): boolean {
+  public static saveToSlot(world: World, slotId: number, name?: string, seed?: number): boolean {
     try {
-      const buffer = SaveManager.saveWorld(world);
+      const buffer = SaveManager.saveWorld(world, seed || 0);
       const binaryString = String.fromCharCode(...new Uint8Array(buffer));
       const base64Data = btoa(binaryString);
       

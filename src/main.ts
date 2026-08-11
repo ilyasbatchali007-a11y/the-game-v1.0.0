@@ -27,19 +27,11 @@ let collisionSystem: CollisionSystem | null = null;
 
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
-const saveModal = document.getElementById('save-modal') as HTMLElement;
-const modalTitle = document.getElementById('modal-title') as HTMLElement;
-const loadControls = document.getElementById('load-controls') as HTMLElement;
-const saveControls = document.getElementById('save-controls') as HTMLElement;
-const loadSaveList = document.getElementById('load-save-list') as HTMLElement;
-const saveSaveList = document.getElementById('save-save-list') as HTMLElement;
-const emptyMessage = document.getElementById('empty-message') as HTMLElement;
-const btnNewGame = document.getElementById('btn-new-game') as HTMLButtonElement;
-const btnLoadGame = document.getElementById('btn-load-game') as HTMLButtonElement;
-const btnSaveGame = document.getElementById('btn-save-game') as HTMLButtonElement;
-const btnCloseModal = document.getElementById('btn-close-modal') as HTMLButtonElement;
+const slotsContainer = document.getElementById('slots-container') as HTMLElement;
+const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 
-let currentMode: 'load' | 'save' = 'load';
+const NUM_SLOTS = 3;
+let currentSlotId: number | null = null; // The slot used for the current session
 
 async function initEngine() {
   // 1. Setup Canvas & WebGL2 Context
@@ -128,7 +120,6 @@ canvas.height = window.innerHeight;
 function startGame() {
   gameRunning = true;
   startMenu.classList.add('hidden');
-  saveModal.classList.remove('active');
   
   // Reset input state
   inputState = {};
@@ -137,6 +128,123 @@ function startGame() {
 function stopGame() {
   gameRunning = false;
   startMenu.classList.remove('hidden');
+  renderSlots(); // Re-render slots to update their state
+}
+
+function renderSlots() {
+  slotsContainer.innerHTML = '';
+  
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    const slotData = SaveSlotManager.loadFromSlot(i);
+    const slotEl = document.createElement('div');
+    slotEl.className = 'save-slot';
+    
+    if (slotData) {
+      // Slot has a save
+      const parsed = JSON.parse(localStorage.getItem(`ecs_save_${i}`) || '{}');
+      const timestamp = parsed.timestamp || 0;
+      
+      slotEl.classList.remove('empty');
+      
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'slot-info';
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'slot-name';
+      nameDiv.textContent = parsed.name || `Save ${i + 1}`;
+      
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'slot-date';
+      dateDiv.textContent = SaveSlotManager.formatDate(timestamp);
+      
+      infoDiv.appendChild(nameDiv);
+      infoDiv.appendChild(dateDiv);
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = 'X';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        SaveSlotManager.deleteSlot(i);
+        renderSlots();
+      });
+      
+      slotEl.appendChild(infoDiv);
+      slotEl.appendChild(deleteBtn);
+      
+      // Click on slot loads the game
+      slotEl.addEventListener('click', () => {
+        const buffer = SaveSlotManager.loadFromSlot(i);
+        if (buffer && world) {
+          SaveManager.loadWorld(world, buffer);
+          currentSlotId = i;
+          console.log(`[UI] Loaded save slot ${i}`);
+          startGame();
+        }
+      });
+    } else {
+      // Slot is empty
+      slotEl.classList.add('empty');
+      
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'slot-info';
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'slot-name';
+      nameDiv.textContent = `Empty Slot ${i + 1}`;
+      
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'slot-date';
+      dateDiv.textContent = 'Click to start New Game';
+      
+      infoDiv.appendChild(nameDiv);
+      infoDiv.appendChild(dateDiv);
+      
+      slotEl.appendChild(infoDiv);
+      
+      // Click on empty slot starts new game
+      slotEl.addEventListener('click', () => {
+        currentSlotId = i;
+        initNewGame();
+        startGame();
+      });
+    }
+    
+    slotsContainer.appendChild(slotEl);
+  }
+}
+
+function initNewGame() {
+  // Generate new random seed for the renderer (new map layout)
+  if (renderer) {
+    renderer['sessionSeed'] = Math.random() * 10000.0;
+  }
+  
+  // Reset world and start new game
+  if (world) {
+    world = new World();
+    generateTestMap();
+    
+    // Respawn player
+    const playerX = WORLD_WIDTH / 2;
+    const playerY = WORLD_HEIGHT / 2;
+    world.active[PLAYER_ID] = 1;
+    world.x[PLAYER_ID] = playerX;
+    world.y[PLAYER_ID] = playerY;
+    world.w[PLAYER_ID] = 32;
+    world.h[PLAYER_ID] = 32;
+    world.speed[PLAYER_ID] = 200;
+    world.vx[PLAYER_ID] = 0;
+    world.vy[PLAYER_ID] = 0;
+    world.rotation[PLAYER_ID] = 0;
+    world.set.count = 1;
+    world.set.dense[0] = PLAYER_ID;
+    
+    if (camera) {
+      camera.setTarget({ x: playerX, y: playerY });
+      camera.snapToTarget();
+    }
+  }
 }
 
 let inputState: Record<string, boolean> = {};
@@ -223,21 +331,12 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
   
-  // Quick save/load shortcuts (S and L with Ctrl)
+  // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
-    // Quick save to slot 0
-    if (world) {
-      SaveSlotManager.saveToSlot(world, 0, 'Quick Save');
-      console.log('[UI] Quick saved!');
-    }
-  } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
-    e.preventDefault();
-    // Quick load from slot 0
-    const buffer = SaveSlotManager.loadFromSlot(0);
-    if (buffer && world) {
-      SaveManager.loadWorld(world, buffer);
-      console.log('[UI] Quick loaded!');
+    if (world && currentSlotId !== null) {
+      SaveSlotManager.saveToSlot(world, currentSlotId, `Save ${currentSlotId + 1}`);
+      console.log(`[UI] Saved to slot ${currentSlotId}!`);
     }
   }
 });
@@ -257,171 +356,11 @@ window.addEventListener('resize', () => {
 });
 
 // Menu Button Handlers
-btnNewGame.addEventListener('click', () => {
-  // Generate new random seed for the renderer (new map layout)
-  if (renderer) {
-    renderer['sessionSeed'] = Math.random() * 10000.0;
-  }
-  
-  // Reset world and start new game
-  if (world) {
-    world = new World();
-    generateTestMap();
-    
-    // Respawn player
-    const playerX = WORLD_WIDTH / 2;
-    const playerY = WORLD_HEIGHT / 2;
-    world.active[PLAYER_ID] = 1;
-    world.x[PLAYER_ID] = playerX;
-    world.y[PLAYER_ID] = playerY;
-    world.w[PLAYER_ID] = 32;
-    world.h[PLAYER_ID] = 32;
-    world.speed[PLAYER_ID] = 200;
-    world.vx[PLAYER_ID] = 0;
-    world.vy[PLAYER_ID] = 0;
-    world.rotation[PLAYER_ID] = 0;
-    world.set.count = 1;
-    world.set.dense[0] = PLAYER_ID;
-    
-    if (camera) {
-      camera.setTarget({ x: playerX, y: playerY });
-      camera.snapToTarget();
-    }
-  }
-  startGame();
+btnStart.addEventListener('click', () => {
+  renderSlots();
 });
 
-btnLoadGame.addEventListener('click', () => {
-  currentMode = 'load';
-  modalTitle.textContent = 'Load Game';
-  loadControls.style.display = 'block';
-  saveControls.style.display = 'none';
-  saveModal.classList.add('active');
-  saveModal.classList.add('mode-load');
-  saveModal.classList.remove('mode-save');
-  renderSaveList('load');
-});
-
-btnSaveGame.addEventListener('click', () => {
-  if (!gameRunning || !world) {
-    alert('Start a game first!');
-    return;
-  }
-  currentMode = 'save';
-  modalTitle.textContent = 'Save Game';
-  loadControls.style.display = 'none';
-  saveControls.style.display = 'block';
-  saveModal.classList.add('active');
-  saveModal.classList.add('mode-save');
-  saveModal.classList.remove('mode-load');
-  renderSaveList('save');
-});
-
-btnCloseModal.addEventListener('click', () => {
-  saveModal.classList.remove('active');
-});
-
-// Close modal when clicking outside
-saveModal.addEventListener('click', (e) => {
-  if (e.target === saveModal) {
-    saveModal.classList.remove('active');
-  }
-});
-
-function renderSaveList(mode: 'load' | 'save') {
-  const slots = SaveSlotManager.getSaveSlots();
-  const container = mode === 'load' ? loadSaveList : saveSaveList;
-  container.innerHTML = '';
-  
-  if (slots.length === 0) {
-    emptyMessage.style.display = 'block';
-  } else {
-    emptyMessage.style.display = 'none';
-    
-    slots.forEach(slot => {
-      const item = document.createElement('div');
-      item.className = 'save-item';
-      
-      const info = document.createElement('div');
-      info.className = 'save-item-info';
-      
-      const name = document.createElement('div');
-      name.className = 'save-item-name';
-      name.textContent = slot.name;
-      
-      const date = document.createElement('div');
-      date.className = 'save-item-date';
-      date.textContent = SaveSlotManager.formatDate(slot.timestamp);
-      
-      info.appendChild(name);
-      info.appendChild(date);
-      
-      const actions = document.createElement('div');
-      actions.className = 'save-item-actions';
-      
-      if (mode === 'load') {
-        const loadBtn = document.createElement('button');
-        loadBtn.className = 'action-btn';
-        loadBtn.textContent = 'Load';
-        loadBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const buffer = SaveSlotManager.loadFromSlot(slot.id);
-          if (buffer && world) {
-            SaveManager.loadWorld(world, buffer);
-            console.log(`[UI] Loaded save slot ${slot.id}`);
-            saveModal.classList.remove('active');
-            if (!gameRunning) {
-              startGame();
-            }
-          }
-        });
-        actions.appendChild(loadBtn);
-      } else {
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'action-btn';
-        saveBtn.textContent = 'Save';
-        saveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (world) {
-            SaveSlotManager.saveToSlot(world, slot.id, slot.name);
-            console.log(`[UI] Saved to slot ${slot.id}`);
-            renderSaveList('save');
-          }
-        });
-        actions.appendChild(saveBtn);
-      }
-      
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'action-btn delete';
-      deleteBtn.textContent = 'Delete';
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        SaveSlotManager.deleteSlot(slot.id);
-        console.log(`[UI] Deleted slot ${slot.id}`);
-        renderSaveList(mode);
-      });
-      actions.appendChild(deleteBtn);
-      
-      item.appendChild(info);
-      item.appendChild(actions);
-      
-      if (mode === 'load') {
-        item.addEventListener('click', () => {
-          const buffer = SaveSlotManager.loadFromSlot(slot.id);
-          if (buffer && world) {
-            SaveManager.loadWorld(world, buffer);
-            console.log(`[UI] Loaded save slot ${slot.id}`);
-            saveModal.classList.remove('active');
-            if (!gameRunning) {
-              startGame();
-            }
-          }
-        });
-      }
-      
-      container.appendChild(item);
-    });
-  }
-}
+// Initial render of slots on page load
+renderSlots();
 
 initEngine().catch(console.error);

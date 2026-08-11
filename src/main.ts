@@ -29,8 +29,11 @@ let engineInitialized = false;
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
 const saveSlotsContainer = document.getElementById('save-slots-container') as HTMLElement;
+const startButton = document.getElementById('start-button') as HTMLButtonElement;
+const slotSubtitle = document.getElementById('slot-subtitle') as HTMLElement;
 
 let currentSlotId: number | null = null;
+let showSlotSelection = false;
 
 async function initEngine() {
   // Initialize engine only once
@@ -135,7 +138,12 @@ function startGame() {
 function stopGame() {
   gameRunning = false;
   startMenu.classList.remove('hidden');
-  renderSaveSlots();
+  
+  // Reset menu to show Start button, hide slots
+  showSlotSelection = false;
+  startButton.style.display = 'block';
+  slotSubtitle.style.display = 'none';
+  saveSlotsContainer.classList.remove('visible');
 }
 
 let inputState: Record<string, boolean> = {};
@@ -248,6 +256,15 @@ window.addEventListener('resize', () => {
   camera.setViewport(canvas.width, canvas.height);
 });
 
+// Handle Start button click to show save slots
+startButton.addEventListener('click', () => {
+  showSlotSelection = true;
+  startButton.style.display = 'none';
+  slotSubtitle.style.display = 'block';
+  saveSlotsContainer.classList.add('visible');
+  renderSaveSlots();
+});
+
 // Render save slots on start menu
 function renderSaveSlots() {
   saveSlotsContainer.innerHTML = '';
@@ -357,8 +374,8 @@ function startNewGameInSlot(slotId: number) {
   startGame();
 }
 
-// Initialize the save slots display
-renderSaveSlots();
+// Initialize the save slots display (but don't show them yet)
+// Slots will be rendered when Start button is clicked
 
 // Pre-initialize engine (load textures, setup WebGL) but don't start game loop yet
 initEngine().catch(console.error);

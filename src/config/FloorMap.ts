@@ -23,10 +23,10 @@ export const ARENA_FLOOR: FloorConfig = {
   repeatZ: 32.0,
   // Atlas configuration
   useAtlas: true,
-  atlasTileCountX: 32,  // 32x32 grid in atlas
-  atlasTileCountY: 32,
-  staticTileRangeStart: 0,    // IDs 0-99 for static tiles (houses, paths)
-  staticTileRangeEnd: 99,
-  variationTileRangeStart: 100, // IDs 100-1023 for random variations (grass, dirt)
-  variationTileRangeEnd: 1023,
+  atlasTileCountX: 14,  // 14x13 grid in atlas
+  atlasTileCountY: 13,
+  staticTileRangeStart: 0,    // IDs 0-50 for static tiles (houses, paths, walls)
+  staticTileRangeEnd: 50,
+  variationTileRangeStart: 51, // IDs 51-181 for random variations (grass, dirt, stone)
+  variationTileRangeEnd: 181,
 };

@@ -6,9 +6,9 @@ export const ATLAS_CONFIG = {
   imagePath: 'src/atlas pictures/atlas floor.jpg',
   atlasSize: 2048,           // 2048x2048 pixels
   
-  // Grid layout within atlas
-  tilesPerRow: 32,           // 32 tiles per row
-  tilesPerCol: 32,           // 32 tiles per column
+  // Grid layout within atlas - UPDATED TO 14x13
+  tilesPerRow: 14,           // 14 tiles per row
+  tilesPerCol: 13,           // 13 tiles per column
   tileSizePixels: 64,        // Each tile is 64x64 pixels in the atlas
   
   // Game world settings
@@ -25,8 +25,8 @@ export const ATLAS_CONFIG = {
   variationTileStart: 100,
   variationTileEnd: 1023,
   
-  // Total tiles available: 32*32 = 1024
-  totalTiles: 1024,
+  // Total tiles available: 14*13 = 182
+  totalTiles: 182,
 };
 
 // Helper: Convert tile ID to UV coordinates in atlas

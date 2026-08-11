@@ -19,41 +19,86 @@ export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2);
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
 
 export function generateTestMap(): void {
-  // Fill entire map with floor tiles (0 = passable floor)
-  MAP_DATA.fill(0);
+  // Floor layout blueprint: 1 = place tile, 0 = empty void
+  const floorLayout = [
+    [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+    [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1],
+    [0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+    [0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0]
+  ];
   
-  // Initialize atlas tile data
-  // For variation tiles (grass), we set isStatic=false and use a variation range
-  // For static tiles (walls, paths), we set isStatic=true with specific tileId
-  for (let row = 0; row < MAP_ROWS; row++) {
-    for (let col = 0; col < MAP_COLS; col++) {
-      const idx = row * MAP_COLS + col;
-      const dataIdx = idx * 2;
-      
-      if (row === 0 || row === MAP_ROWS - 1 || col === 0 || col === MAP_COLS - 1) {
-        // Border walls - static tiles with specific ID
-        MAP_DATA[idx] = 2; // Wall
-        MAP_TILE_DATA[dataIdx] = 5;     // Use tile ID 5 from atlas for walls
-        MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
-      } else {
-        // Floor tiles - use random variations from the new larger range
-        // Each tile gets a different base ID in the variation range
-        const randomOffset = Math.floor(Math.random() * 130); // 0-129
-        MAP_DATA[idx] = 0; // Floor
-        MAP_TILE_DATA[dataIdx] = 51 + randomOffset; // Random tile ID between 51-180
-        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false, use hash-based selection
+  const layoutRows = floorLayout.length;
+  const layoutCols = floorLayout[0].length;
+  
+  // Calculate offset to center the layout on the map
+  const offsetX = Math.floor((MAP_COLS - layoutCols) / 2);
+  const offsetY = Math.floor((MAP_ROWS - layoutRows) / 2);
+  
+  // Clear all data first
+  MAP_DATA.fill(0);
+  MAP_TILE_DATA.fill(0);
+  
+  // Generate floor tiles based on the blueprint
+  for (let row = 0; row < layoutRows; row++) {
+    for (let col = 0; col < layoutCols; col++) {
+      if (floorLayout[row][col] === 1) {
+        const mapRow = offsetY + row;
+        const mapCol = offsetX + col;
+        
+        if (mapRow >= 0 && mapRow < MAP_ROWS && mapCol >= 0 && mapCol < MAP_COLS) {
+          const idx = mapRow * MAP_COLS + mapCol;
+          const dataIdx = idx * 2;
+          
+          // Random tile ID from variation range (51-181)
+          const randomOffset = Math.floor(Math.random() * 131);
+          MAP_DATA[idx] = 0; // Floor
+          MAP_TILE_DATA[dataIdx] = 51 + randomOffset;
+          MAP_TILE_DATA[dataIdx + 1] = 0; // isStatic = false
+        }
       }
     }
   }
   
-  // Add some static path tiles as an example
-  const pathY = Math.floor(MAP_ROWS / 2);
-  for (let col = 1; col < MAP_COLS - 1; col++) {
-    const idx = pathY * MAP_COLS + col;
-    const dataIdx = idx * 2;
-    MAP_DATA[idx] = 1; // Decoration/path
-    MAP_TILE_DATA[dataIdx] = 10;     // Use tile ID 10 from atlas for path
-    MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
+  // Add border walls around the entire map
+  for (let col = 0; col < MAP_COLS; col++) {
+    // Top wall
+    let idx = col;
+    let dataIdx = idx * 2;
+    MAP_DATA[idx] = 2;
+    MAP_TILE_DATA[dataIdx] = 5;
+    MAP_TILE_DATA[dataIdx + 1] = 1;
+    
+    // Bottom wall
+    idx = (MAP_ROWS - 1) * MAP_COLS + col;
+    dataIdx = idx * 2;
+    MAP_DATA[idx] = 2;
+    MAP_TILE_DATA[dataIdx] = 5;
+    MAP_TILE_DATA[dataIdx + 1] = 1;
+  }
+  
+  for (let row = 0; row < MAP_ROWS; row++) {
+    // Left wall
+    let idx = row * MAP_COLS;
+    let dataIdx = idx * 2;
+    MAP_DATA[idx] = 2;
+    MAP_TILE_DATA[dataIdx] = 5;
+    MAP_TILE_DATA[dataIdx + 1] = 1;
+    
+    // Right wall
+    idx = row * MAP_COLS + (MAP_COLS - 1);
+    dataIdx = idx * 2;
+    MAP_DATA[idx] = 2;
+    MAP_TILE_DATA[dataIdx] = 5;
+    MAP_TILE_DATA[dataIdx + 1] = 1;
   }
 }
 

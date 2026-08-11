@@ -24,6 +24,7 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: WebGL2RenderingContext | null = null;
 let movementSystem: MovementSystem | null = null;
 let collisionSystem: CollisionSystem | null = null;
+let engineInitialized = false;
 
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
@@ -32,6 +33,12 @@ const saveSlotsContainer = document.getElementById('save-slots-container') as HT
 let currentSlotId: number | null = null;
 
 async function initEngine() {
+  // Initialize engine only once
+  if (engineInitialized) return;
+  engineInitialized = true;
+  
+  console.log('[Engine] Initializing engine...');
+  
   // 1. Setup Canvas & WebGL2 Context
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
 if (!canvas) throw new Error('Canvas not found');
@@ -56,6 +63,8 @@ canvas.height = window.innerHeight;
   // CollisionSystem does not require constructor parameters
   collisionSystem = new CollisionSystem();
   renderer = new GLInstancedRenderer(ctx, MAX_ENTITIES);
+  
+  console.log('[Engine] Core systems initialized');
   
   // Generate test map BEFORE spawning player
   generateTestMap();
@@ -137,6 +146,8 @@ function startGameLoop() {
   // Reset timing
   lastTime = performance.now();
   accumulator = 0;
+  
+  console.log('[Engine] Game loop started');
   
   function loop(now: number) {
     if (!gameRunning || !world || !renderer || !camera || !ctx || !canvas) {
@@ -283,18 +294,25 @@ function renderSaveSlots() {
     slotElement.appendChild(info);
     slotElement.appendChild(deleteBtn);
     
-    slotElement.addEventListener('click', () => {
+    slotElement.addEventListener('click', (e) => {
+      // Prevent triggering if clicking the delete button
+      if ((e.target as HTMLElement).classList.contains('save-slot-delete')) {
+        return;
+      }
+      
       if (slotData.occupied) {
-        // Load existing save
+        // Load existing save - engine should already be initialized
         const buffer = SaveSlotManager.loadFromSlot(i);
         if (buffer && world) {
           SaveManager.loadWorld(world, buffer);
           currentSlotId = i;
           console.log(`[UI] Loaded save slot ${i}`);
           startGame();
+        } else {
+          console.error('[UI] Failed to load save slot', i, 'buffer:', !!buffer, 'world:', !!world);
         }
       } else {
-        // Start new game in this slot
+        // Start new game in this slot - engine should already be initialized
         startNewGameInSlot(i);
       }
     });
@@ -342,4 +360,5 @@ function startNewGameInSlot(slotId: number) {
 // Initialize the save slots display
 renderSaveSlots();
 
+// Pre-initialize engine (load textures, setup WebGL) but don't start game loop yet
 initEngine().catch(console.error);

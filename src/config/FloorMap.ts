@@ -21,12 +21,12 @@ export const ARENA_FLOOR: FloorConfig = {
   texturePath: 'src/atlas pictures/atlas floor.jpg',
   repeatX: 32.0,
   repeatZ: 32.0,
-  // Atlas configuration
+  // Atlas configuration - supports 128 tile types (0-127)
   useAtlas: true,
-  atlasTileCountX: 32,  // 32x32 grid in atlas
+  atlasTileCountX: 32,  // 32x32 grid in atlas (supports up to 1024 tiles)
   atlasTileCountY: 32,
-  staticTileRangeStart: 0,    // IDs 0-99 for static tiles (houses, paths)
+  staticTileRangeStart: 0,    // IDs 0-99 for static tiles (includes green floor + debug colors)
   staticTileRangeEnd: 99,
-  variationTileRangeStart: 100, // IDs 100-1023 for random variations (grass, dirt)
-  variationTileRangeEnd: 1023,
+  variationTileRangeStart: 100, // IDs 100-127 for additional variations
+  variationTileRangeEnd: 127,
 };

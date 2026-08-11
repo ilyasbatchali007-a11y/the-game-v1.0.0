@@ -22,9 +22,10 @@ export function generateTestMap(): void {
   // Fill entire map with floor tiles (0 = passable floor)
   MAP_DATA.fill(0);
   
-  // Initialize atlas tile data
-  // For variation tiles (grass), we set isStatic=false and use a variation range
-  // For static tiles (walls, paths), we set isStatic=true with specific tileId
+  // Initialize atlas tile data with 128 tile types
+  // Tile 0: green repeating texture (existing)
+  // Tiles 1-99: static debug colors for customization
+  // Tiles 100-127: variation tiles with random selection
   for (let row = 0; row < MAP_ROWS; row++) {
     for (let col = 0; col < MAP_COLS; col++) {
       const idx = row * MAP_COLS + col;
@@ -36,10 +37,15 @@ export function generateTestMap(): void {
         MAP_TILE_DATA[dataIdx] = 5;     // Use tile ID 5 from atlas for walls
         MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true
       } else {
-        // Floor tiles - use random variations
+        // Floor tiles - distribute across 128 tile types for testing
+        // Use a pattern to show different tiles
         MAP_DATA[idx] = 0; // Floor
-        MAP_TILE_DATA[dataIdx] = 100;    // Start of variation range (grass tiles)
-        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false, use hash-based selection
+        
+        // Create a checkerboard-like pattern with different tile IDs
+        // Tile 0 = green texture, Tiles 1-127 = debug colors
+        const tilePattern = (row * MAP_COLS + col) % 128;
+        MAP_TILE_DATA[dataIdx] = tilePattern;    // Cycle through all 128 tile types
+        MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true for now (show exact tile ID)
       }
     }
   }

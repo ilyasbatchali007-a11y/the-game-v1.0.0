@@ -66,6 +66,7 @@ void main() {
 `;
 
 // Fragment Shader Source - Atlas texture with static and random variation tiles
+// Supports 128 tile types: Tile 0 = green texture, Tiles 1-127 = debug solid colors
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
@@ -98,6 +99,15 @@ float hash(vec2 p, float seed) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
   p3 += dot(p3, p3.yzx + 33.33 + seed);
   return fract((p3.x + p3.y) * p3.z);
+}
+
+// Generate debug color for tile IDs 1-127
+vec3 getDebugColor(float tileId) {
+  // Use tile ID to generate a unique color
+  float r = fract(tileId * 0.1234);
+  float g = fract(tileId * 0.5678);
+  float b = fract(tileId * 0.9012);
+  return vec3(r, g, b);
 }
 
 void main() {
@@ -159,26 +169,34 @@ void main() {
       tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
     }
     
-    // Convert tile ID to atlas UV coordinates
-    float tilesPerRow = float(u_atlasTileCount);
-    float tileCol = mod(tileId, tilesPerRow);
-    float tileRow = floor(tileId / tilesPerRow);
-    
-    // Calculate base UV for this tile in atlas
-    float tileUVSize = 1.0 / tilesPerRow;
-    float baseU = tileCol * tileUVSize;
-    float baseV = tileRow * tileUVSize;
-    
-    // Apply a small margin to prevent texture bleeding (chessboard lines)
-    // This shrinks the UV sample area slightly away from the tile edges
-    float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
-    
-    // Final UV: base tile position + local position within tile (with margin)
-    vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
-    vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);
-    
-    // Sample the atlas texture
-    fragColor = texture(u_texture, finalUV);
+    // Tile 0 uses the green texture from atlas
+    // Tiles 1-127 use debug solid colors
+    if (tileId < 0.5) {
+      // Tile 0: Sample the green texture from atlas
+      // Convert tile ID to atlas UV coordinates
+      float tilesPerRow = float(u_atlasTileCount);
+      float tileCol = mod(tileId, tilesPerRow);
+      float tileRow = floor(tileId / tilesPerRow);
+      
+      // Calculate base UV for this tile in atlas
+      float tileUVSize = 1.0 / tilesPerRow;
+      float baseU = tileCol * tileUVSize;
+      float baseV = tileRow * tileUVSize;
+      
+      // Apply a small margin to prevent texture bleeding (chessboard lines)
+      float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
+      
+      // Final UV: base tile position + local position within tile (with margin)
+      vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
+      vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);
+      
+      // Sample the atlas texture
+      fragColor = texture(u_texture, finalUV);
+    } else {
+      // Tiles 1-127: Use debug solid colors
+      vec3 debugColor = getDebugColor(tileId);
+      fragColor = vec4(debugColor, 1.0);
+    }
   }
 }
 `;

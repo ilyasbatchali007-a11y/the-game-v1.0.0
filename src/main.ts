@@ -357,10 +357,11 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnStart.addEventListener('click', () => {
+  slotsContainer.classList.add('visible');
   renderSlots();
 });
 
-// Initial render of slots on page load
-renderSlots();
+// Initial render of slots on page load (hidden by default)
+slotsContainer.classList.remove('visible');
 
 initEngine().catch(console.error);

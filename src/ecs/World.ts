@@ -57,4 +57,26 @@ export class World {
       dense: [] as number[]
     };
   }
+
+  public addEntity(px: number, py: number, w: number, h: number, health: number): number {
+    const id = this.set.count;
+    if (id >= this.maxEntities) {
+      throw new Error('Maximum entities reached');
+    }
+    
+    this.active[id] = 1;
+    this.x[id] = px;
+    this.y[id] = py;
+    this.w[id] = w;
+    this.h[id] = h;
+    this.health[id] = health;
+    this.vx[id] = 0;
+    this.vy[id] = 0;
+    this.deadFlag[id] = 0;
+    
+    this.set.dense[id] = id;
+    this.set.count++;
+    
+    return id;
+  }
 }

@@ -172,6 +172,9 @@ void main() {
     // This shrinks the UV sample area slightly away from the tile edges
     float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
     
+    // Combine localX and localY into a vec2 for UV calculations
+    mediump vec2 localUV = vec2(localX, localY);
+    
     // Final UV: base tile position + local position within tile (with margin)
     vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
     vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);

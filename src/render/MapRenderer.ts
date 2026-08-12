@@ -4,16 +4,6 @@
 
 import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
 
-export interface IFloorRenderData {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  texturePath: string;
-  repeatX: number;
-  repeatZ: number;
-}
-
 export class MapRenderer {
   private floorConfig: FloorConfig;
 
@@ -30,7 +20,7 @@ export class MapRenderer {
     cameraY: number,
     viewportWidth: number,
     viewportHeight: number
-  ): IFloorRenderData {
+  ): { x: number; y: number; width: number; height: number; texturePath: string; repeatX: number; repeatZ: number } {
     // Return the entire world as one seamless floor rectangle
     // Camera offset is applied by the renderer/camera system
     return {
@@ -42,19 +32,5 @@ export class MapRenderer {
       repeatX: this.floorConfig.repeatX,
       repeatZ: this.floorConfig.repeatZ
     };
-  }
-
-  /**
-   * Legacy method kept for compatibility - now returns empty data
-   * since we render the floor as a single quad instead of tiles
-   */
-  public getVisibleTileData(
-    cameraX: number,
-    cameraY: number,
-    viewportWidth: number,
-    viewportHeight: number
-  ): { buffer: Float32Array; count: number } {
-    // Return empty - floor is now rendered as a single quad
-    return { buffer: new Float32Array(0), count: 0 };
   }
 }

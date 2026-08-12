@@ -11,16 +11,14 @@ export interface TileData {
   isStatic: boolean;   // If true, use exact tileId; if false, use variation hashing
 }
 
-// Tile IDs: 0 = floor (passable), 1 = decoration, 2 = wall (blocking)
-export const MAP_DATA = new Uint8Array(MAP_COLS * MAP_ROWS);
-
-// New: Map data with atlas tile information
-export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2); 
+// Map data with atlas tile information
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
+// tileId > 0 renders the tile, tileId = 0 is void (nothing rendered)
+export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2);
 
 export function generateTestMap(): void {
   // Create a 16x16 pattern within the 160x160 map
-  // 1 = Original Atlas Floor (ID 100), 0 = Void (nothing rendered)
+  // tileId > 0 = Floor (renders texture), tileId = 0 = Void (nothing rendered)
   // Pattern has ~15% void holes in an interconnected design
   
   const patternSize = 16;
@@ -47,8 +45,7 @@ export function generateTestMap(): void {
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
   ];
   
-  // Initialize all tiles as void (0) first
-  MAP_DATA.fill(0);
+  // Initialize all tiles as void (tileId = 0) first
   MAP_TILE_DATA.fill(0);
   
   // Apply the pattern
@@ -67,13 +64,11 @@ export function generateTestMap(): void {
       }
       
       if (tileValue === 1) {
-        // Original Atlas Floor - use ID 100 (variation tile)
-        MAP_DATA[idx] = 0; // Floor type
+        // Floor tile - use ID 100 (variation tile)
         MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
         MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
       } else {
         // Void - nothing will be rendered here
-        MAP_DATA[idx] = 0;
         MAP_TILE_DATA[dataIdx] = 0;      // Tile ID 0 (void)
         MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
       }
@@ -81,36 +76,4 @@ export function generateTestMap(): void {
   }
   
   // No border walls - pattern floats in void space
-}
-
-export function isTileBlocking(col: number, row: number): boolean {
-  if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) {
-    return true;
-  }
-  return MAP_DATA[row * MAP_COLS + col] === 2;
-}
-
-// New helper for continuous collision detection with floating-point positions
-export function getTileAtPosition(worldX: number, worldY: number): { col: number; row: number } {
-  return {
-    col: Math.floor(worldX / TILE_SIZE),
-    row: Math.floor(worldY / TILE_SIZE)
-  };
-}
-
-export function isPositionBlocking(worldX: number, worldY: number): boolean {
-  const { col, row } = getTileAtPosition(worldX, worldY);
-  return isTileBlocking(col, row);
-}
-
-// Get tile data for atlas rendering
-export function getTileData(col: number, row: number): { tileId: number; isStatic: number } {
-  if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) {
-    return { tileId: 0, isStatic: 1 };
-  }
-  const idx = (row * MAP_COLS + col) * 2;
-  return {
-    tileId: MAP_TILE_DATA[idx],
-    isStatic: MAP_TILE_DATA[idx + 1]
-  };
 }

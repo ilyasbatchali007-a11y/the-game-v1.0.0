@@ -10,7 +10,18 @@ type World = {
 };
 
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config/Constants';
-import { isTileBlocking, TILE_SIZE } from '../config/MapData';
+import { TILE_SIZE, MAP_COLS, MAP_ROWS, MAP_TILE_DATA } from '../config/MapData';
+
+function isTileBlocking(col: number, row: number): boolean {
+  if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) {
+    return true;
+  }
+  const idx = (row * MAP_COLS + col) * 2;
+  const tileId = MAP_TILE_DATA[idx];
+  // Void tiles (tileId = 0) are not blocking - they're empty space
+  // Only tiles with tileId > 0 are solid
+  return tileId > 0;
+}
 
 export class CollisionSystem {
   public update(world: World, dt: number, playerId: number = 0): void {

@@ -357,6 +357,9 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnStart.addEventListener('click', () => {
+  // Hide the start button
+  btnStart.classList.add('hidden');
+  // Show slots with animation
   slotsContainer.classList.add('visible');
   renderSlots();
 });

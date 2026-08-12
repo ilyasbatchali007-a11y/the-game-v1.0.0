@@ -29,6 +29,11 @@ let collisionSystem: CollisionSystem | null = null;
 const startMenu = document.getElementById('start-menu') as HTMLElement;
 const slotsContainer = document.getElementById('slots-container') as HTMLElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
+const btnSettings = document.getElementById('btn-settings') as HTMLButtonElement;
+const btnCredits = document.getElementById('btn-credits') as HTMLButtonElement;
+const link1 = document.getElementById('link-1') as HTMLAnchorElement;
+const link2 = document.getElementById('link-2') as HTMLAnchorElement;
+const link3 = document.getElementById('link-3') as HTMLAnchorElement;
 
 const NUM_SLOTS = 3;
 let currentSlotId: number | null = null; // The slot used for the current session
@@ -362,6 +367,36 @@ btnStart.addEventListener('click', () => {
   // Show slots with animation
   slotsContainer.classList.add('visible');
   renderSlots();
+});
+
+// Settings and Credits button handlers (placeholder for now)
+btnSettings.addEventListener('click', () => {
+  console.log('[UI] Settings button clicked');
+  // Add settings modal/functionality here
+});
+
+btnCredits.addEventListener('click', () => {
+  console.log('[UI] Credits button clicked');
+  // Add credits modal/functionality here
+});
+
+// Link box handlers (placeholder - replace # with actual URLs)
+link1.addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('[UI] Link 1 clicked');
+  // Replace with: window.open('YOUR_URL_1', '_blank');
+});
+
+link2.addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('[UI] Link 2 clicked');
+  // Replace with: window.open('YOUR_URL_2', '_blank');
+});
+
+link3.addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('[UI] Link 3 clicked');
+  // Replace with: window.open('YOUR_URL_3', '_blank');
 });
 
 // Initial render of slots on page load (hidden by default)

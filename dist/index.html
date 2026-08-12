@@ -70,7 +70,8 @@
         transition: all 0.3s ease;
         border-radius: 8px;
         min-width: 250px;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+        order: 3;
       }
 
       .start-btn:hover {
@@ -83,7 +84,8 @@
       .menu-buttons {
         display: flex;
         gap: 1rem;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
+        order: 2;
       }
 
       .menu-btn {
@@ -108,33 +110,73 @@
       .slots-container {
         display: flex;
         flex-direction: column;
-        gap: 0.9rem;
+        gap: 0.81rem;
         width: 100%;
-        max-width: 450px;
+        max-width: 405px;
         overflow: hidden;
         max-height: 0;
         opacity: 0;
         transform: translateY(-20px);
         transition: all 0.4s ease-out;
+        order: 1;
+        position: relative;
       }
 
       .slots-container.visible {
-        max-height: 450px;
+        max-height: 405px;
         opacity: 1;
         transform: translateY(0);
+      }
+
+      .slots-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(26, 26, 46, 0.95);
+        display: none;
+        justify-content: flex-end;
+        align-items: flex-start;
+        padding: 1rem;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .slots-overlay.active {
+        display: flex;
+      }
+
+      .close-btn {
+        padding: 0.5rem 1rem;
+        font-size: 1.5rem;
+        background: transparent;
+        border: 2px solid #ff6b6b;
+        color: #ff6b6b;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        min-width: 60px;
+        pointer-events: auto;
+      }
+
+      .close-btn:hover {
+        background: #ff6b6b;
+        color: #fff;
+        transform: scale(1.1);
       }
 
       .save-slot {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 1.35rem;
+        padding: 1.215rem;
         background: rgba(233, 69, 96, 0.1);
         border: 2px solid rgba(233, 69, 96, 0.3);
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.3s ease;
-        min-height: 72px;
+        min-height: 64.8px;
       }
 
       .save-slot:hover {
@@ -157,26 +199,26 @@
 
       .slot-name {
         color: #fff;
-        font-size: 1.2rem;
+        font-size: 1.08rem;
         font-weight: bold;
       }
 
       .slot-date {
         color: #aaa;
-        font-size: 0.9rem;
-        margin-top: 0.25rem;
+        font-size: 0.81rem;
+        margin-top: 0.225rem;
       }
 
       .delete-btn {
-        padding: 0.5rem 1rem;
-        font-size: 1rem;
+        padding: 0.45rem 0.9rem;
+        font-size: 0.9rem;
         border: 1px solid #ff6b6b;
         background: transparent;
         color: #ff6b6b;
         cursor: pointer;
         border-radius: 4px;
         transition: all 0.3s;
-        margin-left: 1rem;
+        margin-left: 0.9rem;
       }
 
       .delete-btn:hover {
@@ -190,12 +232,12 @@
         left: 50%;
         transform: translateX(-50%);
         display: flex;
-        gap: 1.5rem;
+        gap: 1.35rem;
       }
 
       .link-box {
-        width: 60px;
-        height: 60px;
+        width: 54px;
+        height: 54px;
         background: rgba(233, 69, 96, 0.1);
         border: 2px solid rgba(233, 69, 96, 0.3);
         border-radius: 8px;
@@ -205,7 +247,7 @@
         cursor: pointer;
         transition: all 0.3s ease;
         color: #aaa;
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         text-decoration: none;
       }
 
@@ -220,7 +262,7 @@
         display: none !important;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-B6xoKVTg.js"></script>
+    <script type="module" crossorigin src="/assets/index-Cc4oeYa5.js"></script>
   </head>
   <body>
     <div id="game-container">
@@ -235,6 +277,9 @@
           <button class="menu-btn" id="btn-credits">Credits</button>
         </div>
         <div class="slots-container" id="slots-container">
+          <div class="slots-overlay" id="slots-overlay">
+            <button class="close-btn" id="btn-close-slots">X</button>
+          </div>
           <!-- Slots will be rendered here by JS -->
         </div>
         <div class="link-boxes">

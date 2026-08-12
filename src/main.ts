@@ -28,9 +28,11 @@ let collisionSystem: CollisionSystem | null = null;
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
 const slotsContainer = document.getElementById('slots-container') as HTMLElement;
+const slotsOverlay = document.getElementById('slots-overlay') as HTMLElement;
 const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
 const btnSettings = document.getElementById('btn-settings') as HTMLButtonElement;
 const btnCredits = document.getElementById('btn-credits') as HTMLButtonElement;
+const btnCloseSlots = document.getElementById('btn-close-slots') as HTMLButtonElement;
 const link1 = document.getElementById('link-1') as HTMLAnchorElement;
 const link2 = document.getElementById('link-2') as HTMLAnchorElement;
 const link3 = document.getElementById('link-3') as HTMLAnchorElement;
@@ -137,7 +139,12 @@ function stopGame() {
 }
 
 function renderSlots() {
+  // Clear existing slots but keep the overlay
+  const overlay = document.getElementById('slots-overlay');
   slotsContainer.innerHTML = '';
+  if (overlay) {
+    slotsContainer.appendChild(overlay);
+  }
   
   for (let i = 0; i < NUM_SLOTS; i++) {
     const slotData = SaveSlotManager.loadFromSlot(i);
@@ -216,6 +223,11 @@ function renderSlots() {
     }
     
     slotsContainer.appendChild(slotEl);
+  }
+  
+  // Re-append the overlay after slots
+  if (overlay) {
+    slotsContainer.appendChild(overlay);
   }
 }
 
@@ -362,11 +374,28 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnStart.addEventListener('click', () => {
-  // Hide the start button
+  // Hide the start button and other menu buttons
   btnStart.classList.add('hidden');
-  // Show slots with animation
+  if (btnSettings.parentElement) {
+    btnSettings.parentElement.classList.add('hidden');
+  }
+  // Show slots with animation and show overlay
+  slotsOverlay.classList.add('active');
   slotsContainer.classList.add('visible');
   renderSlots();
+});
+
+// Close slots overlay handler
+btnCloseSlots.addEventListener('click', () => {
+  // Hide slots overlay
+  slotsOverlay.classList.remove('active');
+  // Hide slots container
+  slotsContainer.classList.remove('visible');
+  // Show start button and menu buttons again
+  btnStart.classList.remove('hidden');
+  if (btnSettings.parentElement) {
+    btnSettings.parentElement.classList.remove('hidden');
+  }
 });
 
 // Settings and Credits button handlers (placeholder for now)

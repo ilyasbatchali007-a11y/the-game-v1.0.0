@@ -379,16 +379,14 @@ btnStart.addEventListener('click', () => {
   if (btnSettings.parentElement) {
     btnSettings.parentElement.classList.add('hidden');
   }
-  // Show slots with animation and show overlay
-  slotsOverlay.classList.add('active');
-  slotsContainer.classList.add('visible');
+  // Render slots first (this recreates the overlay in the DOM)
   renderSlots();
+  // Show slots with animation and show overlay
+  slotsContainer.classList.add('visible');
 });
 
 // Close slots overlay handler
 btnCloseSlots.addEventListener('click', () => {
-  // Hide slots overlay
-  slotsOverlay.classList.remove('active');
   // Hide slots container
   slotsContainer.classList.remove('visible');
   // Show start button and menu buttons again

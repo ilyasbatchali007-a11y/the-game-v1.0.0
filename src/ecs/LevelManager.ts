@@ -1,16 +1,12 @@
-import { Entity } from './Entity';
-import { Player } from './Player';
+import { FLOORS, FloorConfig } from '../config/FloorMap';
 
-export interface FloorConfig {
-  id: number;
-  width: number;
-  height: number;
+export interface FloorData extends FloorConfig {
   spawnX: number;
   spawnY: number;
 }
 
 export class LevelManager {
-  private floors: FloorConfig[] = [];
+  private floors: FloorData[] = [];
   private currentFloorId: number = 0;
   private worldWidth: number = 0;
   private worldHeight: number = 0;
@@ -20,17 +16,17 @@ export class LevelManager {
   }
 
   private generateFloors() {
-    // Generate 10 floors with randomized but fixed sizes for demonstration
-    for (let i = 0; i < 10; i++) {
-      const width = 10 + Math.floor(Math.random() * 10); // 10-20 tiles wide
-      const height = 10 + Math.floor(Math.random() * 10); // 10-20 tiles tall
+    // Convert FLOORS config to extended format with spawn points
+    for (let i = 0; i < FLOORS.length; i++) {
+      const floor = FLOORS[i];
+      const tileSize = floor.tileSize || 64;
+      const widthTiles = Math.floor(floor.width / tileSize);
+      const heightTiles = Math.floor(floor.depth / tileSize);
       
       this.floors.push({
-        id: i,
-        width,
-        height,
-        spawnX: Math.floor(width / 2),
-        spawnY: Math.floor(height / 2)
+        ...floor,
+        spawnX: Math.floor(widthTiles / 2),
+        spawnY: Math.floor(heightTiles / 2)
       });
     }
     
@@ -38,11 +34,11 @@ export class LevelManager {
     this.updateWorldBounds(this.floors[0]);
   }
 
-  public getFloor(id: number): FloorConfig | undefined {
+  public getFloor(id: number): FloorData | undefined {
     return this.floors.find(f => f.id === id);
   }
 
-  public getCurrentFloor(): FloorConfig {
+  public getCurrentFloor(): FloorData {
     return this.floors[this.currentFloorId];
   }
 
@@ -53,15 +49,15 @@ export class LevelManager {
       this.currentFloorId = newId;
       const newFloor = this.floors[newId];
       this.updateWorldBounds(newFloor);
-      console.log(`Transitioned to Floor ${newId} (${newFloor.width}x${newFloor.height})`);
+      console.log(`Transitioned to Floor ${newId} (${newFloor.width}x${newFloor.depth})`);
       return newId;
     }
     return this.currentFloorId;
   }
 
-  private updateWorldBounds(floor: FloorConfig) {
+  private updateWorldBounds(floor: FloorData) {
     this.worldWidth = floor.width;
-    this.worldHeight = floor.height;
+    this.worldHeight = floor.depth;
   }
 
   public getWidth(): number {
@@ -77,10 +73,7 @@ export class LevelManager {
     return { x: floor.spawnX, y: floor.spawnY };
   }
 
-  // Simulate loading floor data (tiles, entities)
   public async loadFloorData(floorId: number): Promise<void> {
-    // In a real scenario, this would fetch JSON from Tiled
-    // For now, we simulate a tiny delay for "loading" feel if needed
     return Promise.resolve();
   }
 }

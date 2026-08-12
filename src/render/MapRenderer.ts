@@ -2,7 +2,7 @@
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
 
-import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { FloorConfig } from '../config/FloorMap';
 
 export interface IFloorRenderData {
   x: number;
@@ -12,13 +12,19 @@ export interface IFloorRenderData {
   texturePath: string;
   repeatX: number;
   repeatZ: number;
+  isProcedural: boolean;
+  proceduralColor1?: [number, number, number];
+  proceduralColor2?: [number, number, number];
+  tileSize?: number;
 }
 
 export class MapRenderer {
-  private floorConfig: FloorConfig;
+  private currentFloor: FloorConfig | null = null;
 
-  constructor(floorConfig: FloorConfig = ARENA_FLOOR) {
-    this.floorConfig = floorConfig;
+  constructor() {}
+
+  public setFloor(floorConfig: FloorConfig) {
+    this.currentFloor = floorConfig;
   }
 
   /**
@@ -31,16 +37,34 @@ export class MapRenderer {
     viewportWidth: number,
     viewportHeight: number
   ): IFloorRenderData {
+    if (!this.currentFloor) {
+      // Default fallback
+      return {
+        x: 0,
+        y: 0,
+        width: 10240,
+        height: 10240,
+        texturePath: 'src/atlas pictures/atlas floor.jpg',
+        repeatX: 160,
+        repeatZ: 160,
+        isProcedural: false
+      };
+    }
+
     // Return the entire world as one seamless floor rectangle
     // Camera offset is applied by the renderer/camera system
     return {
       x: 0,
       y: 0,
-      width: this.floorConfig.width,
-      height: this.floorConfig.depth,
-      texturePath: this.floorConfig.texturePath,
-      repeatX: this.floorConfig.repeatX,
-      repeatZ: this.floorConfig.repeatZ
+      width: this.currentFloor.width,
+      height: this.currentFloor.depth,
+      texturePath: this.currentFloor.texturePath,
+      repeatX: this.currentFloor.repeatX,
+      repeatZ: this.currentFloor.repeatZ,
+      isProcedural: this.currentFloor.isProcedural,
+      proceduralColor1: this.currentFloor.proceduralColor1,
+      proceduralColor2: this.currentFloor.proceduralColor2,
+      tileSize: this.currentFloor.tileSize
     };
   }
 

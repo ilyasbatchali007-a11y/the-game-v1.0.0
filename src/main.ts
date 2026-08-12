@@ -374,15 +374,16 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnStart.addEventListener('click', () => {
+  // Render slots first (this recreates the overlay in the DOM)
+  renderSlots();
   // Hide the start button and other menu buttons
   btnStart.classList.add('hidden');
   if (btnSettings.parentElement) {
     btnSettings.parentElement.classList.add('hidden');
   }
-  // Render slots first (this recreates the overlay in the DOM)
-  renderSlots();
   // Show slots with animation and show overlay
   slotsContainer.classList.add('visible');
+  slotsOverlay.classList.add('active');
 });
 
 // Close slots overlay handler

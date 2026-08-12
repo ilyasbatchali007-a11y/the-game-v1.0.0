@@ -374,22 +374,30 @@ window.addEventListener('resize', () => {
 
 // Menu Button Handlers
 btnStart.addEventListener('click', () => {
-  // Render slots first (this recreates the overlay in the DOM)
-  renderSlots();
   // Hide the start button and other menu buttons
   btnStart.classList.add('hidden');
   if (btnSettings.parentElement) {
     btnSettings.parentElement.classList.add('hidden');
   }
-  // Show slots with animation and show overlay
+  // Render slots first (this recreates the overlay in the DOM)
+  renderSlots();
+  // Show slots with animation
   slotsContainer.classList.add('visible');
-  slotsOverlay.classList.add('active');
+  // Get the fresh overlay element after renderSlots and show it
+  const freshOverlay = document.getElementById('slots-overlay') as HTMLElement;
+  if (freshOverlay) {
+    freshOverlay.classList.add('active');
+  }
 });
 
 // Close slots overlay handler
 btnCloseSlots.addEventListener('click', () => {
-  // Hide slots container
+  // Hide slots container and overlay
   slotsContainer.classList.remove('visible');
+  const freshOverlay = document.getElementById('slots-overlay') as HTMLElement;
+  if (freshOverlay) {
+    freshOverlay.classList.remove('active');
+  }
   // Show start button and menu buttons again
   btnStart.classList.remove('hidden');
   if (btnSettings.parentElement) {

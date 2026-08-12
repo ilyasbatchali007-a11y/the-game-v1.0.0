@@ -1,1 +1,9 @@
-(src/main.ts)
+```
+# Build artifacts
+dist/
+build/
+# Dependencies
+node_modules/
+# Vite specific
+.vite/
+```

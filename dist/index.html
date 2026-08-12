@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ECS Engine</title>
+    <style>
+      /* Reset defaults to prevent awkward offsets */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #000000;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      #game-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background-color: #1a1a1e;
+      }
+
+      /* Start Menu Styles */
+      #start-menu {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+
+      #start-menu.hidden {
+        display: none;
+      }
+
+      .menu-title {
+        font-size: 4rem;
+        color: #e94560;
+        text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        margin-bottom: 2rem;
+        letter-spacing: 4px;
+      }
+
+      .start-btn {
+        padding: 1rem 3rem;
+        font-size: 1.5rem;
+        background: transparent;
+        border: 2px solid #e94560;
+        color: #e94560;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        min-width: 250px;
+        margin-bottom: 0.5rem;
+        order: 3;
+      }
+
+      .start-btn:hover {
+        background: #e94560;
+        color: #fff;
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(233, 69, 96, 0.4);
+      }
+
+      .menu-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        order: 2;
+      }
+
+      .menu-btn {
+        padding: 0.75rem 1.5rem;
+        font-size: 1.1rem;
+        background: transparent;
+        border: 2px solid #4a90d9;
+        color: #4a90d9;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        min-width: 150px;
+      }
+
+      .menu-btn:hover {
+        background: #4a90d9;
+        color: #fff;
+        transform: scale(1.05);
+        box-shadow: 0 0 20px rgba(74, 144, 217, 0.4);
+      }
+
+      .slots-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+        max-width: 400px; /* Increased container width */
+        overflow: hidden;
+        max-height: 0;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all 0.4s ease-out;
+        order: 1;
+        position: relative;
+        padding: 40px 20px 20px 20px; /* Top padding for X button */
+      }
+
+      .slots-container.visible {
+        max-height: 400px;
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .slots-overlay {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        width: auto;
+        height: auto;
+        background: transparent;
+        display: none;
+        justify-content: flex-end;
+        align-items: flex-start;
+        padding: 0;
+        z-index: 20;
+        pointer-events: none;
+      }
+
+      .slots-overlay.active {
+        display: flex;
+      }
+
+      .close-btn {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.9rem;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid #ff6b6b;
+        color: #ff6b6b;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 6px;
+        min-width: 28px;
+        min-height: 28px;
+        pointer-events: auto;
+        line-height: 1;
+      }
+
+      .close-btn:hover {
+        background: #ff6b6b;
+        color: #fff;
+        transform: scale(1.1);
+      }
+
+      .save-slot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.7rem;
+        background: rgba(233, 69, 96, 0.1);
+        border: 2px solid rgba(233, 69, 96, 0.3);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-height: 37px; /* 20% smaller */
+      }
+
+      .save-slot:hover {
+        background: rgba(233, 69, 96, 0.2);
+        border-color: #e94560;
+        transform: scale(1.02);
+      }
+
+      .save-slot.empty {
+        opacity: 0.7;
+        font-style: italic;
+        color: #aaa;
+      }
+
+      .slot-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .slot-name {
+        color: #fff;
+        font-size: 0.972rem;
+        font-weight: bold;
+        opacity: 1;
+        transition: opacity 0.2s ease;
+      }
+
+      .save-slot.selected .slot-name {
+        opacity: 0.6;
+      }
+
+      .slot-date {
+        color: #aaa;
+        font-size: 0.729rem;
+        margin-top: 0.2025rem;
+      }
+
+      .delete-btn {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.9rem;
+        border: 1px solid #ff6b6b;
+        background: transparent;
+        color: #ff6b6b;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.3s;
+        margin-left: 0.9rem;
+      }
+
+      .delete-btn:hover {
+        background: #ff6b6b;
+        color: #fff;
+      }
+
+      .link-boxes {
+        position: absolute;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 1.35rem;
+      }
+
+      .link-box {
+        width: 54px;
+        height: 54px;
+        background: rgba(233, 69, 96, 0.1);
+        border: 2px solid rgba(233, 69, 96, 0.3);
+        border-radius: 8px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: #aaa;
+        font-size: 0.72rem;
+        text-decoration: none;
+      }
+
+      .link-box:hover {
+        background: rgba(233, 69, 96, 0.2);
+        border-color: #e94560;
+        color: #fff;
+        transform: scale(1.1);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-CUNL0C37.js"></script>
+  </head>
+  <body>
+    <div id="game-container">
+      <canvas id="canvas"></canvas>
+      
+      <!-- Start Menu -->
+      <div id="start-menu">
+        <h1 class="menu-title">ECS ENGINE</h1>
+        <button class="start-btn" id="btn-start">START</button>
+        <div class="menu-buttons">
+          <button class="menu-btn" id="btn-settings">Settings</button>
+          <button class="menu-btn" id="btn-credits">Credits</button>
+        </div>
+        <div class="slots-container" id="slots-container">
+          <div class="slots-overlay" id="slots-overlay">
+            <button class="close-btn" id="btn-close-slots">X</button>
+          </div>
+          <!-- Slots will be rendered here by JS -->
+        </div>
+        <div class="link-boxes">
+          <a href="#" class="link-box" id="link-1">Link 1</a>
+          <a href="#" class="link-box" id="link-2">Link 2</a>
+          <a href="#" class="link-box" id="link-3">Link 3</a>
+        </div>
+      </div>
+    </div>
+    
+  </body>
+</html>

@@ -102,4 +102,8 @@ export class World {
   public getSpawnPoint(): { x: number, y: number } {
     return this.levelManager.getSpawnPoint();
   }
+
+  public getLevelManager(): LevelManager {
+    return this.levelManager;
+  }
 }

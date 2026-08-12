@@ -360,6 +360,10 @@ window.addEventListener('keydown', (e) => {
       const newFloor = world.changeFloor(direction);
       
       if (newFloor !== currentFloor) {
+        // Update mapRenderer with the new floor config
+        const newFloorConfig = world.getLevelManager().getCurrentFloor();
+        mapRenderer.setFloor(newFloorConfig);
+        
         // Get spawn point for new floor
         const spawn = world.getSpawnPoint();
         

@@ -1,9 +1,11 @@
 // SRC/ecs/World.ts
 
 import { MAX_ENTITIES } from "../config/Constants";
+import { LevelManager } from "./LevelManager";
 
 export class World {
   public maxEntities: number;
+  public levelManager: LevelManager;
   
   // Legacy array names for compatibility
   public active: Uint8Array;
@@ -30,6 +32,7 @@ export class World {
 
   constructor(maxEntities: number = MAX_ENTITIES) {
     this.maxEntities = maxEntities;
+    this.levelManager = new LevelManager();
     this.active = new Uint8Array(maxEntities);
     this.x = new Float32Array(maxEntities);
     this.y = new Float32Array(maxEntities);
@@ -78,5 +81,25 @@ export class World {
     this.set.count++;
     
     return id;
+  }
+
+  public getWidth(): number {
+    return this.levelManager.getWidth();
+  }
+
+  public getHeight(): number {
+    return this.levelManager.getHeight();
+  }
+
+  public changeFloor(direction: number): number {
+    return this.levelManager.changeFloor(direction);
+  }
+
+  public getCurrentFloorId(): number {
+    return this.levelManager.getCurrentFloor().id;
+  }
+
+  public getSpawnPoint(): { x: number, y: number } {
+    return this.levelManager.getSpawnPoint();
   }
 }

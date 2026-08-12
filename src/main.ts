@@ -70,9 +70,10 @@ canvas.height = window.innerHeight;
   generateTestMap();
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
-  // Spawn player entity at center of map (avoiding border walls)
-  const playerX = WORLD_WIDTH / 2;
-  const playerY = WORLD_HEIGHT / 2;
+  // Spawn player entity at center of first floor (using LevelManager spawn point)
+  const spawn = world.levelManager.getSpawnPoint();
+  const playerX = spawn.x * CELL_SIZE;
+  const playerY = spawn.y * CELL_SIZE;
   world.active[PLAYER_ID] = 1;
   world.x[PLAYER_ID] = playerX;
   world.y[PLAYER_ID] = playerY;
@@ -242,9 +243,11 @@ function initNewGame() {
     world = new World();
     generateTestMap();
     
-    // Respawn player
-    const playerX = WORLD_WIDTH / 2;
-    const playerY = WORLD_HEIGHT / 2;
+    // Get spawn point from LevelManager
+    const spawn = world.getSpawnPoint();
+    const playerX = spawn.x * CELL_SIZE;
+    const playerY = spawn.y * CELL_SIZE;
+    
     world.active[PLAYER_ID] = 1;
     world.x[PLAYER_ID] = playerX;
     world.y[PLAYER_ID] = playerY;
@@ -347,6 +350,33 @@ function startGameLoop() {
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
+  
+  // Floor transition with F key (up) and Shift+F (down)
+  if (e.key === 'f' || e.key === 'F') {
+    if (world && gameRunning) {
+      const currentFloor = world.getCurrentFloorId();
+      // Shift+F goes down, F goes up
+      const direction = e.shiftKey ? -1 : 1;
+      const newFloor = world.changeFloor(direction);
+      
+      if (newFloor !== currentFloor) {
+        // Get spawn point for new floor
+        const spawn = world.getSpawnPoint();
+        
+        // Move player to center of new floor
+        world.x[PLAYER_ID] = spawn.x * CELL_SIZE;
+        world.y[PLAYER_ID] = spawn.y * CELL_SIZE;
+        
+        // Update camera target immediately
+        if (camera) {
+          camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+          camera.snapToTarget();
+        }
+        
+        console.log(`[Floor] Changed from ${currentFloor} to ${newFloor}`);
+      }
+    }
+  }
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {

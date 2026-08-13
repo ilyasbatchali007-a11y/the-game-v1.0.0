@@ -74,7 +74,7 @@ in vec2 v_uv;
 in vec2 v_worldPos;  // World position for floor tile calculation
 
 uniform sampler2D u_texture;
-uniform int u_renderMode;     // 0 = floor, 1 = entity
+uniform int u_renderMode;     // 0 = floor, 1 = entity, 2 = stairs
 uniform vec4 u_entityColor;
 
 // Atlas configuration uniforms
@@ -134,6 +134,25 @@ void main() {
     }
     
     fragColor = u_entityColor * brightness;
+  } else if (u_renderMode == 2) {
+    // STAIR RENDERING - Use atlas index stored in instance data height field
+    float tileId = v_uv.x; // Pass atlas index through UV
+    
+    // Convert tile ID to atlas UV coordinates
+    float tilesPerRow = float(u_atlasTileCount);
+    float tileCol = mod(tileId, tilesPerRow);
+    float tileRow = floor(tileId / tilesPerRow);
+    
+    // Calculate base UV for this tile in atlas
+    float tileUVSize = 1.0 / tilesPerRow;
+    float baseU = tileCol * tileUVSize;
+    float baseV = tileRow * tileUVSize;
+    
+    // Use fragment UV directly (passed from vertex shader)
+    vec2 finalUV = vec2(baseU + v_uv.x * tileUVSize, baseV + v_uv.y * tileUVSize);
+    
+    // Sample the atlas texture
+    fragColor = texture(u_texture, finalUV);
   } else {
     // FLOOR RENDERING
     
@@ -526,6 +545,78 @@ export class GLInstancedRenderer {
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, 1);
     gl.bindVertexArray(null);
     // Leave culling disabled while the cube is drawn; other draws re-enable as needed
+  }
+
+  /**
+   * Render stair tiles from atlas at specified positions on current floor
+   */
+  public renderStairs(
+    floorData: { 
+      stairUpTile?: { x: number; y: number; atlasIndex: number };
+      stairDownTile?: { x: number; y: number; atlasIndex: number };
+    } | null,
+    width: number,
+    height: number,
+    texture: WebGLTexture,
+    cameraX: number = 0,
+    cameraY: number = 0,
+    tileSize: number = 64
+  ): void {
+    if (!floorData || (!floorData.stairUpTile && !floorData.stairDownTile)) return;
+    
+    const gl = this.gl;
+    const stairs: {x: number, y: number, atlasIndex: number}[] = [];
+    
+    if (floorData.stairUpTile) {
+      stairs.push({
+        x: floorData.stairUpTile.x * tileSize,
+        y: floorData.stairUpTile.y * tileSize,
+        atlasIndex: floorData.stairUpTile.atlasIndex
+      });
+    }
+    if (floorData.stairDownTile) {
+      stairs.push({
+        x: floorData.stairDownTile.x * tileSize,
+        y: floorData.stairDownTile.y * tileSize,
+        atlasIndex: floorData.stairDownTile.atlasIndex
+      });
+    }
+    
+    if (stairs.length === 0) return;
+    
+    // Prepare instance data for stairs (position + atlas index as height field)
+    for (let i = 0; i < stairs.length; i++) {
+      const idx = i * 7;
+      this.instanceData[idx] = stairs[i].x;
+      this.instanceData[idx + 1] = stairs[i].y;
+      this.instanceData[idx + 2] = tileSize;
+      this.instanceData[idx + 3] = tileSize;
+      this.instanceData[idx + 4] = stairs[i].atlasIndex; // Use height field for atlas index
+      this.instanceData[idx + 5] = 0; // rotation
+      this.instanceData[idx + 6] = 0; // elevation
+    }
+    
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(this.program);
+    gl.uniform2f(this.resolutionLoc, width, height);
+    gl.uniform1f(this.isoAngleLoc, this.isoAngle);
+    gl.uniform1f(this.isoScaleLoc, this.isoScale);
+    gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
+    gl.uniform1i(this.renderModeLoc, 2);  // Stair mode
+    gl.uniform1i(this.atlasTileCountLoc, 32);
+    gl.uniform1f(this.tileSizePixelsLoc, 64.0);
+    gl.uniform1f(this.worldTileSizeLoc, tileSize);
+    
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, stairs.length * 7));
+    
+    gl.bindVertexArray(this.cubeVAO);
+    // Draw instanced stairs (single quad per stair)
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, stairs.length);
+    gl.bindVertexArray(null);
   }
 
   /**

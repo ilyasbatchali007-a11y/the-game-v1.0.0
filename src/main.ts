@@ -11,8 +11,16 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+import { EXTRA_FLOORS, TOTAL_FLOORS } from './config/FloorMap';
 // 💡 ADDITION: Initialize MapRenderer
 const mapRenderer = new MapRenderer();
+
+// Floor teleportation system
+let currentFloorIndex = 0; // 0 = main arena floor, 1-19 = extra floors
+const FLOOR_HEIGHT_STEP = 200;
+
+// Green chessboard texture for extra floors (generated once)
+let greenChessboardTexture: WebGLTexture | null = null;
 
 // Game State
 let gameRunning = false;
@@ -348,6 +356,15 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
   
+  // Floor teleportation: T for up, G for down
+  if (e.key === 't' || e.key === 'T') {
+    e.preventDefault();
+    teleportFloor(1); // Go up one floor
+  } else if (e.key === 'g' || e.key === 'G') {
+    e.preventDefault();
+    teleportFloor(-1); // Go down one floor
+  }
+  
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
@@ -357,6 +374,39 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Teleport player between floors
+function teleportFloor(direction: number) {
+  if (!world || !renderer) return;
+  
+  const newFloorIndex = currentFloorIndex + direction;
+  
+  // Clamp floor index between 0 (main floor) and TOTAL_FLOORS - 1 (top floor)
+  if (newFloorIndex < 0 || newFloorIndex >= TOTAL_FLOORS) {
+    console.log(`[Floor] Cannot go ${direction > 0 ? 'up' : 'down'} from floor ${currentFloorIndex}`);
+    return;
+  }
+  
+  currentFloorIndex = newFloorIndex;
+  
+  // Update renderer's floor index
+  renderer.setCurrentFloorIndex(currentFloorIndex);
+  
+  // Get target Y level
+  let targetYLevel = 0;
+  if (currentFloorIndex > 0) {
+    const extraFloor = EXTRA_FLOORS[currentFloorIndex - 1];
+    if (extraFloor) {
+      targetYLevel = extraFloor.yLevel;
+      console.log(`[Floor] Teleported to Floor ${currentFloorIndex} (Green Chessboard ${extraFloor.id + 1}), Size: ${extraFloor.width/64}x${extraFloor.depth/64}, Height: ${targetYLevel}`);
+    }
+  } else {
+    console.log(`[Floor] Teleported to Main Arena Floor`);
+  }
+  
+  // Update player Z position for proper 3D rendering
+  world.z[PLAYER_ID] = targetYLevel;
+}
 
 window.addEventListener('keyup', (e) => {
   if (!gameRunning) return;

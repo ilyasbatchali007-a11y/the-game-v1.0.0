@@ -1,6 +1,6 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
-import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { ARENA_FLOOR, FloorConfig, EXTRA_FLOORS } from '../config/FloorMap';
 import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
@@ -219,11 +219,22 @@ export class GLInstancedRenderer {
   private seedLoc: WebGLUniformLocation | null;
   private sessionSeed: number = 0; // Store seed for the entire session
   
+  // Floor system state
+  private currentFloorIndex: number = 0; // 0 = main arena, 1-19 = extra floors
+  
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
   private isoScale: number = 0.5;          // Y compression for isometric
   private cameraOffsetX: number = 0;
   private cameraOffsetY: number = 0;
+
+  public getCurrentFloorIndex(): number {
+    return this.currentFloorIndex;
+  }
+  
+  public setCurrentFloorIndex(index: number): void {
+    this.currentFloorIndex = index;
+  }
 
   constructor(gl: WebGL2RenderingContext, maxEntities: number) {
     this.gl = gl;
@@ -597,13 +608,30 @@ export class GLInstancedRenderer {
   ): void {
     const gl = this.gl;
 
+    // Determine which floor to render based on currentFloorIndex
+    let floorWidth = ARENA_FLOOR.width;
+    let floorHeight = ARENA_FLOOR.depth;
+    let floorTexture = texture;
+    let repeatX = ARENA_FLOOR.repeatX;
+    let repeatZ = ARENA_FLOOR.repeatZ;
+    
+    if (this.currentFloorIndex > 0 && this.currentFloorIndex <= EXTRA_FLOORS.length) {
+      const extraFloor = EXTRA_FLOORS[this.currentFloorIndex - 1];
+      floorWidth = extraFloor.width;
+      floorHeight = extraFloor.depth;
+      repeatX = extraFloor.repeatX;
+      repeatZ = extraFloor.repeatZ;
+      // Note: extraFloor.texturePath contains data URL, but we use the same texture
+      // In a full implementation, we'd load separate textures per floor
+    }
+
     // Only update floor data if provided (camera moved)
     if (floorData !== null) {
       // Pack floor data: x, y, width, height, height=0
       this.instanceData[0] = floorData.x;
       this.instanceData[1] = floorData.y;
-      this.instanceData[2] = floorData.width;
-      this.instanceData[3] = floorData.height;
+      this.instanceData[2] = floorWidth;
+      this.instanceData[3] = floorHeight;
       this.instanceData[4] = 0.0; // cubeHeight = 0 for floor
       this.instanceData[5] = 0.0; // rotation = 0 for floor
       this.instanceData[6] = 0.0; // elevation = 0 for floor
@@ -637,7 +665,7 @@ export class GLInstancedRenderer {
 
     // Bind atlas texture to TEXTURE0
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.bindTexture(gl.TEXTURE_2D, floorTexture);
     
     // Bind map data texture to TEXTURE1
     gl.activeTexture(gl.TEXTURE1);

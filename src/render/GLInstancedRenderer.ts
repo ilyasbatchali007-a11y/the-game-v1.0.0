@@ -65,7 +65,7 @@ void main() {
 }
 `;
 
-// Fragment Shader Source - Atlas texture with static and random variation tiles
+// Fragment Shader Source - Atlas texture with static and random variation tiles, plus special colored tiles
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
@@ -152,6 +152,18 @@ void main() {
     // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
     if (baseTileId < 0.5 && isStatic > 0.5) {
       discard; // Void tile - don't render anything
+    }
+    
+    // Special tile handling: Red teleport tile (ID 200) and Blue teleport tile (ID 201)
+    if (baseTileId > 199.5 && baseTileId < 200.5) {
+      // Red teleport tile - solid red color
+      fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+      return;
+    }
+    if (baseTileId > 200.5 && baseTileId < 201.5) {
+      // Blue teleport tile - solid blue color
+      fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+      return;
     }
     
     if (isStatic > 0.5) {

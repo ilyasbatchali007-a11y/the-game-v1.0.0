@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA } from './config/MapData';
+import { generateTestMap, MAP_DATA, TELEPORT_TILES, TILE_RED_TELEPORT_UP, TILE_BLUE_TELEPORT_DOWN, currentFloor, NUM_FLOORS, getTileAtPosition, TILE_SIZE } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -343,10 +343,56 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Handle keyboard input for movement
+// Handle keyboard input for movement and teleportation
+let lastTeleportTime = 0; // Cooldown to prevent instant re-teleport
+
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
+  
+  // Teleportation on 'E' key press
+  if (e.key === 'e' || e.key === 'E') {
+    e.preventDefault();
+    
+    const now = performance.now();
+    if (now - lastTeleportTime < 500) return; // 500ms cooldown
+    lastTeleportTime = now;
+    
+    if (world) {
+      const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
+      const playerRow = Math.floor(world.y[PLAYER_ID] / TILE_SIZE);
+      
+      // Check if player is standing on a teleport tile
+      for (const tile of TELEPORT_TILES) {
+        if (tile.col === playerCol && tile.row === playerRow) {
+          if (tile.type === TILE_RED_TELEPORT_UP && currentFloor < NUM_FLOORS) {
+            // Teleport up to next floor
+            const newFloor = currentFloor + 1;
+            generateTestMap(newFloor);
+            
+            // Update map data texture in renderer
+            if (renderer) {
+              (renderer as any).createMapDataTexture();
+            }
+            
+            console.log(`[Teleport] Going up to Floor ${newFloor}`);
+          } else if (tile.type === TILE_BLUE_TELEPORT_DOWN && currentFloor > 1) {
+            // Teleport down to previous floor
+            const newFloor = currentFloor - 1;
+            generateTestMap(newFloor);
+            
+            // Update map data texture in renderer
+            if (renderer) {
+              (renderer as any).createMapDataTexture();
+            }
+            
+            console.log(`[Teleport] Going down to Floor ${newFloor}`);
+          }
+          break;
+        }
+      }
+    }
+  }
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {

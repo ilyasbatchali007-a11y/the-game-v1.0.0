@@ -316,10 +316,12 @@ export class GLInstancedRenderer {
 
     // 2. Static Floor Quad Buffer (6 vertices for a single quad)
     // Each vertex: x, y, z=0, faceId=0 packed into vec4
+    // Floor vertices span from (-0.5, -0.5) to (0.5, 0.5) so when scaled by size,
+    // they cover the full floor area centered at origin
     const floorVertices = new Float32Array([
-      // Single quad covering [0,0] to [1,1]
-      0, 0, 0, 0,   1, 0, 0, 0,   0, 1, 0, 0,
-      0, 1, 0, 0,   1, 0, 0, 0,   1, 1, 0, 0,
+      // Single quad covering [-0.5,-0.5] to [0.5,0.5]
+      -0.5, -0.5, 0, 0,   0.5, -0.5, 0, 0,   -0.5, 0.5, 0, 0,
+      -0.5, 0.5, 0, 0,   0.5, -0.5, 0, 0,   0.5, 0.5, 0, 0,
     ]);
     const floorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, floorBuffer);

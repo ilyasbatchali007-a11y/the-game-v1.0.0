@@ -233,6 +233,7 @@ export class GLInstancedRenderer {
   private variationRangeStartLoc: WebGLUniformLocation | null;
   private variationRangeEndLoc: WebGLUniformLocation | null;
   private useAtlasLoc: WebGLUniformLocation | null;  // Uniform for chessboard vs atlas mode
+  private pendingUseAtlas: boolean = false;  // Store pending atlas mode until program is active
   private mapDataTextureLoc: WebGLUniformLocation | null;
   private mapDimensionsLoc: WebGLUniformLocation | null;
   private seedLoc: WebGLUniformLocation | null;
@@ -631,9 +632,8 @@ export class GLInstancedRenderer {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
       
-      // Set atlas/chessboard mode based on floor data
-      const useAtlas = floorData.useAtlas !== undefined ? floorData.useAtlas : false;
-      gl.uniform1i(this.useAtlasLoc, useAtlas ? 1 : 0);  // 1 = atlas texture, 0 = chessboard pattern
+      // Store atlas mode for later use (after useProgram is called)
+      this.pendingUseAtlas = floorData.useAtlas !== undefined ? floorData.useAtlas : false;
     }
 
     // Disable culling for floor rendering
@@ -641,6 +641,12 @@ export class GLInstancedRenderer {
 
     // Draw single quad for the entire floor
     gl.useProgram(this.program);
+    
+    // Set atlas/chessboard mode now that program is active
+    if (this.pendingUseAtlas !== undefined) {
+      gl.uniform1i(this.useAtlasLoc, this.pendingUseAtlas ? 1 : 0);
+    }
+    
     gl.uniform2f(this.resolutionLoc, width, height);
     gl.uniform1f(this.isoAngleLoc, this.isoAngle);
     gl.uniform1f(this.isoScaleLoc, this.isoScale);

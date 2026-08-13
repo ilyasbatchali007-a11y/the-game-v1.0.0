@@ -65,7 +65,7 @@ void main() {
 }
 `;
 
-// Fragment Shader Source - Atlas texture with static and random variation tiles
+// Fragment Shader Source - Atlas texture with static and random variation tiles, plus chessboard
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
@@ -90,6 +90,9 @@ uniform int u_variationRangeEnd;   // End of variation tile range
 uniform sampler2D u_mapDataTexture;
 uniform vec2 u_mapDimensions;      // Map dimensions in tiles (32, 32)
 uniform float u_seed;              // Random seed for variation tiles (changes on reload)
+
+// Chessboard mode uniform
+uniform int u_isChessboard;        // 1 = use chessboard pattern, 0 = use atlas
 
 out vec4 fragColor;
 
@@ -140,50 +143,71 @@ void main() {
     float localY = fract(v_worldPos.y / u_worldTileSize);
     vec2 localUV = vec2(localX, localY);
     
-    // Determine tile ID from map data or hash
-    float tileId = 0.0;
+    vec4 floorColor;
     
-    // Sample map data texture to get tile info
-    vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
-    vec4 mapData = texture(u_mapDataTexture, mapUV);
-    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
-    float isStatic = mapData.g;              // Static flag stored in G channel
-    
-    // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
-    if (baseTileId < 0.5 && isStatic > 0.5) {
-      discard; // Void tile - don't render anything
-    }
-    
-    if (isStatic > 0.5) {
-      // Static tile: use exact tile ID from map data
-      tileId = baseTileId;
+    if (u_isChessboard == 1) {
+      // GREEN CHESSBOARD PATTERN
+      // Alternate between light green and dark green based on tile coordinates
+      int tileSum = int(tileX) + int(tileY);
+      bool isLight = (tileSum % 2) == 0;
+      
+      if (isLight) {
+        // Light green square
+        floorColor = vec4(0.2, 0.8, 0.2, 1.0);
+      } else {
+        // Dark green square
+        floorColor = vec4(0.1, 0.5, 0.1, 1.0);
+      }
+      
+      fragColor = floorColor;
     } else {
-      // Variation tile: use hash with seed to select random tile from variation range
-      float hashVal = hash(vec2(tileX, tileY), u_seed);
-      float variationCount = float(u_variationRangeEnd - u_variationRangeStart + 1);
-      tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
+      // ATLAS TEXTURE RENDERING (original behavior)
+      
+      // Determine tile ID from map data or hash
+      float tileId = 0.0;
+      
+      // Sample map data texture to get tile info
+      vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
+      vec4 mapData = texture(u_mapDataTexture, mapUV);
+      float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
+      float isStatic = mapData.g;              // Static flag stored in G channel
+      
+      // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
+      if (baseTileId < 0.5 && isStatic > 0.5) {
+        discard; // Void tile - don't render anything
+      }
+      
+      if (isStatic > 0.5) {
+        // Static tile: use exact tile ID from map data
+        tileId = baseTileId;
+      } else {
+        // Variation tile: use hash with seed to select random tile from variation range
+        float hashVal = hash(vec2(tileX, tileY), u_seed);
+        float variationCount = float(u_variationRangeEnd - u_variationRangeStart + 1);
+        tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
+      }
+      
+      // Convert tile ID to atlas UV coordinates
+      float tilesPerRow = float(u_atlasTileCount);
+      float tileCol = mod(tileId, tilesPerRow);
+      float tileRow = floor(tileId / tilesPerRow);
+      
+      // Calculate base UV for this tile in atlas
+      float tileUVSize = 1.0 / tilesPerRow;
+      float baseU = tileCol * tileUVSize;
+      float baseV = tileRow * tileUVSize;
+      
+      // Apply a small margin to prevent texture bleeding (chessboard lines)
+      // This shrinks the UV sample area slightly away from the tile edges
+      float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
+      
+      // Final UV: base tile position + local position within tile (with margin)
+      vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
+      vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);
+      
+      // Sample the atlas texture
+      fragColor = texture(u_texture, finalUV);
     }
-    
-    // Convert tile ID to atlas UV coordinates
-    float tilesPerRow = float(u_atlasTileCount);
-    float tileCol = mod(tileId, tilesPerRow);
-    float tileRow = floor(tileId / tilesPerRow);
-    
-    // Calculate base UV for this tile in atlas
-    float tileUVSize = 1.0 / tilesPerRow;
-    float baseU = tileCol * tileUVSize;
-    float baseV = tileRow * tileUVSize;
-    
-    // Apply a small margin to prevent texture bleeding (chessboard lines)
-    // This shrinks the UV sample area slightly away from the tile edges
-    float margin = 1.0 / 2048.0; // ~1 pixel margin for a 2048 texture
-    
-    // Final UV: base tile position + local position within tile (with margin)
-    vec2 clampedLocalUV = clamp(localUV, margin / tileUVSize, 1.0 - margin / tileUVSize);
-    vec2 finalUV = vec2(baseU + clampedLocalUV.x * tileUVSize, baseV + clampedLocalUV.y * tileUVSize);
-    
-    // Sample the atlas texture
-    fragColor = texture(u_texture, finalUV);
   }
 }
 `;
@@ -217,6 +241,7 @@ export class GLInstancedRenderer {
   private mapDataTextureLoc: WebGLUniformLocation | null;
   private mapDimensionsLoc: WebGLUniformLocation | null;
   private seedLoc: WebGLUniformLocation | null;
+  private isChessboardLoc: WebGLUniformLocation | null;  // Chessboard mode uniform
   private sessionSeed: number = 0; // Store seed for the entire session
   
   // Isometric view defaults
@@ -252,6 +277,7 @@ export class GLInstancedRenderer {
     this.mapDataTextureLoc = gl.getUniformLocation(this.program, 'u_mapDataTexture');
     this.mapDimensionsLoc = gl.getUniformLocation(this.program, 'u_mapDimensions');
     this.seedLoc = gl.getUniformLocation(this.program, 'u_seed');
+    this.isChessboardLoc = gl.getUniformLocation(this.program, 'u_isChessboard');
     
     // Generate initial random seed for this session (changes only on reload/new game)
     this.sessionSeed = Math.random() * 10000.0;
@@ -588,7 +614,7 @@ export class GLInstancedRenderer {
   }
 
   public renderFloor(
-    floorData: { x: number; y: number; width: number; height: number } | null,
+    floorData: { x: number; y: number; width: number; height: number; isChessboard?: boolean } | null,
     width: number,
     height: number,
     texture: WebGLTexture,
@@ -623,29 +649,36 @@ export class GLInstancedRenderer {
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
     
-    // Set atlas configuration uniforms
-    gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
-    gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
-    gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
-    gl.uniform1i(this.staticRangeStartLoc, 0);          // Static tiles: 0-99
-    gl.uniform1i(this.staticRangeEndLoc, 99);
-    gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
-    gl.uniform1i(this.variationRangeEndLoc, 1023);
-    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
-    // Use the stored session seed (consistent throughout gameplay, changes on reload)
-    gl.uniform1f(this.seedLoc, this.sessionSeed);
-
-    // Bind atlas texture to TEXTURE0
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Set chessboard mode uniform
+    const isChessboard = floorData?.isChessboard ?? false;
+    gl.uniform1i(this.isChessboardLoc, isChessboard ? 1 : 0);
     
-    // Bind map data texture to TEXTURE1
-    gl.activeTexture(gl.TEXTURE1);
-    if (this.mapDataTexture) {
-      gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
+    // Only set atlas uniforms if not in chessboard mode
+    if (!isChessboard) {
+      // Set atlas configuration uniforms
+      gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
+      gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
+      gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
+      gl.uniform1i(this.staticRangeStartLoc, 0);          // Static tiles: 0-99
+      gl.uniform1i(this.staticRangeEndLoc, 99);
+      gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
+      gl.uniform1i(this.variationRangeEndLoc, 1023);
+      gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
+      // Use the stored session seed (consistent throughout gameplay, changes on reload)
+      gl.uniform1f(this.seedLoc, this.sessionSeed);
+
+      // Bind atlas texture to TEXTURE0
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      
+      // Bind map data texture to TEXTURE1
+      gl.activeTexture(gl.TEXTURE1);
+      if (this.mapDataTexture) {
+        gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
+      }
+      // Tell shader which texture unit to use for map data
+      gl.uniform1i(this.mapDataTextureLoc, 1);
     }
-    // Tell shader which texture unit to use for map data
-    gl.uniform1i(this.mapDataTextureLoc, 1);
 
     gl.bindVertexArray(this.floorVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1); // Draw 1 instance (the floor)

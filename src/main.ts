@@ -348,6 +348,13 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
   
+  // Floor transition controls: T = go up, G = go down
+  if (e.key === 't' || e.key === 'T') {
+    mapRenderer.nextFloor();
+  } else if (e.key === 'g' || e.key === 'G') {
+    mapRenderer.previousFloor();
+  }
+  
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();

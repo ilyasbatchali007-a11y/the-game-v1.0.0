@@ -64,9 +64,9 @@ export function generateTestMap(floor: number = 1): void {
         MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
         MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
         
-        // Place red teleport tile at specific position on floor 1
-        const redTileCol = offsetX + 7;
-        const redTileRow = offsetY + 7;
+        // Place red teleport tile at specific position on floor 1 (near center spawn)
+        const redTileCol = offsetX + 8;
+        const redTileRow = offsetY + 8;
         if (col === redTileCol && row === redTileRow) {
           MAP_DATA[idx] = TILE_RED_TELEPORT_UP;
           MAP_TILE_DATA[dataIdx] = 200;   // Special red tile ID
@@ -82,9 +82,9 @@ export function generateTestMap(floor: number = 1): void {
         MAP_TILE_DATA[dataIdx] = isEven ? 150 : 151;  // Two different green shades
         MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true (exact tiles for chessboard)
         
-        // Place blue teleport tile at specific position on floors 2-10
-        const blueTileCol = offsetX + 7;
-        const blueTileRow = offsetY + 7;
+        // Place blue teleport tile at specific position on floors 2-10 (same spot as red)
+        const blueTileCol = offsetX + 8;
+        const blueTileRow = offsetY + 8;
         if (col === blueTileCol && row === blueTileRow) {
           MAP_DATA[idx] = TILE_BLUE_TELEPORT_DOWN;
           MAP_TILE_DATA[dataIdx] = 201;   // Special blue tile ID

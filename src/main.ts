@@ -11,8 +11,21 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
-// 💡 ADDITION: Initialize MapRenderer
+// 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
+
+// Expose floor switching function globally for UI/debugging
+(window as any).switchFloor = (floorId: number) => {
+  return mapRenderer.switchFloor(floorId);
+};
+
+(window as any).getCurrentFloor = () => {
+  return mapRenderer.getCurrentFloorId();
+};
+
+(window as any).getAvailableFloors = () => {
+  return mapRenderer.getAvailableFloors();
+};
 
 // Game State
 let gameRunning = false;

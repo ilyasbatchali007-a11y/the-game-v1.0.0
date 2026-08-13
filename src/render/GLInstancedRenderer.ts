@@ -1,6 +1,6 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
-import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { FloorConfig } from '../config/FloorMap';
 import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion

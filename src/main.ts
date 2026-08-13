@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA } from './config/MapData';
+import { generateTestMap, MAP_DATA, TILE_SIZE, getTileData, teleportToFloor, currentFloorId, TELEPORTER_UP_ID, TELEPORTER_DOWN_ID } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -354,6 +354,33 @@ window.addEventListener('keydown', (e) => {
     if (world && currentSlotId !== null) {
       SaveSlotManager.saveToSlot(world, currentSlotId, `Save ${currentSlotId + 1}`);
       console.log(`[UI] Saved to slot ${currentSlotId}!`);
+    }
+  }
+  
+  // Teleport controls: Numpad + for UP, Numpad - for DOWN
+  if (world && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '_')) {
+    const playerX = world.x[PLAYER_ID];
+    const playerY = world.y[PLAYER_ID];
+    const col = Math.floor(playerX / TILE_SIZE);
+    const row = Math.floor(playerY / TILE_SIZE);
+    const tileData = getTileData(col, row);
+    
+    if (e.key === '+' || e.key === '=') {
+      // Numpad + or regular + : Try to go UP
+      if (tileData.tileId === TELEPORTER_UP_ID) {
+        const newPos = teleportToFloor(currentFloorId + 1, playerX, playerY);
+        world.x[PLAYER_ID] = newPos.x;
+        world.y[PLAYER_ID] = newPos.y;
+        console.log('[Input] Teleported UP to floor', currentFloorId);
+      }
+    } else if (e.key === '-' || e.key === '_') {
+      // Numpad - or regular - : Try to go DOWN
+      if (tileData.tileId === TELEPORTER_DOWN_ID) {
+        const newPos = teleportToFloor(currentFloorId - 1, playerX, playerY);
+        world.x[PLAYER_ID] = newPos.x;
+        world.y[PLAYER_ID] = newPos.y;
+        console.log('[Input] Teleported DOWN to floor', currentFloorId);
+      }
     }
   }
 });

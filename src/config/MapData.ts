@@ -4,9 +4,9 @@ export const MAP_ROWS = 160;
 export const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 export const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 
-// Tile IDs for teleporters
-export const TELEPORTER_UP_ID = 10;
-export const TELEPORTER_DOWN_ID = 13;
+// Tile IDs for teleporters (using distinct colors from atlas)
+export const TELEPORTER_UP_ID = 19;    // Red tile (RGB: 206, 69, 60)
+export const TELEPORTER_DOWN_ID = 29;  // Blue tile (RGB: 59, 137, 208)
 
 // Tile data structure for atlas rendering
 // Each tile stores: tileId (which texture to use from atlas) and isStatic flag

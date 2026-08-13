@@ -504,13 +504,6 @@ export class GLInstancedRenderer {
     const cols = MAP_COLS;
     const rows = MAP_ROWS;
     
-    // Create a texture with dimensions matching the current floor
-    const texture = gl.createTexture();
-    if (!texture) {
-      console.error('Failed to create map data texture');
-      return;
-    }
-    
     // Convert current floor's FLOOR_TILE_DATA to RGBA format for texture
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
@@ -534,7 +527,16 @@ export class GLInstancedRenderer {
       textureData[dstIdx + 3] = 255;                                 // A
     }
     
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Create or reuse texture
+    if (!this.mapDataTexture) {
+      this.mapDataTexture = gl.createTexture();
+      if (!this.mapDataTexture) {
+        console.error('Failed to create map data texture');
+        return;
+      }
+    }
+    
+    gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
     
     // Upload texture data - use NEAREST filtering for exact pixel values
     gl.texImage2D(
@@ -556,12 +558,11 @@ export class GLInstancedRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     
     gl.bindTexture(gl.TEXTURE_2D, null);
-    
-    this.mapDataTexture = texture;
   }
   
   // Public method to update floor texture when changing floors
   public updateFloorTexture(): void {
+    console.log(`[Renderer] Updating floor texture for floor ${currentFloor}`);
     this.createMapDataTexture();
   }
 

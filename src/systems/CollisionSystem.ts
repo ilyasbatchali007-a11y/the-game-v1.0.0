@@ -10,7 +10,7 @@ type World = {
 };
 
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config/Constants';
-import { isTileBlocking, TILE_SIZE } from '../config/MapData';
+import { isTileBlocking, TILE_SIZE, getCurrentFloor } from '../config/MapData';
 
 export class CollisionSystem {
   public update(world: World, dt: number, playerId: number = 0): void {
@@ -43,6 +43,9 @@ export class CollisionSystem {
     height: number,
     dt: number
   ): { x: number; y: number } {
+    // Get current floor for collision checking
+    const currentFloor = getCurrentFloor();
+    
     // Calculate next position with floating-point precision
     let nextX = x + vx * dt;
     let nextY = y + vy * dt;
@@ -67,7 +70,7 @@ export class CollisionSystem {
     for (const corner of corners) {
       const col = Math.floor(corner.x / TILE_SIZE);
       const row = Math.floor(corner.y / TILE_SIZE);
-      if (isTileBlocking(col, row)) {
+      if (isTileBlocking(col, row, currentFloor)) {
         hasCollision = true;
         break;
       }
@@ -86,7 +89,7 @@ export class CollisionSystem {
       for (const corner of xCorners) {
         const col = Math.floor(corner.x / TILE_SIZE);
         const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row)) {
+        if (isTileBlocking(col, row, currentFloor)) {
           canMoveX = false;
           break;
         }
@@ -107,7 +110,7 @@ export class CollisionSystem {
       for (const corner of yCorners) {
         const col = Math.floor(corner.x / TILE_SIZE);
         const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row)) {
+        if (isTileBlocking(col, row, currentFloor)) {
           canMoveY = false;
           break;
         }

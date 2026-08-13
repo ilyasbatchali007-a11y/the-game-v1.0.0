@@ -267,6 +267,7 @@ function initNewGame() {
 let inputState: Record<string, boolean> = {};
 let accumulator = 0;
 let lastTime = performance.now();
+let floorDataNeedsRefresh = false; // Flag to trigger floor data recalculation on floor change
 
 function startGameLoop() {
   // Reset timing
@@ -304,8 +305,13 @@ function startGameLoop() {
     const camX = camera.getX();
     const camY = camera.getY();
 
-    // Always recalculate floor data on first few frames OR when camera moved
-    if (cameraMoved || lastTime === now) { // First frame condition
+    // Always recalculate floor data when camera moved or on floor change
+    // Force floor data recalculation by checking if we need to refresh
+    const shouldRecalculate = cameraMoved || (lastTime === now) || floorDataNeedsRefresh;
+    
+    if (shouldRecalculate) {
+      floorDataNeedsRefresh = false; // Reset flag after using it
+      
       // 1. Get floor data and render as SINGLE quad (1 draw call instead of 1024+)
       const floorData = mapRenderer.getFloorData(
         camX, camY,
@@ -357,6 +363,8 @@ window.addEventListener('keydown', (e) => {
     if (renderer) {
       renderer.updateFloorTexture();
     }
+    // Force mapRenderer to recalculate floor data on next frame
+    floorDataNeedsRefresh = true;
   } else if (e.key === 'g' || e.key === 'G') {
     const newFloor = getCurrentFloor() - 1;
     setCurrentFloor(newFloor);
@@ -365,6 +373,8 @@ window.addEventListener('keydown', (e) => {
     if (renderer) {
       renderer.updateFloorTexture();
     }
+    // Force mapRenderer to recalculate floor data on next frame
+    floorDataNeedsRefresh = true;
   }
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session

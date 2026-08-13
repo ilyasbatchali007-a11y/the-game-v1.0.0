@@ -146,7 +146,7 @@ void main() {
     // Sample map data texture to get tile info
     vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
     vec4 mapData = texture(u_mapDataTexture, mapUV);
-    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
+    float baseTileId = mapData.r * 255.0;  // Tile ID stored in R channel (0-255 range)
     float isStatic = mapData.g;              // Static flag stored in G channel
     
     if (isStatic > 0.5) {
@@ -504,6 +504,8 @@ export class GLInstancedRenderer {
     const cols = MAP_COLS;
     const rows = MAP_ROWS;
     
+    console.log(`[Renderer] Creating map texture for Floor ${currentFloor} (${cols}x${rows})`);
+    
     // Convert current floor's FLOOR_TILE_DATA to RGBA format for texture
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
@@ -527,13 +529,17 @@ export class GLInstancedRenderer {
       textureData[dstIdx + 3] = 255;                                 // A
     }
     
-    // Create or reuse texture
+    // CRITICAL FIX: Delete existing texture to force GPU update
+    if (this.mapDataTexture) {
+      gl.deleteTexture(this.mapDataTexture);
+      this.mapDataTexture = null;
+    }
+    
+    // Create new texture
+    this.mapDataTexture = gl.createTexture();
     if (!this.mapDataTexture) {
-      this.mapDataTexture = gl.createTexture();
-      if (!this.mapDataTexture) {
-        console.error('Failed to create map data texture');
-        return;
-      }
+      console.error('Failed to create map data texture');
+      return;
     }
     
     gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
@@ -558,6 +564,8 @@ export class GLInstancedRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     
     gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    console.log(`[Renderer] Floor ${currentFloor} texture created and bound successfully.`);
   }
   
   // Public method to update floor texture when changing floors

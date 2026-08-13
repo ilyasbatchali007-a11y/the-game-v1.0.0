@@ -52,81 +52,48 @@ export function generateTestMap(floor: number = 1): void {
   const offsetX = Math.floor((MAP_COLS - patternSize) / 2);
   const offsetY = Math.floor((MAP_ROWS - patternSize) / 2);
   
-  // Initialize all tiles as void (0) first
-  MAP_DATA.fill(0);
-  MAP_TILE_DATA.fill(0);
-  
-  // Apply the pattern directly
+  // Fill entire map with Floor 1 atlas texture by default
   for (let row = 0; row < MAP_ROWS; row++) {
     for (let col = 0; col < MAP_COLS; col++) {
       const idx = row * MAP_COLS + col;
       const dataIdx = idx * 2;
       
-      // Check if within pattern area
-      let isFloor = false;
-      if (row >= offsetY && row < offsetY + patternSize &&
-          col >= offsetX && col < offsetX + patternSize) {
-        const patternRow = row - offsetY;
-        const patternCol = col - offsetX;
+      if (floor === 1) {
+        // Floor 1: Atlas texture (green grass from atlas)
+        MAP_DATA[idx] = TILE_NORMAL;
+        MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
+        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
         
-        // Interconnected pattern with ~15% void (38 voids out of 256)
-        isFloor = !(
-          (patternRow === 1 || patternRow === 2) && (patternCol === 5 || patternCol === 6 || patternCol === 9 || patternCol === 10) ||
-          (patternRow === 3 || patternRow === 4) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-          (patternRow === 5 || patternRow === 6) && (patternCol >= 6 && patternCol <= 9) ||
-          (patternRow === 9 || patternRow === 10) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-          (patternRow === 11 || patternRow === 12) && (patternCol === 6 || patternCol === 7 || patternCol === 9 || patternCol === 10)
-        );
-      }
-      
-      if (isFloor) {
-        if (floor === 1) {
-          // Floor 1: Atlas texture (green grass from atlas)
-          MAP_DATA[idx] = TILE_NORMAL;
-          MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
-          MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
-          
-          // Place red teleport tile at specific position on floor 1
-          // Position: center of the pattern area
-          const redTileCol = offsetX + 7;
-          const redTileRow = offsetY + 7;
-          if (col === redTileCol && row === redTileRow) {
-            MAP_DATA[idx] = TILE_RED_TELEPORT_UP;
-            MAP_TILE_DATA[dataIdx] = 200;   // Special red tile ID
-            MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true (exact tile)
-            TELEPORT_TILES.push({ col: redTileCol, row: redTileRow, type: TILE_RED_TELEPORT_UP });
-          }
-        } else {
-          // Floors 2-10: Green chessboard pattern
-          MAP_DATA[idx] = TILE_GREEN_CHESS;
-          
-          // Create chessboard pattern using tile IDs
-          // Even positions get one green shade, odd positions get another
-          const isEven = ((col + row) % 2) === 0;
-          MAP_TILE_DATA[dataIdx] = isEven ? 150 : 151;  // Two different green shades
-          MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true (exact tiles for chessboard)
-          
-          // Place blue teleport tile at specific position on floors 2-10
-          // Position: same relative position as red tile on floor 1
-          const blueTileCol = offsetX + 7;
-          const blueTileRow = offsetY + 7;
-          if (col === blueTileCol && row === blueTileRow) {
-            MAP_DATA[idx] = TILE_BLUE_TELEPORT_DOWN;
-            MAP_TILE_DATA[dataIdx] = 201;   // Special blue tile ID
-            MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true (exact tile)
-            TELEPORT_TILES.push({ col: blueTileCol, row: blueTileRow, type: TILE_BLUE_TELEPORT_DOWN });
-          }
+        // Place red teleport tile at specific position on floor 1
+        const redTileCol = offsetX + 7;
+        const redTileRow = offsetY + 7;
+        if (col === redTileCol && row === redTileRow) {
+          MAP_DATA[idx] = TILE_RED_TELEPORT_UP;
+          MAP_TILE_DATA[dataIdx] = 200;   // Special red tile ID
+          MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true (exact tile)
+          TELEPORT_TILES.push({ col: redTileCol, row: redTileRow, type: TILE_RED_TELEPORT_UP });
         }
       } else {
-        // Void - nothing will be rendered here
-        MAP_DATA[idx] = 0;
-        MAP_TILE_DATA[dataIdx] = 0;      // Tile ID 0 (void)
-        MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
+        // Floors 2-10: Green chessboard pattern
+        MAP_DATA[idx] = TILE_GREEN_CHESS;
+        
+        // Create chessboard pattern using tile IDs
+        const isEven = ((col + row) % 2) === 0;
+        MAP_TILE_DATA[dataIdx] = isEven ? 150 : 151;  // Two different green shades
+        MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true (exact tiles for chessboard)
+        
+        // Place blue teleport tile at specific position on floors 2-10
+        const blueTileCol = offsetX + 7;
+        const blueTileRow = offsetY + 7;
+        if (col === blueTileCol && row === blueTileRow) {
+          MAP_DATA[idx] = TILE_BLUE_TELEPORT_DOWN;
+          MAP_TILE_DATA[dataIdx] = 201;   // Special blue tile ID
+          MAP_TILE_DATA[dataIdx + 1] = 1; // isStatic = true (exact tile)
+          TELEPORT_TILES.push({ col: blueTileCol, row: blueTileRow, type: TILE_BLUE_TELEPORT_DOWN });
+        }
       }
     }
   }
-  
-  // No border walls - pattern floats in void space
 }
 
 export function isTileBlocking(col: number, row: number): boolean {

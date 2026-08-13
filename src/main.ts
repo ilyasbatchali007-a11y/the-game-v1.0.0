@@ -70,6 +70,9 @@ canvas.height = window.innerHeight;
   generateTestMap();
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
+  // Update map data texture in renderer after initial map generation
+  renderer.updateMapDataTexture();
+  
   // Spawn player entity at center of map (avoiding border walls)
   const playerX = WORLD_WIDTH / 2;
   const playerY = WORLD_HEIGHT / 2;
@@ -372,7 +375,7 @@ window.addEventListener('keydown', (e) => {
             
             // Update map data texture in renderer
             if (renderer) {
-              (renderer as any).createMapDataTexture();
+              renderer.updateMapDataTexture();
             }
             
             console.log(`[Teleport] Going up to Floor ${newFloor}`);
@@ -383,7 +386,7 @@ window.addEventListener('keydown', (e) => {
             
             // Update map data texture in renderer
             if (renderer) {
-              (renderer as any).createMapDataTexture();
+              renderer.updateMapDataTexture();
             }
             
             console.log(`[Teleport] Going down to Floor ${newFloor}`);

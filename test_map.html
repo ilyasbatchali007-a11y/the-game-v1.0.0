@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Map Data Test</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
+        .info { margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #output { white-space: pre; background: #2a2a2a; padding: 15px; border-radius: 5px; max-height: 400px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Map Data Debug Tool</h1>
+    <div class="info">
+        <p>This tool shows the map data to verify teleport tiles are correctly placed.</p>
+        <button onclick="checkFloor1()">Check Floor 1 (Red Tile)</button>
+        <button onclick="checkFloor2()">Check Floor 2 (Blue Tile)</button>
+        <button onclick="showPattern()">Show Pattern Area</button>
+    </div>
+    <div id="output">Click a button to check map data...</div>
+
+    <script type="module">
+        // Import map constants directly
+        const TILE_SIZE = 64;
+        const MAP_COLS = 160;
+        const MAP_ROWS = 160;
+        
+        const TILE_NORMAL = 0;
+        const TILE_RED_TELEPORT_UP = 1;
+        const TILE_BLUE_TELEPORT_DOWN = 2;
+        const TILE_GREEN_CHESS = 3;
+        
+        let MAP_DATA = new Uint8Array(MAP_COLS * MAP_ROWS);
+        let MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2);
+        let TELEPORT_TILES = [];
+        let currentFloor = 1;
+        
+        function generateTestMap(floor = 1) {
+            TELEPORT_TILES = [];
+            currentFloor = floor;
+            
+            const patternSize = 16;
+            const offsetX = Math.floor((MAP_COLS - patternSize) / 2);
+            const offsetY = Math.floor((MAP_ROWS - patternSize) / 2);
+            
+            MAP_DATA.fill(0);
+            MAP_TILE_DATA.fill(0);
+            
+            for (let row = 0; row < MAP_ROWS; row++) {
+                for (let col = 0; col < MAP_COLS; col++) {
+                    const idx = row * MAP_COLS + col;
+                    const dataIdx = idx * 2;
+                    
+                    let isFloor = false;
+                    if (row >= offsetY && row < offsetY + patternSize &&
+                        col >= offsetX && col < offsetX + patternSize) {
+                        const patternRow = row - offsetY;
+                        const patternCol = col - offsetX;
+                        
+                        isFloor = !(
+                            (patternRow === 1 || patternRow === 2) && (patternCol === 5 || patternCol === 6 || patternCol === 9 || patternCol === 10) ||
+                            (patternRow === 3 || patternRow === 4) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
+                            (patternRow === 5 || patternRow === 6) && (patternCol >= 6 && patternCol <= 9) ||
+                            (patternRow === 9 || patternRow === 10) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
+                            (patternRow === 11 || patternRow === 12) && (patternCol === 6 || patternCol === 7 || patternCol === 9 || patternCol === 10)
+                        );
+                    }
+                    
+                    if (isFloor) {
+                        if (floor === 1) {
+                            MAP_DATA[idx] = TILE_NORMAL;
+                            MAP_TILE_DATA[dataIdx] = 100;
+                            MAP_TILE_DATA[dataIdx + 1] = 0;
+                            
+                            const redTileCol = offsetX + 7;
+                            const redTileRow = offsetY + 7;
+                            if (col === redTileCol && row === redTileRow) {
+                                MAP_DATA[idx] = TILE_RED_TELEPORT_UP;
+                                MAP_TILE_DATA[dataIdx] = 200;
+                                MAP_TILE_DATA[dataIdx + 1] = 1;
+                                TELEPORT_TILES.push({ col: redTileCol, row: redTileRow, type: TILE_RED_TELEPORT_UP });
+                            }
+                        } else {
+                            MAP_DATA[idx] = TILE_GREEN_CHESS;
+                            const isEven = ((col + row) % 2) === 0;
+                            MAP_TILE_DATA[dataIdx] = isEven ? 150 : 151;
+                            MAP_TILE_DATA[dataIdx + 1] = 1;
+                            
+                            const blueTileCol = offsetX + 7;
+                            const blueTileRow = offsetY + 7;
+                            if (col === blueTileCol && row === blueTileRow) {
+                                MAP_DATA[idx] = TILE_BLUE_TELEPORT_DOWN;
+                                MAP_TILE_DATA[dataIdx] = 201;
+                                MAP_TILE_DATA[dataIdx + 1] = 1;
+                                TELEPORT_TILES.push({ col: blueTileCol, row: blueTileRow, type: TILE_BLUE_TELEPORT_DOWN });
+                            }
+                        }
+                    } else {
+                        MAP_DATA[idx] = 0;
+                        MAP_TILE_DATA[dataIdx] = 0;
+                        MAP_TILE_DATA[dataIdx + 1] = 1;
+                    }
+                }
+            }
+        }
+        
+        function getOutput() {
+            return document.getElementById('output');
+        }
+        
+        window.checkFloor1 = function() {
+            generateTestMap(1);
+            const out = getOutput();
+            out.innerHTML = `=== FLOOR 1 CHECK ===\n`;
+            out.innerHTML += `Pattern center: (${Math.floor((160-16)/2)+7}, ${Math.floor((160-16)/2)+7})\n\n`;
+            out.innerHTML += `Teleport tiles found: ${TELEPORT_TILES.length}\n`;
+            TELEPORT_TILES.forEach(t => {
+                const tileId = MAP_TILE_DATA[(t.row * MAP_COLS + t.col) * 2];
+                out.innerHTML += `  - Type: ${t.type} at (${t.col}, ${t.row}), TileID: ${tileId}\n`;
+            });
+            
+            const redCol = Math.floor((160-16)/2) + 7;
+            const redRow = Math.floor((160-16)/2) + 7;
+            const idx = redRow * MAP_COLS + redCol;
+            out.innerHTML += `\nExpected red tile position: (${redCol}, ${redRow})\n`;
+            out.innerHTML += `MAP_DATA[${idx}] = ${MAP_DATA[idx]} (should be 1)\n`;
+            out.innerHTML += `MAP_TILE_DATA[${idx*2}] = ${MAP_TILE_DATA[idx*2]} (should be 200)\n`;
+        };
+        
+        window.checkFloor2 = function() {
+            generateTestMap(2);
+            const out = getOutput();
+            out.innerHTML = `=== FLOOR 2 CHECK ===\n`;
+            const centerCol = Math.floor((160-16)/2)+7;
+            const centerRow = Math.floor((160-16)/2)+7;
+            out.innerHTML += `Pattern center: (${centerCol}, ${centerRow})\n\n`;
+            out.innerHTML += `Teleport tiles found: ${TELEPORT_TILES.length}\n`;
+            TELEPORT_TILES.forEach(t => {
+                const tileId = MAP_TILE_DATA[(t.row * MAP_COLS + t.col) * 2];
+                out.innerHTML += `  - Type: ${t.type} at (${t.col}, ${t.row}), TileID: ${tileId}\n`;
+            });
+            
+            const idx = centerRow * MAP_COLS + centerCol;
+            out.innerHTML += `\nExpected blue tile position: (${centerCol}, ${centerRow})\n`;
+            out.innerHTML += `MAP_DATA[${idx}] = ${MAP_DATA[idx]} (should be 2)\n`;
+            out.innerHTML += `MAP_TILE_DATA[${idx*2}] = ${MAP_TILE_DATA[idx*2]} (should be 201)\n`;
+        };
+        
+        window.showPattern = function() {
+            generateTestMap(1);
+            const out = getOutput();
+            const patternSize = 16;
+            const offsetX = Math.floor((MAP_COLS - patternSize) / 2);
+            const offsetY = Math.floor((MAP_ROWS - patternSize) / 2);
+            
+            out.innerHTML = `=== PATTERN AREA (${patternSize}x${patternSize}) ===\n`;
+            out.innerHTML += `Offset: (${offsetX}, ${offsetY})\n`;
+            out.innerHTML += `Bounds: [${offsetX}-${offsetX+patternSize-1}, ${offsetY}-${offsetY+patternSize-1}]\n\n`;
+            
+            // Show a small section around the center
+            const centerX = offsetX + 7;
+            const centerY = offsetY + 7;
+            out.innerHTML += `Center area (5x5 around teleport tile):\n`;
+            for (let row = centerY - 2; row <= centerY + 2; row++) {
+                let line = '';
+                for (let col = centerX - 2; col <= centerX + 2; col++) {
+                    const idx = row * MAP_COLS + col;
+                    const tileType = MAP_DATA[idx];
+                    const tileId = MAP_TILE_DATA[idx * 2];
+                    if (col === centerX && row === centerY) {
+                        line += `[${tileType}:${tileId}] `;
+                    } else {
+                        line += ` ${tileType}:${tileId}  `;
+                    }
+                }
+                out.innerHTML += line + '\n';
+            }
+        };
+        
+        // Auto-check on load
+        window.checkFloor1();
+    </script>
+</body>
+</html>

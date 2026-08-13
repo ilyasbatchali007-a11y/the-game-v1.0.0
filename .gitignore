@@ -1,24 +1,18 @@
 ```
-# Build artifacts
+# Compiled and build artifacts
 dist/
 build/
 
 # Dependencies
 node_modules/
 
-# Compiled files
-*.js
-
 # Logs and temp files
 *.log
 *.tmp
 
-# Environment
-.env
-.env.local
-*.env.*
-
 # Editors
 .vscode/
-.idea/
+
+# Original rules preserved
+*.log
 ```

@@ -570,6 +570,53 @@ export class GLInstancedRenderer {
     this.mapDataTexture = texture;
   }
 
+  /**
+   * Update the map data texture with current MAP_TILE_DATA
+   * Call this when floor changes or map data is modified
+   */
+  public updateMapDataTexture(): void {
+    const gl = this.gl;
+    
+    if (!this.mapDataTexture) {
+      this.createMapDataTexture();
+      return;
+    }
+    
+    // Convert MAP_TILE_DATA to RGBA format for texture
+    const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
+    
+    for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
+      const srcIdx = i * 2;
+      const dstIdx = i * 4;
+      
+      const tileId = MAP_TILE_DATA[srcIdx];
+      const isStatic = MAP_TILE_DATA[srcIdx + 1];
+      
+      // Normalize tileId to [0, 1] range (max 1024 tiles)
+      textureData[dstIdx] = Math.floor((tileId / 1024.0) * 255.0);  // R
+      textureData[dstIdx + 1] = isStatic > 0.5 ? 255 : 0;           // G
+      textureData[dstIdx + 2] = 0;                                   // B
+      textureData[dstIdx + 3] = 255;                                 // A
+    }
+    
+    gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
+    
+    // Upload texture data - use NEAREST filtering for exact pixel values
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      MAP_COLS,
+      MAP_ROWS,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      textureData
+    );
+    
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
   private createShader(type: number, source: string): WebGLShader {
     const gl = this.gl;
     const shader = gl.createShader(type);

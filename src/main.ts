@@ -357,24 +357,24 @@ window.addEventListener('keydown', (e) => {
     }
   }
   
-  // Teleport controls: Numpad + for UP, Numpad - for DOWN
-  if (world && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '_')) {
+  // Teleport controls: T for UP, G for DOWN
+  if (world && (e.key === 't' || e.key === 'g' || e.key === 'T' || e.key === 'G')) {
     const playerX = world.x[PLAYER_ID];
     const playerY = world.y[PLAYER_ID];
     const col = Math.floor(playerX / TILE_SIZE);
     const row = Math.floor(playerY / TILE_SIZE);
     const tileData = getTileData(col, row);
     
-    if (e.key === '+' || e.key === '=') {
-      // Numpad + or regular + : Try to go UP
+    if (e.key === 't' || e.key === 'T') {
+      // T key: Try to go UP
       if (tileData.tileId === TELEPORTER_UP_ID) {
         const newPos = teleportToFloor(currentFloorId + 1, playerX, playerY);
         world.x[PLAYER_ID] = newPos.x;
         world.y[PLAYER_ID] = newPos.y;
         console.log('[Input] Teleported UP to floor', currentFloorId);
       }
-    } else if (e.key === '-' || e.key === '_') {
-      // Numpad - or regular - : Try to go DOWN
+    } else if (e.key === 'g' || e.key === 'G') {
+      // G key: Try to go DOWN
       if (tileData.tileId === TELEPORTER_DOWN_ID) {
         const newPos = teleportToFloor(currentFloorId - 1, playerX, playerY);
         world.x[PLAYER_ID] = newPos.x;

@@ -1,7 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
-import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
+import { MAP_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -65,7 +65,7 @@ void main() {
 }
 `;
 
-// Fragment Shader Source - Atlas texture with static and random variation tiles
+// Fragment Shader Source - Atlas texture with simple tile rendering
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
@@ -81,15 +81,10 @@ uniform vec4 u_entityColor;
 uniform int u_atlasTileCount;      // Number of tiles per row/column in atlas (32)
 uniform float u_tileSizePixels;    // Size of each tile in pixels (64)
 uniform float u_worldTileSize;     // Size of each game tile in pixels (64)
-uniform int u_staticRangeStart;    // Start of static tile range
-uniform int u_staticRangeEnd;      // End of static tile range
-uniform int u_variationRangeStart; // Start of variation tile range
-uniform int u_variationRangeEnd;   // End of variation tile range
 
-// Map data texture for static/varying tile info
+// Map data texture for tile info
 uniform sampler2D u_mapDataTexture;
-uniform vec2 u_mapDimensions;      // Map dimensions in tiles (32, 32)
-uniform float u_seed;              // Random seed for variation tiles (changes on reload)
+uniform vec2 u_mapDimensions;      // Map dimensions in tiles
 
 out vec4 fragColor;
 
@@ -140,28 +135,14 @@ void main() {
     float localY = fract(v_worldPos.y / u_worldTileSize);
     vec2 localUV = vec2(localX, localY);
     
-    // Determine tile ID from map data or hash
-    float tileId = 0.0;
-    
-    // Sample map data texture to get tile info
+    // Sample map data texture to get tile info (0 or 1)
     vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
     vec4 mapData = texture(u_mapDataTexture, mapUV);
-    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
-    float isStatic = mapData.g;              // Static flag stored in G channel
+    float tileId = mapData.r * 255.0;  // Tile ID stored in R channel (0 or 1)
     
-    // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
-    if (baseTileId < 0.5 && isStatic > 0.5) {
-      discard; // Void tile - don't render anything
-    }
-    
-    if (isStatic > 0.5) {
-      // Static tile: use exact tile ID from map data
-      tileId = baseTileId;
-    } else {
-      // Variation tile: use hash with seed to select random tile from variation range
-      float hashVal = hash(vec2(tileX, tileY), u_seed);
-      float variationCount = float(u_variationRangeEnd - u_variationRangeStart + 1);
-      tileId = float(u_variationRangeStart) + floor(hashVal * variationCount);
+    // If tileId is 0, skip rendering (empty space)
+    if (tileId < 0.5) {
+      discard;
     }
     
     // Convert tile ID to atlas UV coordinates
@@ -499,37 +480,34 @@ export class GLInstancedRenderer {
   }
 
   /**
-   * Create a texture from MAP_TILE_DATA for the fragment shader to sample
-   * Each pixel stores: R = tileId/1024, G = isStatic (0 or 1)
+   * Create a texture from MAP_DATA for the fragment shader to sample
+   * Each pixel stores: R = tileId (0 or 1)
    */
   private createMapDataTexture(): void {
     const gl = this.gl;
     
-    // Create a texture with dimensions matching the map (32x32)
+    // Create a texture with dimensions matching the map
     const texture = gl.createTexture();
     if (!texture) {
       console.error('Failed to create map data texture');
       return;
     }
     
-    // Convert MAP_TILE_DATA to RGBA format for texture
-    // R channel: tileId / 1024 (normalized)
-    // G channel: isStatic (0 or 1)
-    // B and A channels: unused (set to 0)
+    // Convert MAP_DATA to RGBA format for texture
+    // R channel: tileId (0 or 1)
+    // G, B and A channels: unused (set to 0)
     const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
     
     for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
-      const srcIdx = i * 2;
       const dstIdx = i * 4;
       
-      const tileId = MAP_TILE_DATA[srcIdx];
-      const isStatic = MAP_TILE_DATA[srcIdx + 1];
+      const tileId = MAP_DATA[i];
       
-      // Normalize tileId to [0, 1] range (max 1024 tiles)
-      textureData[dstIdx] = Math.floor((tileId / 1024.0) * 255.0);  // R
-      textureData[dstIdx + 1] = isStatic > 0.5 ? 255 : 0;           // G
-      textureData[dstIdx + 2] = 0;                                   // B
-      textureData[dstIdx + 3] = 255;                                 // A
+      // Store tileId directly (0 or 1)
+      textureData[dstIdx] = tileId > 0.5 ? 255 : 0;  // R
+      textureData[dstIdx + 1] = 0;                    // G
+      textureData[dstIdx + 2] = 0;                    // B
+      textureData[dstIdx + 3] = 255;                  // A
     }
     
     gl.bindTexture(gl.TEXTURE_2D, texture);

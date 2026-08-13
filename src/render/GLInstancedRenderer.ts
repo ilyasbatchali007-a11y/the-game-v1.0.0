@@ -608,7 +608,7 @@ export class GLInstancedRenderer {
   }
 
   public renderFloor(
-    floorData: { x: number; y: number; width: number; height: number } | null,
+    floorData: { x: number; y: number; width: number; height: number; useAtlas?: boolean } | null,
     width: number,
     height: number,
     texture: WebGLTexture,
@@ -630,6 +630,10 @@ export class GLInstancedRenderer {
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
+      
+      // Set atlas/chessboard mode based on floor data
+      const useAtlas = floorData.useAtlas !== undefined ? floorData.useAtlas : false;
+      gl.uniform1i(this.useAtlasLoc, useAtlas ? 1 : 0);  // 1 = atlas texture, 0 = chessboard pattern
     }
 
     // Disable culling for floor rendering
@@ -643,10 +647,7 @@ export class GLInstancedRenderer {
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
     
-    // Set chessboard mode (u_useAtlas = 0) instead of atlas mode
-    gl.uniform1i(this.useAtlasLoc, 0);  // 0 = chessboard pattern, 1 = atlas texture
-    
-    // Set atlas configuration uniforms (not used in chessboard mode but kept for compatibility)
+    // Set atlas configuration uniforms
     gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
     gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
     gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
@@ -658,11 +659,11 @@ export class GLInstancedRenderer {
     // Use the stored session seed (consistent throughout gameplay, changes on reload)
     gl.uniform1f(this.seedLoc, this.sessionSeed);
 
-    // Bind atlas texture to TEXTURE0 (not used in chessboard mode but kept for compatibility)
+    // Bind atlas texture to TEXTURE0
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     
-    // Bind map data texture to TEXTURE1 (not used in chessboard mode but kept for compatibility)
+    // Bind map data texture to TEXTURE1
     gl.activeTexture(gl.TEXTURE1);
     if (this.mapDataTexture) {
       gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);

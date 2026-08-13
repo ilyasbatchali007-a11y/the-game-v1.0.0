@@ -40,11 +40,11 @@ export const ARENA_FLOOR: FloorConfig = {
   id: 0,
   width: 10240.0,
   depth: 10240.0,
-  texturePath: GREEN_CHESSBOARD_TEXTURE,
+  texturePath: '/textures/atlas.png',
   repeatX: 160.0,
   repeatZ: 160.0,
-  // Atlas configuration (disabled for chessboard texture)
-  useAtlas: false,
+  // Atlas configuration (enabled for floor 0)
+  useAtlas: true,
   atlasTileCountX: 32,  // 32x32 grid in atlas
   atlasTileCountY: 32,
   staticTileRangeStart: 0,    // IDs 0-99 for static tiles (houses, paths)
@@ -55,15 +55,15 @@ export const ARENA_FLOOR: FloorConfig = {
 
 // Generate 20 independent floor configurations with customized sizes
 export const FLOORS: FloorConfig[] = [
-  // Floor 0 - Original Arena (160x160 tiles)
+  // Floor 0 - Original Arena (160x160 tiles) - Uses Atlas Texture
   {
     id: 0,
     width: 10240.0,
     depth: 10240.0,
-    texturePath: GREEN_CHESSBOARD_TEXTURE,
+    texturePath: '/textures/atlas.png',
     repeatX: 160.0,
     repeatZ: 160.0,
-    useAtlas: false,
+    useAtlas: true,
     atlasTileCountX: 32,
     atlasTileCountY: 32,
     staticTileRangeStart: 0,

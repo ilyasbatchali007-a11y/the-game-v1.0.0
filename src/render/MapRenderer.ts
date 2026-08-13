@@ -15,6 +15,7 @@ export interface IFloorRenderData {
   repeatX: number;
   repeatZ: number;
   floorId: number;  // Current floor ID for reference
+  useAtlas: boolean;  // Whether to use atlas texture or chessboard pattern
 }
 
 export class MapRenderer {
@@ -86,7 +87,8 @@ export class MapRenderer {
       texturePath: this.floorConfig.texturePath,
       repeatX: this.floorConfig.repeatX,
       repeatZ: this.floorConfig.repeatZ,
-      floorId: this.currentFloorId
+      floorId: this.currentFloorId,
+      useAtlas: this.floorConfig.useAtlas
     };
   }
 

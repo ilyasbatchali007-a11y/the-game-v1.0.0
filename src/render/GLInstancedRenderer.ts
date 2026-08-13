@@ -1,7 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
-import { FLOOR_MAP_DATA, FLOOR_TILE_DATA, currentFloor, getFloorDimensions, NUM_FLOORS } from '../config/MapData';
+import { FLOOR_MAP_DATA, FLOOR_TILE_DATA, currentFloor, MAP_COLS, MAP_ROWS, NUM_FLOORS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -148,11 +148,6 @@ void main() {
     vec4 mapData = texture(u_mapDataTexture, mapUV);
     float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
     float isStatic = mapData.g;              // Static flag stored in G channel
-    
-    // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
-    if (baseTileId < 0.5 && isStatic > 0.5) {
-      discard; // Void tile - don't render anything
-    }
     
     if (isStatic > 0.5) {
       // Static tile: use exact tile ID from map data
@@ -505,10 +500,9 @@ export class GLInstancedRenderer {
   private createMapDataTexture(): void {
     const gl = this.gl;
     
-    // Get current floor dimensions
-    const dims = getFloorDimensions(currentFloor);
-    const cols = dims.cols;
-    const rows = dims.rows;
+    // Use fixed map dimensions
+    const cols = MAP_COLS;
+    const rows = MAP_ROWS;
     
     // Create a texture with dimensions matching the current floor
     const texture = gl.createTexture();
@@ -645,9 +639,8 @@ export class GLInstancedRenderer {
     gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
     gl.uniform1i(this.variationRangeEndLoc, 1023);
     
-    // Use current floor dimensions
-    const dims = getFloorDimensions(currentFloor);
-    gl.uniform2f(this.mapDimensionsLoc, dims.cols, dims.rows);
+    // Use fixed map dimensions
+    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
     // Use the stored session seed (consistent throughout gameplay, changes on reload)
     gl.uniform1f(this.seedLoc, this.sessionSeed);
 

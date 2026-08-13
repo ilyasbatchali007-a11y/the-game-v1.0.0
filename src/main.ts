@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, getFloorDimensions, getCurrentFloor, setCurrentFloor } from './config/MapData';
+import { generateTestMap, getCurrentFloor, setCurrentFloor } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -68,8 +68,7 @@ canvas.height = window.innerHeight;
   
   // Generate test map BEFORE spawning player
   generateTestMap();
-  const dims = getFloorDimensions(getCurrentFloor());
-  console.log('[Engine] Map generated, size:', dims.cols, 'x', dims.rows, '=', dims.cols * dims.rows, 'tiles');
+  console.log('[Engine] Map generated, size: 32 x 32 = 1024 tiles');
   
   // Spawn player entity at center of map (avoiding border walls)
   const playerX = WORLD_WIDTH / 2;

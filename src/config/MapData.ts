@@ -7,6 +7,16 @@ export const DEFAULT_MAP_ROWS = 160;
 let CURRENT_MAP_COLS = DEFAULT_MAP_COLS;
 let CURRENT_MAP_ROWS = DEFAULT_MAP_ROWS;
 
+// Dynamic world dimensions - recalculated when map dimensions change
+export function getCurrentWorldWidth(): number {
+  return CURRENT_MAP_COLS * TILE_SIZE;
+}
+
+export function getCurrentWorldHeight(): number {
+  return CURRENT_MAP_ROWS * TILE_SIZE;
+}
+
+// Legacy constants for backward compatibility (will be deprecated)
 export const WORLD_WIDTH = DEFAULT_MAP_COLS * TILE_SIZE;
 export const WORLD_HEIGHT = DEFAULT_MAP_ROWS * TILE_SIZE;
 

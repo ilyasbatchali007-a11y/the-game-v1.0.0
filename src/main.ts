@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA } from './config/MapData';
+import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -85,8 +85,8 @@ canvas.height = window.innerHeight;
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
   // Spawn player entity at center of map (avoiding border walls)
-  const playerX = WORLD_WIDTH / 2;
-  const playerY = WORLD_HEIGHT / 2;
+  const playerX = getCurrentWorldWidth() / 2;
+  const playerY = getCurrentWorldHeight() / 2;
   world.active[PLAYER_ID] = 1;
   world.x[PLAYER_ID] = playerX;
   world.y[PLAYER_ID] = playerY;
@@ -257,9 +257,9 @@ function initNewGame() {
     world = new World();
     generateTestMap();
     
-    // Respawn player
-    const playerX = WORLD_WIDTH / 2;
-    const playerY = WORLD_HEIGHT / 2;
+    // Respawn player at center of new map
+    const playerX = getCurrentWorldWidth() / 2;
+    const playerY = getCurrentWorldHeight() / 2;
     world.active[PLAYER_ID] = 1;
     world.x[PLAYER_ID] = playerX;
     world.y[PLAYER_ID] = playerY;
@@ -363,12 +363,25 @@ let floorSwitchCooldown = false;
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   
-  // Floor switching with T (previous) and G (next)
+  // Floor switching with T (previous) and G (next) - also respawn player at center of new floor
   if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {
     floorSwitchCooldown = true;
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
     mapRenderer.switchFloor(newFloor);
+    
+    // Teleport player to center of new floor and update camera
+    if (world) {
+      world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
+      world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
+      world.vx[PLAYER_ID] = 0;
+      world.vy[PLAYER_ID] = 0;
+      if (camera) {
+        camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+        camera.snapToTarget();
+      }
+    }
+    
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   
@@ -377,6 +390,19 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
     mapRenderer.switchFloor(newFloor);
+    
+    // Teleport player to center of new floor and update camera
+    if (world) {
+      world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
+      world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
+      world.vx[PLAYER_ID] = 0;
+      world.vy[PLAYER_ID] = 0;
+      if (camera) {
+        camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+        camera.snapToTarget();
+      }
+    }
+    
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   

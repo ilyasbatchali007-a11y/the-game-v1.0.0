@@ -9,7 +9,7 @@ type World = {
   h: number[];
 };
 
-import { WORLD_WIDTH, WORLD_HEIGHT } from '../config/Constants';
+import { getCurrentWorldWidth, getCurrentWorldHeight } from '../config/MapData';
 import { isTileBlocking, TILE_SIZE } from '../config/MapData';
 
 export class CollisionSystem {
@@ -47,9 +47,13 @@ export class CollisionSystem {
     let nextX = x + vx * dt;
     let nextY = y + vy * dt;
 
-    // Clamp to world bounds
-    nextX = Math.max(0, Math.min(nextX, WORLD_WIDTH - width));
-    nextY = Math.max(0, Math.min(nextY, WORLD_HEIGHT - height));
+    // Get current world dimensions dynamically
+    const worldWidth = getCurrentWorldWidth();
+    const worldHeight = getCurrentWorldHeight();
+
+    // Clamp to world bounds (dynamic)
+    nextX = Math.max(0, Math.min(nextX, worldWidth - width));
+    nextY = Math.max(0, Math.min(nextY, worldHeight - height));
 
     // Check tile collisions at corners of the entity's bounding box
     // This enables seamless sliding along walls with floating-point positions

@@ -1,7 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { FloorConfig } from '../config/FloorMap';
-import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
+import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -537,9 +537,11 @@ export class GLInstancedRenderer {
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
     // B and A channels: unused (set to 0)
-    const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
+    const cols = getCurrentMapCols();
+    const rows = getCurrentMapRows();
+    const textureData = new Uint8Array(cols * rows * 4);
     
-    for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
+    for (let i = 0; i < cols * rows; i++) {
       const srcIdx = i * 2;
       const dstIdx = i * 4;
       
@@ -560,8 +562,8 @@ export class GLInstancedRenderer {
       gl.TEXTURE_2D,
       0,
       gl.RGBA,
-      MAP_COLS,
-      MAP_ROWS,
+      cols,
+      rows,
       0,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
@@ -661,7 +663,7 @@ export class GLInstancedRenderer {
     gl.uniform1i(this.staticRangeEndLoc, 99);
     gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
     gl.uniform1i(this.variationRangeEndLoc, 1023);
-    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
+    gl.uniform2f(this.mapDimensionsLoc, getCurrentMapCols(), getCurrentMapRows());
     // Use the stored session seed (consistent throughout gameplay, changes on reload)
     gl.uniform1f(this.seedLoc, this.sessionSeed);
 

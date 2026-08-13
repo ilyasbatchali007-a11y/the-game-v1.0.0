@@ -5,6 +5,7 @@
 // Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
+import { generateTestMap } from '../config/MapData';
 
 export interface IFloorRenderData {
   x: number;
@@ -39,7 +40,17 @@ export class MapRenderer {
     
     this.currentFloorId = floorId;
     this.floorConfig = getFloorById(floorId);
-    console.log(`[MapRenderer] Switched to Floor ${floorId} (${this.floorConfig.width}x${this.floorConfig.depth})`);
+    
+    // Regenerate the map data with new dimensions and texture settings
+    const cols = Math.floor(this.floorConfig.width / 64);
+    const rows = Math.floor(this.floorConfig.depth / 64);
+    generateTestMap({
+      cols,
+      rows,
+      useAtlas: this.floorConfig.useAtlas
+    });
+    
+    console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;
   }
 

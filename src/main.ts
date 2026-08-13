@@ -425,6 +425,14 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
   
+  // TELEPORTATION CONTROLS: T = Up, G = Down
+  if (e.key.toLowerCase() === 't') {
+    teleportToFloor(currentFloorIndex + 1); // Go Up
+  }
+  if (e.key.toLowerCase() === 'g') {
+    teleportToFloor(currentFloorIndex - 1); // Go Down
+  }
+  
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
@@ -439,6 +447,32 @@ window.addEventListener('keyup', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = false;
 });
+
+// Teleportation Logic
+let currentFloorIndex = 0;
+
+function teleportToFloor(targetIndex: number) {
+  const floors = mapRenderer.getAllFloors();
+  if (floors.length === 0) return;
+
+  // Clamp index to valid range
+  if (targetIndex < 0) targetIndex = 0;
+  if (targetIndex >= floors.length) targetIndex = floors.length - 1;
+
+  if (targetIndex === currentFloorIndex) return; // Already on this floor
+
+  const targetFloor = floors[targetIndex];
+  
+  // Update camera position: Keep X/Z, change Y to be above the new floor
+  const cameraHeightOffset = 50.0; // Height of camera above floor
+  const newY = targetFloor.elevation + cameraHeightOffset;
+  
+  // Instant teleport
+  camera!.position.y = newY;
+  
+  currentFloorIndex = targetIndex;
+  console.log(`Teleported to Floor ${currentFloorIndex} (Elevation: ${targetFloor.elevation})`);
+}
 
 // Handle window resize
 window.addEventListener('resize', () => {

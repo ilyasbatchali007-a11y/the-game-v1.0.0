@@ -22,6 +22,7 @@ export interface IFloorRenderData {
   staticRangeEnd: number;
   variationRangeStart: number;
   variationRangeEnd: number;
+  customTexture?: WebGLTexture; // Custom texture for this floor (e.g., chessboard)
 }
 
 export class MapRenderer {
@@ -86,7 +87,8 @@ export class MapRenderer {
       staticRangeStart: floor.staticTileRangeStart,
       staticRangeEnd: floor.staticTileRangeEnd,
       variationRangeStart: floor.variationTileRangeStart,
-      variationRangeEnd: floor.variationTileRangeEnd
+      variationRangeEnd: floor.variationTileRangeEnd,
+      customTexture: floor.customTexture
     }));
   }
 

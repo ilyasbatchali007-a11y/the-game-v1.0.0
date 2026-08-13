@@ -698,6 +698,7 @@ export class GLInstancedRenderer {
       staticRangeEnd?: number;
       variationRangeStart?: number;
       variationRangeEnd?: number;
+      customTexture?: WebGLTexture;
     }>,
     textures: WebGLTexture[],
     width: number,
@@ -708,7 +709,8 @@ export class GLInstancedRenderer {
     // Render each floor with its own texture
     for (let i = 0; i < floorsData.length; i++) {
       const floorData = floorsData[i];
-      const texture = textures[Math.min(i, textures.length - 1)]; // Use last texture if not enough
+      // Use custom texture if provided, otherwise use texture array
+      const texture = floorData.customTexture || textures[Math.min(i, textures.length - 1)];
       this.renderFloor(floorData, width, height, texture, cameraX, cameraY);
     }
   }

@@ -15,6 +15,7 @@ export interface FloorConfig {
   // Multi-floor support
   elevation: number;        // Y position offset for this floor (for stacking floors)
   layerIndex: number;       // Render order (lower = rendered first)
+  customTexture?: WebGLTexture; // Optional custom texture (e.g., chessboard)
 }
 
 // Floor dimensions match the world size (160 tiles x 64px = 10240px)
@@ -57,5 +58,6 @@ export function createFloorConfig(options: Partial<FloorConfig> & { texturePath:
     variationTileRangeEnd: options.variationTileRangeEnd ?? 0,
     elevation: options.elevation ?? 0.0,
     layerIndex: options.layerIndex ?? 0,
+    customTexture: options.customTexture,
   };
 }

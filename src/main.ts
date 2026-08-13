@@ -107,68 +107,77 @@ canvas.height = window.innerHeight;
   camera.snapToTarget();
   
   // ============================================
-  // MULTI-FLOOR SETUP: Add multiple floors with different textures and sizes
+  // MULTI-FLOOR SETUP: Create 21 floors (ground + 20 more) with chessboard texture
   // ============================================
   
-  // Floor 1: Base ground floor using atlas texture (layer 0)
-  const groundFloor = createFloorConfig({
-    texturePath: 'src/atlas pictures/atlas floor.jpg',
-    width: 10240.0,
-    depth: 10240.0,
-    repeatX: 160.0,
-    repeatZ: 160.0,
-    useAtlas: true,
-    atlasTileCountX: 32,
-    atlasTileCountY: 32,
-    staticTileRangeStart: 0,
-    staticTileRangeEnd: 99,
-    variationTileRangeStart: 100,
-    variationTileRangeEnd: 1023,
-    elevation: 0.0,
-    layerIndex: 0
-  });
-  mapRenderer.addFloor(groundFloor);
-  
-  // Floor 2: Elevated platform with different texture (layer 1)
-  // This demonstrates custom size and different texture than atlas
-  const elevatedFloor = createFloorConfig({
-    texturePath: 'src/atlas pictures/atlas floor.jpg', // Can use same or different texture
-    width: 5120.0,  // Custom size: half the base floor
-    depth: 5120.0,
-    repeatX: 80.0,  // Adjust texture repeat for custom size
-    repeatZ: 80.0,
-    useAtlas: true,
-    atlasTileCountX: 32,
-    atlasTileCountY: 32,
-    staticTileRangeStart: 0,
-    staticTileRangeEnd: 50,
-    variationTileRangeStart: 100,
-    variationTileRangeEnd: 200,
-    elevation: 32.0,  // Elevated 32 pixels above ground
-    layerIndex: 1     // Rendered after ground floor
-  });
-  mapRenderer.addFloor(elevatedFloor);
-  
-  // Floor 3: Another elevated floor with different properties (layer 2)
-  const upperFloor = createFloorConfig({
-    texturePath: 'src/atlas pictures/atlas floor.jpg',
-    width: 2560.0,  // Even smaller: quarter of base floor
-    depth: 2560.0,
-    repeatX: 40.0,
-    repeatZ: 40.0,
-    useAtlas: false,  // Can use standalone texture (non-atlas mode)
-    atlasTileCountX: 1,
-    atlasTileCountY: 1,
-    staticTileRangeStart: 0,
-    staticTileRangeEnd: 0,
-    variationTileRangeStart: 0,
-    variationTileRangeEnd: 0,
-    elevation: 64.0,  // Elevated 64 pixels above ground
-    layerIndex: 2     // Rendered last (topmost floor)
-  });
-  mapRenderer.addFloor(upperFloor);
-  
-  console.log('[Engine] Multi-floor setup complete:', mapRenderer.getAllFloors().length, 'floors configured');
+  // Generate a procedural chessboard texture
+  function createChessboardTexture(gl: WebGL2RenderingContext): WebGLTexture {
+    const size = 512;
+    const data = new Uint8Array(size * size * 4);
+    const squareSize = 64; // 8x8 grid
+    
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const col = Math.floor(x / squareSize);
+        const row = Math.floor(y / squareSize);
+        const isWhite = (col + row) % 2 === 0;
+        
+        const index = (y * size + x) * 4;
+        if (isWhite) {
+          data[index] = 200;     // R
+          data[index + 1] = 200; // G
+          data[index + 2] = 200; // B
+          data[index + 3] = 255; // A
+        } else {
+          data[index] = 50;      // R
+          data[index + 1] = 50;  // G
+          data[index + 2] = 50;  // B
+          data[index + 3] = 255; // A
+        }
+      }
+    }
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    
+    return tex!;
+  }
+
+  const chessboardTexture = createChessboardTexture(ctx);
+
+  // Create 21 Floors (Ground + 20 more)
+  const floorCount = 21;
+  const elevationStep = 40.0; // Distance between floors
+  const baseWidth = 10240.0;
+  const baseDepth = 10240.0;
+
+  for (let i = 0; i < floorCount; i++) {
+    const floorConfig = createFloorConfig({
+      texturePath: '', // Not used when useAtlas is false with custom texture
+      width: baseWidth,
+      depth: baseDepth,
+      repeatX: baseWidth / 64.0, // Match chessboard pattern
+      repeatZ: baseDepth / 64.0,
+      useAtlas: false, // Use standalone texture mode
+      atlasTileCountX: 1,
+      atlasTileCountY: 1,
+      staticTileRangeStart: 0,
+      staticTileRangeEnd: 0,
+      variationTileRangeStart: 0,
+      variationTileRangeEnd: 0,
+      elevation: i * elevationStep,
+      layerIndex: i,
+      customTexture: chessboardTexture // Assign the generated chessboard texture
+    });
+    mapRenderer.addFloor(floorConfig);
+  }
+
+  console.log(`[Engine] Multi-floor setup complete: ${floorCount} floors with chessboard textures configured`);
 
   // 3. Load Atlas Texture (atlas floor.jpg from /src/atlas pictures/)
   try {
@@ -468,7 +477,7 @@ function teleportToFloor(targetIndex: number) {
   const newY = targetFloor.elevation + cameraHeightOffset;
   
   // Instant teleport
-  camera!.position.y = newY;
+  camera!.setY(newY);
   
   currentFloorIndex = targetIndex;
   console.log(`Teleported to Floor ${currentFloorIndex} (Elevation: ${targetFloor.elevation})`);

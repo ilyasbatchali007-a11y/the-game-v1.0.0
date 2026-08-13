@@ -238,6 +238,13 @@ export class Camera {
   }
 
   /**
+   * Set camera Y position directly (for teleportation)
+   */
+  public setY(y: number): void {
+    this.y = y;
+  }
+
+  /**
    * Get full camera state
    */
   public getState(): ICameraState {

@@ -25,6 +25,10 @@ let ctx: WebGL2RenderingContext | null = null;
 let movementSystem: MovementSystem | null = null;
 let collisionSystem: CollisionSystem | null = null;
 
+// Multi-floor state
+let currentFloorIndex = 0;
+const FLOOR_COUNT = 4; // Number of floors defined in FloorMap.ts
+
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
 const slotsContainer = document.getElementById('slots-container') as HTMLElement;
@@ -313,24 +317,24 @@ function startGameLoop() {
         canvas.height
       );
 
-      // 2. Render seamless floor in ONE draw call
-      renderer.renderFloor(
-        floorData,
+      // 2. Render ALL floors with different sizes and UV offsets in ONE instanced draw call
+      renderer.renderFloors(
         canvas.width,
         canvas.height,
         texture!,
         camX,
-        camY
+        camY,
+        currentFloorIndex
       );
     } else {
-      // Re-render floor without recalculating data
-      renderer.renderFloor(
-        null,
+      // Re-render floors without recalculating data
+      renderer.renderFloors(
         canvas.width,
         canvas.height,
         texture!,
         camX,
-        camY
+        camY,
+        currentFloorIndex
       );
     }
 
@@ -343,10 +347,22 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Handle keyboard input for movement
+// Handle keyboard input for movement and floor switching
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
+  
+  // T key: Go to NEXT floor
+  if (e.key === 't' || e.key === 'T') {
+    currentFloorIndex = (currentFloorIndex + 1) % FLOOR_COUNT;
+    console.log(`[Floor] Switched to floor ${currentFloorIndex}`);
+  }
+  
+  // G key: Go to PREVIOUS floor
+  if (e.key === 'g' || e.key === 'G') {
+    currentFloorIndex = (currentFloorIndex - 1 + FLOOR_COUNT) % FLOOR_COUNT;
+    console.log(`[Floor] Switched to floor ${currentFloorIndex}`);
+  }
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {

@@ -1,16 +1,17 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
-import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { ARENA_FLOOR, FloorConfig, FLOOR_CONFIGS } from '../config/FloorMap';
 import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
-// Vertex Shader Source - isometric transformation with cube extrusion
+// Vertex Shader Source - isometric transformation with cube extrusion and multi-floor support
 const VS_SOURCE = `#version 300 es
 layout(location = 0) in vec4 a_vertex;      // For cube: (x, y, z, faceId), For floor: (x, y, 0, 0)
-layout(location = 1) in vec2 a_pos;       // Entity position (px, py)
-layout(location = 2) in vec2 a_size;      // Entity size (width, height)
-layout(location = 3) in float a_height;   // Cube height (z-scale)
-layout(location = 4) in float a_rotation; // Entity facing angle in radians
-layout(location = 5) in float a_elevation; // Elevation offset for jumping
+layout(location = 1) in vec2 a_pos;       // Entity/floor position (px, py)
+layout(location = 2) in vec2 a_size;      // Entity size (width, height) or floor dimensions
+layout(location = 3) in float a_height;   // Cube height (z-scale) or floor elevation
+layout(location = 4) in float a_rotation; // Entity facing angle in radians or floor UV offset X
+layout(location = 5) in float a_elevation; // Elevation offset for jumping or floor UV offset Y
+layout(location = 6) in float a_floorIndex; // Floor index for multi-floor rendering
 
 uniform vec2 u_resolution;
 uniform float u_isoAngle;                 // Isometric rotation angle
@@ -20,6 +21,8 @@ uniform vec2 u_cameraOffset;              // Camera offset for scrolling
 out float v_faceId;
 out vec2 v_uv;
 out vec2 v_worldPos;  // Pass world position to fragment shader for tile calculation
+out float v_floorElevation; // Pass floor elevation for proper layering
+out vec2 v_uvOffset;  // Pass UV offset for chessboard pattern
 
 void main() {
   // Step A: Rotate the local footprint around the entity center so the cube faces movement direction.
@@ -62,16 +65,20 @@ void main() {
   v_faceId = a_vertex.w;
   v_uv = a_vertex.xy;
   v_worldPos = worldPos;  // Pass world position for floor tile calculation
+  v_floorElevation = a_height;  // Pass floor elevation for proper layering
+  v_uvOffset = vec2(a_rotation, a_elevation);  // Pass UV offset for chessboard pattern
 }
 `;
 
-// Fragment Shader Source - Atlas texture with static and random variation tiles
+// Fragment Shader Source - Atlas texture with static and random variation tiles and multi-floor support
 const FS_SOURCE = `#version 300 es
 precision mediump float;
 
 in float v_faceId;
 in vec2 v_uv;
 in vec2 v_worldPos;  // World position for floor tile calculation
+in float v_floorElevation; // Floor elevation for proper layering
+in vec2 v_uvOffset;  // UV offset for chessboard pattern
 
 uniform sampler2D u_texture;
 uniform int u_renderMode;     // 0 = floor, 1 = entity
@@ -139,6 +146,12 @@ void main() {
     float localX = fract(v_worldPos.x / u_worldTileSize);
     float localY = fract(v_worldPos.y / u_worldTileSize);
     vec2 localUV = vec2(localX, localY);
+    
+    // Apply UV offset for chessboard pattern (passed from vertex shader)
+    // This allows each floor to have independent texture positioning
+    localX = fract(localX + v_uvOffset.x);
+    localY = fract(localY + v_uvOffset.y);
+    localUV = vec2(localX, localY);
     
     // Determine tile ID from map data or hash
     float tileId = 0.0;
@@ -227,8 +240,8 @@ export class GLInstancedRenderer {
 
   constructor(gl: WebGL2RenderingContext, maxEntities: number) {
     this.gl = gl;
-    // 7 floats per instance: px, py, width, height, cubeHeight, rotation, elevation
-    this.instanceData = new Float32Array(maxEntities * 7);
+    // 8 floats per instance for multi-floor: px, py, width, height, elevation, uvOffsetX, uvOffsetY, floorIndex
+    this.instanceData = new Float32Array(maxEntities * 8);
 
     const vs = this.createShader(gl.VERTEX_SHADER, VS_SOURCE);
     const fs = this.createShader(gl.FRAGMENT_SHADER, FS_SOURCE);
@@ -312,8 +325,8 @@ export class GLInstancedRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.instanceData.byteLength, gl.DYNAMIC_DRAW);
 
-    // Stride: 7 floats × 4 bytes = 28 bytes
-    const stride = 28;
+    // Stride: 8 floats × 4 bytes = 32 bytes
+    const stride = 32;
 
     // ============================================
     // Create FLOOR VAO
@@ -339,20 +352,25 @@ export class GLInstancedRenderer {
     gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 8);
     gl.vertexAttribDivisor(2, 1);
 
-    // Attribute 3: Height (not used for floor, but set up)
+    // Attribute 3: Height/elevation (floor elevation for layering)
     gl.enableVertexAttribArray(3);
     gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 16);
     gl.vertexAttribDivisor(3, 1);
 
-    // Attribute 4: Rotation (unused for floor, defaults to 0)
+    // Attribute 4: UV offset X (for chessboard pattern)
     gl.enableVertexAttribArray(4);
     gl.vertexAttribPointer(4, 1, gl.FLOAT, false, stride, 20);
     gl.vertexAttribDivisor(4, 1);
 
-    // Attribute 5: Elevation offset (unused for floor, defaults to 0)
+    // Attribute 5: UV offset Y (for chessboard pattern)
     gl.enableVertexAttribArray(5);
     gl.vertexAttribPointer(5, 1, gl.FLOAT, false, stride, 24);
     gl.vertexAttribDivisor(5, 1);
+
+    // Attribute 6: Floor index (for ordering)
+    gl.enableVertexAttribArray(6);
+    gl.vertexAttribPointer(6, 1, gl.FLOAT, false, stride, 28);
+    gl.vertexAttribDivisor(6, 1);
 
     gl.bindVertexArray(null);
 
@@ -394,6 +412,11 @@ export class GLInstancedRenderer {
     gl.enableVertexAttribArray(5);
     gl.vertexAttribPointer(5, 1, gl.FLOAT, false, stride, 24);
     gl.vertexAttribDivisor(5, 1);
+
+    // Attribute 6: Floor index (unused for entities, set to 0)
+    gl.enableVertexAttribArray(6);
+    gl.vertexAttribPointer(6, 1, gl.FLOAT, false, stride, 28);
+    gl.vertexAttribDivisor(6, 1);
 
     gl.bindVertexArray(null);
 
@@ -587,6 +610,80 @@ export class GLInstancedRenderer {
     return prog;
   }
 
+  /**
+   * Render multiple floors with different sizes and UV offsets (chessboard pattern)
+   * Uses GPU instancing to render all floors in a SINGLE draw call
+   */
+  public renderFloors(
+    width: number,
+    height: number,
+    texture: WebGLTexture,
+    cameraX: number = 0,
+    cameraY: number = 0,
+    currentFloorIndex: number = 0
+  ): void {
+    const gl = this.gl;
+    const floors = FLOOR_CONFIGS;
+
+    // Pack all floor instances data
+    // Each floor: x, y, width, height, elevation, uvOffsetX, uvOffsetY, floorIndex
+    let offset = 0;
+    for (let i = 0; i < floors.length; i++) {
+      const floor = floors[i];
+      this.instanceData[offset++] = 0;                    // x position (centered)
+      this.instanceData[offset++] = 0;                    // y position (centered)
+      this.instanceData[offset++] = floor.width;          // width
+      this.instanceData[offset++] = floor.depth;          // height/depth
+      this.instanceData[offset++] = floor.elevation;      // elevation (for layering)
+      this.instanceData[offset++] = floor.uvOffsetX;      // UV offset X (chessboard)
+      this.instanceData[offset++] = floor.uvOffsetY;      // UV offset Y (chessboard)
+      this.instanceData[offset++] = i;                    // floor index
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, floors.length * 8));
+
+    // Disable culling for floor rendering
+    gl.disable(gl.CULL_FACE);
+
+    // Draw all floors in a SINGLE instanced draw call
+    gl.useProgram(this.program);
+    gl.uniform2f(this.resolutionLoc, width, height);
+    gl.uniform1f(this.isoAngleLoc, this.isoAngle);
+    gl.uniform1f(this.isoScaleLoc, this.isoScale);
+    gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
+    gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
+    
+    // Set atlas configuration uniforms
+    gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
+    gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
+    gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
+    gl.uniform1i(this.staticRangeStartLoc, 0);          // Static tiles: 0-99
+    gl.uniform1i(this.staticRangeEndLoc, 99);
+    gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
+    gl.uniform1i(this.variationRangeEndLoc, 1023);
+    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
+    // Use the stored session seed (consistent throughout gameplay, changes on reload)
+    gl.uniform1f(this.seedLoc, this.sessionSeed);
+
+    // Bind atlas texture to TEXTURE0
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    // Bind map data texture to TEXTURE1
+    gl.activeTexture(gl.TEXTURE1);
+    if (this.mapDataTexture) {
+      gl.bindTexture(gl.TEXTURE_2D, this.mapDataTexture);
+    }
+    // Tell shader which texture unit to use for map data
+    gl.uniform1i(this.mapDataTextureLoc, 1);
+
+    gl.bindVertexArray(this.floorVAO);
+    // Draw all floors in ONE instanced draw call (no additional draw calls!)
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, floors.length);
+    gl.bindVertexArray(null);
+  }
+
   public renderFloor(
     floorData: { x: number; y: number; width: number; height: number } | null,
     width: number,
@@ -599,17 +696,18 @@ export class GLInstancedRenderer {
 
     // Only update floor data if provided (camera moved)
     if (floorData !== null) {
-      // Pack floor data: x, y, width, height, height=0
+      // Pack floor data: x, y, width, height, elevation, uvOffsetX, uvOffsetY, floorIndex
       this.instanceData[0] = floorData.x;
       this.instanceData[1] = floorData.y;
       this.instanceData[2] = floorData.width;
       this.instanceData[3] = floorData.height;
-      this.instanceData[4] = 0.0; // cubeHeight = 0 for floor
-      this.instanceData[5] = 0.0; // rotation = 0 for floor
-      this.instanceData[6] = 0.0; // elevation = 0 for floor
+      this.instanceData[4] = 0.0; // elevation = 0 for single floor
+      this.instanceData[5] = 0.0; // uvOffsetX = 0
+      this.instanceData[6] = 0.0; // uvOffsetY = 0
+      this.instanceData[7] = 0.0; // floorIndex = 0
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 8));
     }
 
     // Disable culling for floor rendering

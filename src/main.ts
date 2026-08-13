@@ -118,7 +118,8 @@ canvas.height = window.innerHeight;
   // Initialize camera position to player position so map is visible on first frame
   camera.snapToTarget();
 
-  // 3. Load Atlas Texture (atlas floor.jpg from /src/atlas pictures/)
+  // 3. Load Atlas Texture (not used for floor - chessboard pattern is rendered in shader)
+  // Texture is still loaded for entity rendering compatibility
   try {
     texture = await AssetLoader.loadTexture(
       ctx,

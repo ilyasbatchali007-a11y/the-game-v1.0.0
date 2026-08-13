@@ -11,6 +11,7 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+import { getFloorCount } from './config/FloorMap';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -356,9 +357,28 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Handle keyboard input for movement
+// Add keyboard controls for floor switching (T and G keys)
+let floorSwitchCooldown = false;
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
+  
+  // Floor switching with T (previous) and G (next)
+  if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {
+    floorSwitchCooldown = true;
+    const currentFloor = mapRenderer.getCurrentFloorId();
+    const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
+    mapRenderer.switchFloor(newFloor);
+    setTimeout(() => { floorSwitchCooldown = false; }, 200);
+  }
+  
+  if ((e.key === 'g' || e.key === 'G') && !floorSwitchCooldown) {
+    floorSwitchCooldown = true;
+    const currentFloor = mapRenderer.getCurrentFloorId();
+    const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
+    mapRenderer.switchFloor(newFloor);
+    setTimeout(() => { floorSwitchCooldown = false; }, 200);
+  }
+  
   inputState[e.key] = true;
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session

@@ -2,6 +2,7 @@
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
 // Supports 20 independent floors with customized sizes that can be switched at runtime
+// Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
 

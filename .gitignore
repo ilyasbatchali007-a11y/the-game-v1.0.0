@@ -1,7 +1,1 @@
-```
-# Dependencies
-node_modules/
-
-# Vite build artifacts
-node_modules/.vite/
-```
+(src/config/FloorMap.ts)

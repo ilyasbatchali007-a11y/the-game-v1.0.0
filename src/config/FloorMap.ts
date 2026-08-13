@@ -38,7 +38,7 @@ export const FLOOR_1: FloorConfig = {
   isProcedural: false,
 };
 
-// Floors 2-10: Green chessboard pattern
+// Floors 2-10: Green chessboard pattern (Smaller for testing: 20x20 tiles)
 function createChessboardFloor(id: number, widthTiles: number, depthTiles: number): FloorConfig {
   const tileSize = 64;
   return {
@@ -64,13 +64,13 @@ function createChessboardFloor(id: number, widthTiles: number, depthTiles: numbe
 
 export const FLOORS: FloorConfig[] = [
   FLOOR_1,
-  createChessboardFloor(1, 12, 12),  // Floor 2
-  createChessboardFloor(2, 15, 10),  // Floor 3
+  createChessboardFloor(1, 20, 20),  // Floor 2 (Small test size)
+  createChessboardFloor(2, 20, 20),  // Floor 3
   createChessboardFloor(3, 20, 20),  // Floor 4
-  createChessboardFloor(4, 8, 25),   // Floor 5
-  createChessboardFloor(5, 30, 15),  // Floor 6
-  createChessboardFloor(6, 18, 18),  // Floor 7
-  createChessboardFloor(7, 25, 12),  // Floor 8
-  createChessboardFloor(8, 14, 22),  // Floor 9
-  createChessboardFloor(9, 16, 16),  // Floor 10
+  createChessboardFloor(4, 20, 20),  // Floor 5
+  createChessboardFloor(5, 20, 20),  // Floor 6
+  createChessboardFloor(6, 20, 20),  // Floor 7
+  createChessboardFloor(7, 20, 20),  // Floor 8
+  createChessboardFloor(8, 20, 20),  // Floor 9
+  createChessboardFloor(9, 20, 20),  // Floor 10
 ];

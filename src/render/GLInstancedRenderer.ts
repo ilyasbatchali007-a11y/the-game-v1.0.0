@@ -614,7 +614,7 @@ export class GLInstancedRenderer {
   }
 
   public renderFloor(
-    floorData: { x: number; y: number; width: number; height: number; isChessboard?: boolean } | null,
+    floorData: { x: number; y: number; width: number; height: number; yLevel?: number; isChessboard?: boolean; floorId?: number } | null,
     width: number,
     height: number,
     texture: WebGLTexture,
@@ -632,7 +632,7 @@ export class GLInstancedRenderer {
       this.instanceData[3] = floorData.height;
       this.instanceData[4] = 0.0; // cubeHeight = 0 for floor
       this.instanceData[5] = 0.0; // rotation = 0 for floor
-      this.instanceData[6] = 0.0; // elevation = 0 for floor
+      this.instanceData[6] = floorData.yLevel ?? 0.0; // elevation = yLevel for floor
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));

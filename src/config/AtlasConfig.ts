@@ -22,8 +22,8 @@ export const ATLAS_CONFIG = {
   staticTileEnd: 99,
   
   // Special teleporter tiles
-  teleporterUpId: 10,      // UP teleporter tile
-  teleporterDownId: 13,    // DOWN teleporter tile
+  teleporterUpId: 19,      // UP teleporter tile (RED - RGB 206, 69, 60)
+  teleporterDownId: 29,    // DOWN teleporter tile (BLUE - RGB 59, 137, 208)
   
   // Random variation tiles: IDs 100-1023 (for grass, dirt, etc. - auto-selected by hash)
   variationTileStart: 100,

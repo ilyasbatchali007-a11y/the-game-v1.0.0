@@ -34,14 +34,15 @@ export const ARENA_FLOOR: FloorConfig = {
 };
 
 // Additional smaller floors with customizable IDs and sizes
+// Floors 1-3 use a green chessboard pattern texture
 export const SMALL_FLOOR_1: FloorConfig = {
   id: 1,
   width: 5120.0,   // Half the size of arena floor
   depth: 5120.0,
-  texturePath: 'src/atlas pictures/atlas floor.jpg',
+  texturePath: 'green-chessboard',  // Special identifier for procedural green chessboard
   repeatX: 80.0,
   repeatZ: 80.0,
-  useAtlas: true,
+  useAtlas: false,  // Use procedural texture instead of atlas
   atlasTileCountX: 32,
   atlasTileCountY: 32,
   staticTileRangeStart: 0,
@@ -54,10 +55,10 @@ export const SMALL_FLOOR_2: FloorConfig = {
   id: 2,
   width: 2560.0,   // Quarter the size of arena floor
   depth: 2560.0,
-  texturePath: 'src/atlas pictures/atlas floor.jpg',
+  texturePath: 'green-chessboard',  // Special identifier for procedural green chessboard
   repeatX: 40.0,
   repeatZ: 40.0,
-  useAtlas: true,
+  useAtlas: false,  // Use procedural texture instead of atlas
   atlasTileCountX: 32,
   atlasTileCountY: 32,
   staticTileRangeStart: 0,
@@ -70,10 +71,10 @@ export const SMALL_FLOOR_3: FloorConfig = {
   id: 3,
   width: 1280.0,   // Eighth the size of arena floor
   depth: 1280.0,
-  texturePath: 'src/atlas pictures/atlas floor.jpg',
+  texturePath: 'green-chessboard',  // Special identifier for procedural green chessboard
   repeatX: 20.0,
   repeatZ: 20.0,
-  useAtlas: true,
+  useAtlas: false,  // Use procedural texture instead of atlas
   atlasTileCountX: 32,
   atlasTileCountY: 32,
   staticTileRangeStart: 0,

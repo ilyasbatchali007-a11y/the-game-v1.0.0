@@ -11,6 +11,7 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+import { FLOORS, FloorConfig } from './config/FloorMap';
 // 💡 ADDITION: Initialize MapRenderer
 const mapRenderer = new MapRenderer();
 
@@ -305,6 +306,9 @@ function startGameLoop() {
     const camY = camera.getY();
 
     // Always recalculate floor data on first few frames OR when camera moved
+    const currentFloorConfig = mapRenderer.getCurrentFloorConfig();
+    const useGreenChessboard = currentFloorConfig.texturePath === 'green-chessboard';
+    
     if (cameraMoved || lastTime === now) { // First frame condition
       // 1. Get floor data and render as SINGLE quad (1 draw call instead of 1024+)
       const floorData = mapRenderer.getFloorData(
@@ -320,7 +324,8 @@ function startGameLoop() {
         canvas.height,
         texture!,
         camX,
-        camY
+        camY,
+        useGreenChessboard
       );
     } else {
       // Re-render floor without recalculating data
@@ -330,7 +335,8 @@ function startGameLoop() {
         canvas.height,
         texture!,
         camX,
-        camY
+        camY,
+        useGreenChessboard
       );
     }
 
@@ -426,6 +432,28 @@ link3.addEventListener('click', (e) => {
   e.preventDefault();
   console.log('[UI] Link 3 clicked');
   // Replace with: window.open('YOUR_URL_3', '_blank');
+});
+
+// Floor swap button handlers
+const floorButtons = document.querySelectorAll('.floor-btn');
+floorButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const floorId = parseInt(btn.getAttribute('data-floor-id') || '0');
+    
+    // Update active button state
+    floorButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    // Swap to the selected floor
+    if (mapRenderer) {
+      const success = mapRenderer.swapFloor(floorId);
+      if (success) {
+        console.log(`[UI] Swapped to floor ID ${floorId}`);
+      } else {
+        console.warn(`[UI] Failed to swap to floor ID ${floorId}`);
+      }
+    }
+  });
 });
 
 // Initial render of slots on page load (hidden by default)

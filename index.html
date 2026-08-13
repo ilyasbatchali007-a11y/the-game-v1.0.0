@@ -270,11 +270,54 @@
       .hidden {
         display: none !important;
       }
+      
+      /* Floor Swap Buttons Styles */
+      .floor-buttons {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 50;
+      }
+      
+      .floor-btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+        background: rgba(74, 144, 217, 0.9);
+        border: 2px solid #4a90d9;
+        color: #fff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 6px;
+        min-width: 180px;
+        font-weight: 500;
+      }
+      
+      .floor-btn:hover {
+        background: #4a90d9;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(74, 144, 217, 0.5);
+      }
+      
+      .floor-btn.active {
+        background: #e94560;
+        border-color: #e94560;
+      }
     </style>
   </head>
   <body>
     <div id="game-container">
       <canvas id="canvas"></canvas>
+      
+      <!-- Floor Swap Buttons -->
+      <div id="floor-buttons" class="floor-buttons">
+        <button class="floor-btn" data-floor-id="0">Arena Floor</button>
+        <button class="floor-btn" data-floor-id="1">Small Floor 1 (50%)</button>
+        <button class="floor-btn" data-floor-id="2">Small Floor 2 (25%)</button>
+        <button class="floor-btn" data-floor-id="3">Small Floor 3 (12.5%)</button>
+      </div>
       
       <!-- Start Menu -->
       <div id="start-menu">

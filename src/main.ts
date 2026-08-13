@@ -11,6 +11,8 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+import { FloorManager } from './engine/FloorManager';
+import { FLOORS, getCurrentFloor } from './config/FloorSystem';
 // 💡 ADDITION: Initialize MapRenderer
 const mapRenderer = new MapRenderer();
 
@@ -24,6 +26,7 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: WebGL2RenderingContext | null = null;
 let movementSystem: MovementSystem | null = null;
 let collisionSystem: CollisionSystem | null = null;
+let floorManager: FloorManager | null = null;
 
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
@@ -104,21 +107,26 @@ canvas.height = window.innerHeight;
   // Initialize camera position to player position so map is visible on first frame
   camera.snapToTarget();
 
-  // 3. Load Atlas Texture (atlas floor.jpg from /src/atlas pictures/)
-  try {
-    texture = await AssetLoader.loadTexture(
-      ctx,
-      'src/atlas pictures/atlas floor.jpg'
-    );
-    console.log('[Engine] Atlas texture loaded successfully');
-  } catch (error) {
-    console.warn('[Engine] Failed to load atlas texture, using placeholder', error);
+  // 3. Initialize Floor Manager for multi-floor system
+  floorManager = new FloorManager(ctx);
+  console.log(`[Engine] Floor manager initialized with ${floorManager.getTotalFloors()} floors`);
+  
+  // Get current floor texture (green chessboard)
+  const currentFloor = getCurrentFloor();
+  const floorTexture = floorManager.getFloorTexture(currentFloor.id);
+  if (floorTexture) {
+    texture = floorTexture;
+    console.log('[Engine] Chessboard floor texture created');
+  } else {
     // Fallback to a simple placeholder texture
     texture = await AssetLoader.loadTexture(
       ctx,
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
     );
   }
+
+  // Set up keyboard handler for floor navigation
+  setupFloorNavigation();
 
   // Start the game loop
   startGameLoop();
@@ -356,6 +364,27 @@ window.addEventListener('keydown', (e) => {
       console.log(`[UI] Saved to slot ${currentSlotId}!`);
     }
   }
+  
+  // Floor navigation with T key (next floor) and G key (previous floor)
+  if (floorManager && world) {
+    if (e.key === 't' || e.key === 'T') {
+      floorManager.goToNextFloor(world);
+      // Update texture when changing floors
+      const currentFloor = getCurrentFloor();
+      const newTexture = floorManager.getFloorTexture(currentFloor.id);
+      if (newTexture) {
+        texture = newTexture;
+      }
+    } else if (e.key === 'g' || e.key === 'G') {
+      floorManager.goToPreviousFloor(world);
+      // Update texture when changing floors
+      const currentFloor = getCurrentFloor();
+      const newTexture = floorManager.getFloorTexture(currentFloor.id);
+      if (newTexture) {
+        texture = newTexture;
+      }
+    }
+  }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -427,6 +456,13 @@ link3.addEventListener('click', (e) => {
   console.log('[UI] Link 3 clicked');
   // Replace with: window.open('YOUR_URL_3', '_blank');
 });
+
+// Floor navigation setup function
+function setupFloorNavigation(): void {
+  console.log('[FloorSystem] Floor navigation enabled: T = next floor, G = previous floor');
+  console.log(`[FloorSystem] Total floors: ${FLOORS.length}`);
+  console.log(`[FloorSystem] Current floor: ${getCurrentFloor().name}`);
+}
 
 // Initial render of slots on page load (hidden by default)
 slotsContainer.classList.remove('visible');

@@ -587,8 +587,25 @@ export class GLInstancedRenderer {
     return prog;
   }
 
+  /**
+   * Render a single floor with custom configuration
+   * Each floor uses 1 draw call, but all floors share the same shader pipeline
+   */
   public renderFloor(
-    floorData: { x: number; y: number; width: number; height: number } | null,
+    floorData: { 
+      x: number; 
+      y: number; 
+      width: number; 
+      height: number;
+      elevation?: number;
+      useAtlas?: boolean;
+      atlasTileCountX?: number;
+      atlasTileCountY?: number;
+      staticRangeStart?: number;
+      staticRangeEnd?: number;
+      variationRangeStart?: number;
+      variationRangeEnd?: number;
+    } | null,
     width: number,
     height: number,
     texture: WebGLTexture,
@@ -599,14 +616,15 @@ export class GLInstancedRenderer {
 
     // Only update floor data if provided (camera moved)
     if (floorData !== null) {
-      // Pack floor data: x, y, width, height, height=0
+      // Pack floor data: x, y, width, height, elevation (for multi-floor), height=0, rotation=0
+      const elevation = floorData.elevation ?? 0.0;
       this.instanceData[0] = floorData.x;
       this.instanceData[1] = floorData.y;
       this.instanceData[2] = floorData.width;
       this.instanceData[3] = floorData.height;
       this.instanceData[4] = 0.0; // cubeHeight = 0 for floor
       this.instanceData[5] = 0.0; // rotation = 0 for floor
-      this.instanceData[6] = 0.0; // elevation = 0 for floor
+      this.instanceData[6] = elevation; // elevation offset for multi-floor support
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, 7));
@@ -623,19 +641,26 @@ export class GLInstancedRenderer {
     gl.uniform2f(this.cameraOffsetLoc, cameraX, cameraY);
     gl.uniform1i(this.renderModeLoc, 0);  // Floor mode
     
-    // Set atlas configuration uniforms
-    gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
+    // Set atlas configuration uniforms (supports both atlas and standalone textures)
+    const useAtlas = floorData?.useAtlas ?? true;
+    const atlasTileCount = floorData?.atlasTileCountX ?? 32;
+    const staticRangeStart = floorData?.staticRangeStart ?? 0;
+    const staticRangeEnd = floorData?.staticRangeEnd ?? 99;
+    const variationRangeStart = floorData?.variationRangeStart ?? 100;
+    const variationRangeEnd = floorData?.variationRangeEnd ?? 1023;
+    
+    gl.uniform1i(this.atlasTileCountLoc, atlasTileCount);
     gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
     gl.uniform1f(this.worldTileSizeLoc, 64.0);          // 64px per game tile
-    gl.uniform1i(this.staticRangeStartLoc, 0);          // Static tiles: 0-99
-    gl.uniform1i(this.staticRangeEndLoc, 99);
-    gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
-    gl.uniform1i(this.variationRangeEndLoc, 1023);
+    gl.uniform1i(this.staticRangeStartLoc, staticRangeStart);
+    gl.uniform1i(this.staticRangeEndLoc, staticRangeEnd);
+    gl.uniform1i(this.variationRangeStartLoc, variationRangeStart);
+    gl.uniform1i(this.variationRangeEndLoc, variationRangeEnd);
     gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
     // Use the stored session seed (consistent throughout gameplay, changes on reload)
     gl.uniform1f(this.seedLoc, this.sessionSeed);
 
-    // Bind atlas texture to TEXTURE0
+    // Bind floor texture to TEXTURE0 (can be atlas or standalone)
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     
@@ -650,5 +675,41 @@ export class GLInstancedRenderer {
     gl.bindVertexArray(this.floorVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1); // Draw 1 instance (the floor)
     gl.bindVertexArray(null);
+  }
+
+  /**
+   * Render multiple floors in sequence
+   * Each floor is rendered with its own texture and configuration
+   * All floors share the same shader pipeline for efficiency
+   * @param floorsData Array of floor configurations
+   * @param textures Array of textures (one per floor, or single texture for all)
+   */
+  public renderMultipleFloors(
+    floorsData: Array<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      elevation?: number;
+      useAtlas?: boolean;
+      atlasTileCountX?: number;
+      atlasTileCountY?: number;
+      staticRangeStart?: number;
+      staticRangeEnd?: number;
+      variationRangeStart?: number;
+      variationRangeEnd?: number;
+    }>,
+    textures: WebGLTexture[],
+    width: number,
+    height: number,
+    cameraX: number = 0,
+    cameraY: number = 0
+  ): void {
+    // Render each floor with its own texture
+    for (let i = 0; i < floorsData.length; i++) {
+      const floorData = floorsData[i];
+      const texture = textures[Math.min(i, textures.length - 1)]; // Use last texture if not enough
+      this.renderFloor(floorData, width, height, texture, cameraX, cameraY);
+    }
   }
 }

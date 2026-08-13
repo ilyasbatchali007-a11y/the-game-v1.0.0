@@ -11,7 +11,9 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
-// 💡 ADDITION: Initialize MapRenderer
+import { ARENA_FLOOR, createFloorConfig } from './config/FloorMap';
+
+// 💡 ADDITION: Initialize MapRenderer with support for multiple floors
 const mapRenderer = new MapRenderer();
 
 // Game State
@@ -101,8 +103,72 @@ canvas.height = window.innerHeight;
     -100    // offsetY (keep original camera offset)
   );
   
-  // Initialize camera position to player position so map is visible on first frame
+  // Update camera position to player position so map is visible on first frame
   camera.snapToTarget();
+  
+  // ============================================
+  // MULTI-FLOOR SETUP: Add multiple floors with different textures and sizes
+  // ============================================
+  
+  // Floor 1: Base ground floor using atlas texture (layer 0)
+  const groundFloor = createFloorConfig({
+    texturePath: 'src/atlas pictures/atlas floor.jpg',
+    width: 10240.0,
+    depth: 10240.0,
+    repeatX: 160.0,
+    repeatZ: 160.0,
+    useAtlas: true,
+    atlasTileCountX: 32,
+    atlasTileCountY: 32,
+    staticTileRangeStart: 0,
+    staticTileRangeEnd: 99,
+    variationTileRangeStart: 100,
+    variationTileRangeEnd: 1023,
+    elevation: 0.0,
+    layerIndex: 0
+  });
+  mapRenderer.addFloor(groundFloor);
+  
+  // Floor 2: Elevated platform with different texture (layer 1)
+  // This demonstrates custom size and different texture than atlas
+  const elevatedFloor = createFloorConfig({
+    texturePath: 'src/atlas pictures/atlas floor.jpg', // Can use same or different texture
+    width: 5120.0,  // Custom size: half the base floor
+    depth: 5120.0,
+    repeatX: 80.0,  // Adjust texture repeat for custom size
+    repeatZ: 80.0,
+    useAtlas: true,
+    atlasTileCountX: 32,
+    atlasTileCountY: 32,
+    staticTileRangeStart: 0,
+    staticTileRangeEnd: 50,
+    variationTileRangeStart: 100,
+    variationTileRangeEnd: 200,
+    elevation: 32.0,  // Elevated 32 pixels above ground
+    layerIndex: 1     // Rendered after ground floor
+  });
+  mapRenderer.addFloor(elevatedFloor);
+  
+  // Floor 3: Another elevated floor with different properties (layer 2)
+  const upperFloor = createFloorConfig({
+    texturePath: 'src/atlas pictures/atlas floor.jpg',
+    width: 2560.0,  // Even smaller: quarter of base floor
+    depth: 2560.0,
+    repeatX: 40.0,
+    repeatZ: 40.0,
+    useAtlas: false,  // Can use standalone texture (non-atlas mode)
+    atlasTileCountX: 1,
+    atlasTileCountY: 1,
+    staticTileRangeStart: 0,
+    staticTileRangeEnd: 0,
+    variationTileRangeStart: 0,
+    variationTileRangeEnd: 0,
+    elevation: 64.0,  // Elevated 64 pixels above ground
+    layerIndex: 2     // Rendered last (topmost floor)
+  });
+  mapRenderer.addFloor(upperFloor);
+  
+  console.log('[Engine] Multi-floor setup complete:', mapRenderer.getAllFloors().length, 'floors configured');
 
   // 3. Load Atlas Texture (atlas floor.jpg from /src/atlas pictures/)
   try {
@@ -306,35 +372,46 @@ function startGameLoop() {
 
     // Always recalculate floor data on first few frames OR when camera moved
     if (cameraMoved || lastTime === now) { // First frame condition
-      // 1. Get floor data and render as SINGLE quad (1 draw call instead of 1024+)
-      const floorData = mapRenderer.getFloorData(
+      // 1. Get ALL floor data and render each as SINGLE quad (1 draw call per floor)
+      const allFloorsData = mapRenderer.getAllFloorData(
         camX, camY,
         canvas.width,
         canvas.height
       );
 
-      // 2. Render seamless floor in ONE draw call
-      renderer.renderFloor(
-        floorData,
-        canvas.width,
-        canvas.height,
-        texture!,
-        camX,
-        camY
-      );
+      // 2. Render all floors in sequence using the same shader pipeline
+      // Each floor uses its own texture configuration but shares the shader
+      if (texture) {
+        renderer.renderMultipleFloors(
+          allFloorsData,
+          [texture], // Can pass multiple textures for different floors
+          canvas.width,
+          canvas.height,
+          camX,
+          camY
+        );
+      }
     } else {
-      // Re-render floor without recalculating data
-      renderer.renderFloor(
-        null,
+      // Re-render floors without recalculating data
+      const allFloorsData = mapRenderer.getAllFloorData(
+        camX, camY,
         canvas.width,
-        canvas.height,
-        texture!,
-        camX,
-        camY
+        canvas.height
       );
+      
+      if (texture) {
+        renderer.renderMultipleFloors(
+          allFloorsData,
+          [texture],
+          canvas.width,
+          canvas.height,
+          camX,
+          camY
+        );
+      }
     }
 
-    // 3. Draw Player Entity (red square) on Top
+    // 3. Draw Player Entity (red cube) on Top
     renderer.renderPlayer(world, canvas.width, canvas.height, texture!, camX, camY);
 
     requestAnimationFrame(loop);

@@ -1,6 +1,6 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
-import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
+import { FloorConfig } from '../config/FloorMap';
 import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
@@ -653,8 +653,9 @@ export class GLInstancedRenderer {
     const isChessboard = floorData?.isChessboard ?? false;
     gl.uniform1i(this.isChessboardLoc, isChessboard ? 1 : 0);
     
-    // Only set atlas uniforms if not in chessboard mode
     if (!isChessboard) {
+      // Only set atlas uniforms if not in chessboard mode
+      
       // Set atlas configuration uniforms
       gl.uniform1i(this.atlasTileCountLoc, 32);           // 32x32 tiles in atlas
       gl.uniform1f(this.tileSizePixelsLoc, 64.0);         // 64px per tile in atlas
@@ -678,6 +679,13 @@ export class GLInstancedRenderer {
       }
       // Tell shader which texture unit to use for map data
       gl.uniform1i(this.mapDataTextureLoc, 1);
+    } else {
+      // Chessboard mode: no textures needed, just use procedural colors
+      // Unbind any textures to avoid accidental sampling
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
     gl.bindVertexArray(this.floorVAO);

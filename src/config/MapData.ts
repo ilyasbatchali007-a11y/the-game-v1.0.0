@@ -1,35 +1,43 @@
 export const TILE_SIZE = 64;
-export const MAP_COLS = 160;
-export const MAP_ROWS = 160;
-export const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
-export const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
+// Floor configuration - each floor can have different dimensions
+export interface FloorConfig {
+  cols: number;      // Width in tiles
+  rows: number;      // Height in tiles  
+  id: number;        // Unique floor ID
+  tileBaseId: number; // Base tile ID for texture variation
+}
 
-// Multi-floor system configuration
-export const NUM_FLOORS = 5; // Number of floor levels
-export const FLOOR_HEIGHT = 64; // Vertical distance between floors in pixels
+// Customizable floor definitions - different sizes and IDs
+export const FLOORS: FloorConfig[] = [
+  { cols: 32, rows: 32, id: 0, tileBaseId: 100 },   // Ground floor - 32x32
+  { cols: 24, rows: 28, id: 1, tileBaseId: 200 },   // Floor 1 - 24x28 (green chessboard)
+  { cols: 20, rows: 24, id: 2, tileBaseId: 300 },   // Floor 2 - 20x24 (green chessboard)
+  { cols: 16, rows: 20, id: 3, tileBaseId: 400 },   // Floor 3 - 16x20 (green chessboard)
+  { cols: 12, rows: 16, id: 4, tileBaseId: 500 },   // Floor 4 - 12x16 (green chessboard)
+];
+
+export const NUM_FLOORS = FLOORS.length;
+export const FLOOR_HEIGHT = 64;
+
+// Get max dimensions needed for array allocation
+const MAX_COLS = Math.max(...FLOORS.map(f => f.cols));
+const MAX_ROWS = Math.max(...FLOORS.map(f => f.rows));
 
 // Tile data structure for atlas rendering
-// Each tile stores: tileId (which texture to use from atlas) and isStatic flag
 export interface TileData {
   tileId: number;      // Which tile texture to use from the atlas
   isStatic: boolean;   // If true, use exact tileId; if false, use variation hashing
 }
 
-// Tile IDs: 0 = floor (passable), 1 = decoration, 2 = wall (blocking)
-export const MAP_DATA = new Uint8Array(MAP_COLS * MAP_ROWS);
-
-// New: Map data with atlas tile information
-export const MAP_TILE_DATA = new Float32Array(MAP_COLS * MAP_ROWS * 2); 
-// Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
-
-// Multi-floor map data - each floor has its own tile data
+// Multi-floor map data - each floor has its own tile data with custom dimensions
 export const FLOOR_MAP_DATA: Uint8Array[] = [];
 export const FLOOR_TILE_DATA: Float32Array[] = [];
 
-// Initialize floor arrays
+// Initialize floor arrays with custom dimensions per floor
 for (let i = 0; i < NUM_FLOORS; i++) {
-  FLOOR_MAP_DATA.push(new Uint8Array(MAP_COLS * MAP_ROWS));
-  FLOOR_TILE_DATA.push(new Float32Array(MAP_COLS * MAP_ROWS * 2));
+  const floor = FLOORS[i];
+  FLOOR_MAP_DATA.push(new Uint8Array(floor.cols * floor.rows));
+  FLOOR_TILE_DATA.push(new Float32Array(floor.cols * floor.rows * 2));
 }
 
 // Current active floor level (0 = ground floor)
@@ -43,59 +51,40 @@ export function getCurrentFloor(): number {
   return currentFloor;
 }
 
+export function getFloorDimensions(floor: number): { cols: number; rows: number } {
+  const f = FLOORS[Math.max(0, Math.min(NUM_FLOORS - 1, floor))];
+  return { cols: f.cols, rows: f.rows };
+}
+
 export function generateTestMap(): void {
-  // Create a 16x16 floor area in the center of the 160x160 map
-  // with ~15% void holes in an interconnected design
-  // This pattern is applied to ALL floors
-  
-  const patternSize = 16;
-  const offsetX = Math.floor((MAP_COLS - patternSize) / 2);
-  const offsetY = Math.floor((MAP_ROWS - patternSize) / 2);
-  
-  // Generate each floor level
+  // Generate each floor level with custom dimensions and solid tiles (no voids)
   for (let floor = 0; floor < NUM_FLOORS; floor++) {
+    const floorConfig = FLOORS[floor];
     const floorMapData = FLOOR_MAP_DATA[floor];
     const floorTileData = FLOOR_TILE_DATA[floor];
     
-    // Initialize all tiles as void (0) first
-    floorMapData.fill(0);
-    floorTileData.fill(0);
+    const cols = floorConfig.cols;
+    const rows = floorConfig.rows;
+    const baseTileId = floorConfig.tileBaseId;
     
-    // Apply the pattern directly
-    for (let row = 0; row < MAP_ROWS; row++) {
-      for (let col = 0; col < MAP_COLS; col++) {
-        const idx = row * MAP_COLS + col;
+    // Fill entire floor with solid tiles - no voids
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const idx = row * cols + col;
         const dataIdx = idx * 2;
         
-        // Check if within pattern area
-        let isFloor = false;
-        if (row >= offsetY && row < offsetY + patternSize &&
-            col >= offsetX && col < offsetX + patternSize) {
-          const patternRow = row - offsetY;
-          const patternCol = col - offsetX;
-          
-          // Interconnected pattern with ~15% void (38 voids out of 256)
-          isFloor = !(
-            (patternRow === 1 || patternRow === 2) && (patternCol === 5 || patternCol === 6 || patternCol === 9 || patternCol === 10) ||
-            (patternRow === 3 || patternRow === 4) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-            (patternRow === 5 || patternRow === 6) && (patternCol >= 6 && patternCol <= 9) ||
-            (patternRow === 9 || patternRow === 10) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-            (patternRow === 11 || patternRow === 12) && (patternCol === 6 || patternCol === 7 || patternCol === 9 || patternCol === 10)
-          );
-        }
-        
-        if (isFloor) {
-          // Floor tile - use different texture IDs for different floors (no texture = plain color)
-          // Each floor gets a different base tile ID for visual distinction
-          const baseTileId = 100 + (floor * 50); // Different variation range per floor
+        // Floor tile - use different texture IDs for different floors
+        // Ground floor (0) uses original texture, other floors use green chessboard pattern
+        if (floor === 0) {
+          // Original floor - use base tile ID with variation
           floorMapData[idx] = 0; // Floor type (passable)
-          floorTileData[dataIdx] = baseTileId;    // Atlas tile ID (different per floor)
+          floorTileData[dataIdx] = baseTileId;    // Atlas tile ID
           floorTileData[dataIdx + 1] = 0;  // isStatic = false (use variation)
         } else {
-          // Void - nothing will be rendered here
-          floorMapData[idx] = 0;
-          floorTileData[dataIdx] = 0;      // Tile ID 0 (void)
-          floorTileData[dataIdx + 1] = 1;  // isStatic = true
+          // Additional floors - green chessboard pattern (different tile range)
+          floorMapData[idx] = 0; // Floor type (passable)
+          floorTileData[dataIdx] = baseTileId;    // Green chessboard tile ID
+          floorTileData[dataIdx + 1] = 0;  // isStatic = false (use variation)
         }
       }
     }
@@ -103,42 +92,60 @@ export function generateTestMap(): void {
   
   // Set current floor to ground (0)
   currentFloor = 0;
-  
-  // Copy floor 0 data to legacy MAP_DATA for compatibility
-  MAP_DATA.set(FLOOR_MAP_DATA[0]);
-  MAP_TILE_DATA.set(FLOOR_TILE_DATA[0]);
-  
-  // No border walls - pattern floats in void space
 }
 
-export function isTileBlocking(col: number, row: number): boolean {
-  if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) {
+export function isTileBlocking(col: number, row: number, floor?: number): boolean {
+  const f = floor !== undefined ? floor : currentFloor;
+  if (f < 0 || f >= NUM_FLOORS) return true;
+  
+  const dims = getFloorDimensions(f);
+  if (col < 0 || col >= dims.cols || row < 0 || row >= dims.rows) {
     return true;
   }
-  return MAP_DATA[row * MAP_COLS + col] === 2;
+  return FLOOR_MAP_DATA[f][row * dims.cols + col] === 2;
 }
 
 // New helper for continuous collision detection with floating-point positions
-export function getTileAtPosition(worldX: number, worldY: number): { col: number; row: number } {
+export function getTileAtPosition(worldX: number, worldY: number, floor?: number): { col: number; row: number } {
+  const f = floor !== undefined ? floor : currentFloor;
+  const dims = getFloorDimensions(f);
   return {
     col: Math.floor(worldX / TILE_SIZE),
     row: Math.floor(worldY / TILE_SIZE)
   };
 }
 
-export function isPositionBlocking(worldX: number, worldY: number): boolean {
-  const { col, row } = getTileAtPosition(worldX, worldY);
-  return isTileBlocking(col, row);
+export function isPositionBlocking(worldX: number, worldY: number, floor?: number): boolean {
+  const { col, row } = getTileAtPosition(worldX, worldY, floor);
+  return isTileBlocking(col, row, floor);
 }
 
-// Get tile data for atlas rendering
+// Get tile data for atlas rendering from current floor
 export function getTileData(col: number, row: number): { tileId: number; isStatic: number } {
-  if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) {
+  const f = currentFloor;
+  const dims = getFloorDimensions(f);
+  if (col < 0 || col >= dims.cols || row < 0 || row >= dims.rows) {
     return { tileId: 0, isStatic: 1 };
   }
-  const idx = (row * MAP_COLS + col) * 2;
+  const idx = (row * dims.cols + col) * 2;
   return {
-    tileId: MAP_TILE_DATA[idx],
-    isStatic: MAP_TILE_DATA[idx + 1]
+    tileId: FLOOR_TILE_DATA[f][idx],
+    isStatic: FLOOR_TILE_DATA[f][idx + 1]
+  };
+}
+
+// Get floor-specific tile data
+export function getFloorTileData(floor: number, col: number, row: number): { tileId: number; isStatic: number } {
+  if (floor < 0 || floor >= NUM_FLOORS) {
+    return { tileId: 0, isStatic: 1 };
+  }
+  const dims = getFloorDimensions(floor);
+  if (col < 0 || col >= dims.cols || row < 0 || row >= dims.rows) {
+    return { tileId: 0, isStatic: 1 };
+  }
+  const idx = (row * dims.cols + col) * 2;
+  return {
+    tileId: FLOOR_TILE_DATA[floor][idx],
+    isStatic: FLOOR_TILE_DATA[floor][idx + 1]
   };
 }

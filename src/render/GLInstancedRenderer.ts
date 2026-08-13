@@ -1,7 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
-import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS, FLOOR_MAP_DATA, FLOOR_TILE_DATA, currentFloor } from '../config/MapData';
+import { FLOOR_MAP_DATA, FLOOR_TILE_DATA, currentFloor, getFloorDimensions, NUM_FLOORS } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -499,29 +499,34 @@ export class GLInstancedRenderer {
   }
 
   /**
-   * Create a texture from MAP_TILE_DATA for the fragment shader to sample
+   * Create a texture from FLOOR_TILE_DATA for the fragment shader to sample
    * Each pixel stores: R = tileId/1024, G = isStatic (0 or 1)
    */
   private createMapDataTexture(): void {
     const gl = this.gl;
     
-    // Create a texture with dimensions matching the map (32x32)
+    // Get current floor dimensions
+    const dims = getFloorDimensions(currentFloor);
+    const cols = dims.cols;
+    const rows = dims.rows;
+    
+    // Create a texture with dimensions matching the current floor
     const texture = gl.createTexture();
     if (!texture) {
       console.error('Failed to create map data texture');
       return;
     }
     
-    // Convert current floor's MAP_TILE_DATA to RGBA format for texture
+    // Convert current floor's FLOOR_TILE_DATA to RGBA format for texture
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
     // B and A channels: unused (set to 0)
-    const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
+    const textureData = new Uint8Array(cols * rows * 4);
     
     // Use the current floor's tile data
     const floorTileData = FLOOR_TILE_DATA[currentFloor];
     
-    for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
+    for (let i = 0; i < cols * rows; i++) {
       const srcIdx = i * 2;
       const dstIdx = i * 4;
       
@@ -542,8 +547,8 @@ export class GLInstancedRenderer {
       gl.TEXTURE_2D,
       0,
       gl.RGBA,
-      MAP_COLS,
-      MAP_ROWS,
+      cols,
+      rows,
       0,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
@@ -639,7 +644,10 @@ export class GLInstancedRenderer {
     gl.uniform1i(this.staticRangeEndLoc, 99);
     gl.uniform1i(this.variationRangeStartLoc, 100);     // Variation tiles: 100-1023
     gl.uniform1i(this.variationRangeEndLoc, 1023);
-    gl.uniform2f(this.mapDimensionsLoc, MAP_COLS, MAP_ROWS);
+    
+    // Use current floor dimensions
+    const dims = getFloorDimensions(currentFloor);
+    gl.uniform2f(this.mapDimensionsLoc, dims.cols, dims.rows);
     // Use the stored session seed (consistent throughout gameplay, changes on reload)
     gl.uniform1f(this.seedLoc, this.sessionSeed);
 

@@ -5,7 +5,7 @@
 // kept resident on GPU buffers to avoid re-uploading entire tile buffers every frame.
 // Uses gl.bufferSubData for partial updates and frustum culling at chunk level.
 
-import { TILE_SIZE, MAP_COLS, MAP_ROWS } from '../config/MapData';
+import { TILE_SIZE, getFloorDimensions, getCurrentFloor } from '../config/MapData';
 
 export const CHUNK_SIZE = 32;
 export const CHUNK_WIDTH = CHUNK_SIZE;
@@ -37,13 +37,15 @@ export class ChunkManager {
 
   constructor(
     gl: WebGL2RenderingContext,
-    mapWidth: number = MAP_COLS,
-    mapHeight: number = MAP_ROWS,
+    mapWidth?: number,
+    mapHeight?: number,
     chunkSize: number = CHUNK_SIZE
   ) {
     this.gl = gl;
-    this.mapWidth = mapWidth;
-    this.mapHeight = mapHeight;
+    // Use current floor dimensions if not provided
+    const dims = getFloorDimensions(getCurrentFloor());
+    this.mapWidth = mapWidth ?? dims.cols;
+    this.mapHeight = mapHeight ?? dims.rows;
     this.chunkSize = chunkSize;
     this.maxInstancesPerChunk = chunkSize * chunkSize;
     

@@ -1,7 +1,7 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { ARENA_FLOOR, FloorConfig } from '../config/FloorMap';
-import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS } from '../config/MapData';
+import { MAP_TILE_DATA, MAP_COLS, MAP_ROWS, FLOOR_MAP_DATA, FLOOR_TILE_DATA, currentFloor } from '../config/MapData';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -512,18 +512,21 @@ export class GLInstancedRenderer {
       return;
     }
     
-    // Convert MAP_TILE_DATA to RGBA format for texture
+    // Convert current floor's MAP_TILE_DATA to RGBA format for texture
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
     // B and A channels: unused (set to 0)
     const textureData = new Uint8Array(MAP_COLS * MAP_ROWS * 4);
     
+    // Use the current floor's tile data
+    const floorTileData = FLOOR_TILE_DATA[currentFloor];
+    
     for (let i = 0; i < MAP_COLS * MAP_ROWS; i++) {
       const srcIdx = i * 2;
       const dstIdx = i * 4;
       
-      const tileId = MAP_TILE_DATA[srcIdx];
-      const isStatic = MAP_TILE_DATA[srcIdx + 1];
+      const tileId = floorTileData[srcIdx];
+      const isStatic = floorTileData[srcIdx + 1];
       
       // Normalize tileId to [0, 1] range (max 1024 tiles)
       textureData[dstIdx] = Math.floor((tileId / 1024.0) * 255.0);  // R
@@ -556,6 +559,11 @@ export class GLInstancedRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
     
     this.mapDataTexture = texture;
+  }
+  
+  // Public method to update floor texture when changing floors
+  public updateFloorTexture(): void {
+    this.createMapDataTexture();
   }
 
   private createShader(type: number, source: string): WebGLShader {

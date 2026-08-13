@@ -11,6 +11,8 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
+// Floor switching imports
+import { getCurrentFloor, setCurrentFloor } from './config/MapData';
 // 💡 ADDITION: Initialize MapRenderer
 const mapRenderer = new MapRenderer();
 
@@ -347,6 +349,25 @@ function startGameLoop() {
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
+  
+  // Floor switching: T = go up, G = go down
+  if (e.key === 't' || e.key === 'T') {
+    const newFloor = getCurrentFloor() + 1;
+    setCurrentFloor(newFloor);
+    console.log(`[Floor] Changed to floor ${getCurrentFloor()}`);
+    // Update the renderer's floor texture
+    if (renderer) {
+      renderer.updateFloorTexture();
+    }
+  } else if (e.key === 'g' || e.key === 'G') {
+    const newFloor = getCurrentFloor() - 1;
+    setCurrentFloor(newFloor);
+    console.log(`[Floor] Changed to floor ${getCurrentFloor()}`);
+    // Update the renderer's floor texture
+    if (renderer) {
+      renderer.updateFloorTexture();
+    }
+  }
   
   // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {

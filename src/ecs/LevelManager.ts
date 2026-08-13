@@ -3,9 +3,6 @@ import { FLOORS, FloorConfig } from '../config/FloorMap';
 export interface FloorData extends FloorConfig {
   spawnX: number;
   spawnY: number;
-  // Stair tile positions for floor interaction
-  stairUpTile?: { x: number; y: number; atlasIndex: number };
-  stairDownTile?: { x: number; y: number; atlasIndex: number };
 }
 
 export class LevelManager {
@@ -19,11 +16,7 @@ export class LevelManager {
   }
 
   private generateFloors() {
-    // Define atlas tile indices for stair textures (CHANGE THESE TO MATCH YOUR ATLAS)
-    const STAIR_UP_ATLAS_INDEX = 1;   // Tile ID in your atlas for "Up" stairs
-    const STAIR_DOWN_ATLAS_INDEX = 2; // Tile ID in your atlas for "Down" stairs
-    
-    // Convert FLOORS config to extended format with spawn points and stair tiles
+    // Convert FLOORS config to extended format with spawn points
     for (let i = 0; i < FLOORS.length; i++) {
       const floor = FLOORS[i];
       const tileSize = floor.tileSize || 64;
@@ -36,10 +29,7 @@ export class LevelManager {
       this.floors.push({
         ...floor,
         spawnX: centerX,
-        spawnY: centerY,
-        // Add stair tiles near spawn point using atlas textures
-        stairUpTile: { x: centerX, y: centerY + 1, atlasIndex: STAIR_UP_ATLAS_INDEX },
-        stairDownTile: { x: centerX, y: centerY - 1, atlasIndex: STAIR_DOWN_ATLAS_INDEX }
+        spawnY: centerY
       });
     }
     

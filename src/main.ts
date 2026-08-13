@@ -339,18 +339,6 @@ function startGameLoop() {
 
     // 3. Draw Player Entity (red square) on Top
     renderer.renderPlayer(world, canvas.width, canvas.height, texture!, camX, camY);
-    
-    // 4. Render stair tiles from current floor data
-    const currentFloor = world.getLevelManager().getCurrentFloor();
-    renderer.renderStairs(
-      currentFloor,
-      canvas.width,
-      canvas.height,
-      texture!,
-      camX,
-      camY,
-      64
-    );
 
     requestAnimationFrame(loop);
   }
@@ -363,70 +351,20 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
   inputState[e.key] = true;
   
-  // Floor transition with E key on stair tiles
-  if ((e.key === 'e' || e.key === 'E') && world && gameRunning) {
-    const currentFloor = world.getLevelManager().getCurrentFloor();
-    const playerX = world.x[PLAYER_ID];
-    const playerY = world.y[PLAYER_ID];
-    const tileSize = 64;
+  // Legacy floor transition with F key
+  if ((e.key === 'f' || e.key === 'F') && world && gameRunning) {
+    const currentFloor = world.getCurrentFloorId();
+    // Shift+F goes down, F goes up
+    const direction = e.shiftKey ? -1 : 1;
+    const newFloor = world.changeFloor(direction);
     
-    // Convert player position to tile coordinates
-    const playerTileX = Math.floor(playerX / tileSize);
-    const playerTileY = Math.floor(playerY / tileSize);
-    
-    // Check if player is standing on stair up tile
-    if (currentFloor.stairUpTile && 
-        playerTileX === currentFloor.stairUpTile.x && 
-        playerTileY === currentFloor.stairUpTile.y) {
-      const newFloor = world.changeFloor(1);
-      if (newFloor !== world.getCurrentFloorId()) {
-        const newFloorConfig = world.getLevelManager().getCurrentFloor();
-        mapRenderer.setFloor(newFloorConfig);
-        const spawn = world.getSpawnPoint();
-        world.x[PLAYER_ID] = spawn.x * CELL_SIZE;
-        world.y[PLAYER_ID] = spawn.y * CELL_SIZE;
-        if (camera) {
-          camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-          camera.snapToTarget();
-        }
-        console.log(`[Stairs] Went UP to Floor ${newFloor}`);
-      }
-    }
-    // Check if player is standing on stair down tile
-    else if (currentFloor.stairDownTile && 
-             playerTileX === currentFloor.stairDownTile.x && 
-             playerTileY === currentFloor.stairDownTile.y) {
-      const newFloor = world.changeFloor(-1);
-      if (newFloor !== world.getCurrentFloorId()) {
-        const newFloorConfig = world.getLevelManager().getCurrentFloor();
-        mapRenderer.setFloor(newFloorConfig);
-        const spawn = world.getSpawnPoint();
-        world.x[PLAYER_ID] = spawn.x * CELL_SIZE;
-        world.y[PLAYER_ID] = spawn.y * CELL_SIZE;
-        if (camera) {
-          camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-          camera.snapToTarget();
-        }
-        console.log(`[Stairs] Went DOWN to Floor ${newFloor}`);
-      }
-    }
-  }
-  
-  // Legacy floor transition with F key (can be removed later)
-  if (e.key === 'f' || e.key === 'F') {
-    if (world && gameRunning) {
-      const currentFloor = world.getCurrentFloorId();
-      // Shift+F goes down, F goes up
-      const direction = e.shiftKey ? -1 : 1;
-      const newFloor = world.changeFloor(direction);
+    if (newFloor !== currentFloor) {
+      // Update mapRenderer with the new floor config
+      const newFloorConfig = world.getLevelManager().getCurrentFloor();
+      mapRenderer.setFloor(newFloorConfig);
       
-      if (newFloor !== currentFloor) {
-        // Update mapRenderer with the new floor config
-        const newFloorConfig = world.getLevelManager().getCurrentFloor();
-        mapRenderer.setFloor(newFloorConfig);
-        
-        // Get spawn point for new floor
-        const spawn = world.getSpawnPoint();
+      // Get spawn point for new floor
+      const spawn = world.getSpawnPoint();
         
         // Move player to center of new floor
         world.x[PLAYER_ID] = spawn.x * CELL_SIZE;

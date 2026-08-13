@@ -72,17 +72,22 @@ export function generateFloor(floorId: number, width: number, height: number, us
   
   // Add teleporters for all floors except the last one
   if (floorId < MAX_FLOORS - 1) {
-    // Place UP teleporter at center
-    const upCol = Math.floor(width / 2);
-    const upRow = Math.floor(height / 2);
+    // Place teleporters side-by-side at center of floor
+    const centerCol = Math.floor(width / 2);
+    const centerRow = Math.floor(height / 2);
+    
+    // UP Teleporter (Tile ID 10) - Left position
+    const upCol = centerCol;
+    const upRow = centerRow;
     const upIdx = (upRow * width + upCol) * 2;
     tileData[upIdx] = TELEPORTER_UP_ID;
     tileData[upIdx + 1] = 1; // static
     
-    // Place DOWN teleporter near UP (offset by 1 tile diagonally)
-    const downCol = upCol - 1;
-    const downRow = upRow - 1;
-    if (downCol >= 0 && downRow >= 0) {
+    // DOWN Teleporter (Tile ID 13) - Right position (next to UP)
+    const downCol = centerCol + 1;
+    const downRow = centerRow;
+    // Only place if within bounds
+    if (downCol < width) {
       const downIdx = (downRow * width + downCol) * 2;
       tileData[downIdx] = TELEPORTER_DOWN_ID;
       tileData[downIdx + 1] = 1; // static

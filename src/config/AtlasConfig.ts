@@ -21,6 +21,10 @@ export const ATLAS_CONFIG = {
   staticTileStart: 0,
   staticTileEnd: 99,
   
+  // Special teleporter tiles
+  teleporterUpId: 10,      // UP teleporter tile
+  teleporterDownId: 13,    // DOWN teleporter tile
+  
   // Random variation tiles: IDs 100-1023 (for grass, dirt, etc. - auto-selected by hash)
   variationTileStart: 100,
   variationTileEnd: 1023,

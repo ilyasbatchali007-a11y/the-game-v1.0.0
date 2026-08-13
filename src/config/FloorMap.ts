@@ -20,14 +20,14 @@ export interface FloorConfig {
   tileSize?: number;
 }
 
-// Floor 1: Uses atlas texture
+// Floor 1: Uses atlas texture (Small 20x20 for testing)
 export const FLOOR_1: FloorConfig = {
   id: 0,
-  width: 10240.0,
-  depth: 10240.0,
+  width: 1280.0,  // 20 tiles * 64px
+  depth: 1280.0,  // 20 tiles * 64px
   texturePath: 'src/atlas pictures/atlas floor.jpg',
-  repeatX: 160.0,
-  repeatZ: 160.0,
+  repeatX: 20.0,
+  repeatZ: 20.0,
   useAtlas: true,
   atlasTileCountX: 32,
   atlasTileCountY: 32,
@@ -36,6 +36,7 @@ export const FLOOR_1: FloorConfig = {
   variationTileRangeStart: 100,
   variationTileRangeEnd: 1023,
   isProcedural: false,
+  tileSize: 64,
 };
 
 // Floors 2-10: Green chessboard pattern (Smaller for testing: 20x20 tiles)

@@ -1,3 +1,22 @@
-# No changes needed - only source/config files detected
+```
+# Build artifacts
+dist/
+build/
+*.js
 
-The file changes contain only a README.md file which is a source/documentation file. No build artifacts, dependencies, or temporary files were detected that require ignoring.
+# Dependencies
+node_modules/
+
+# Editors
+.vscode/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+```

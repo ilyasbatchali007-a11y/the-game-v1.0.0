@@ -12,8 +12,10 @@ import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
+import { MiniMap3D } from './render/MiniMap3D';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
+const miniMap3D = new MiniMap3D();
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {
@@ -356,6 +358,11 @@ function startGameLoop() {
     // 3. Draw Player Entity (red square) on Top
     renderer.renderPlayer(world, canvas.width, canvas.height, texture!, camX, camY);
 
+    // 4. Render 3D Mini-Map if visible
+    if (mapVisible && miniMapInitialized) {
+      renderMiniMap3D(now / 1000); // Convert to seconds for shader
+    }
+
     requestAnimationFrame(loop);
   }
 
@@ -370,6 +377,22 @@ const mapContainer = document.getElementById('map-container') as HTMLElement;
 const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
 let mapCtx: CanvasRenderingContext2D | null = null;
 let mapVisible = false;
+let miniMapInitialized = false;
+
+async function initMiniMap3D() {
+  if (miniMapInitialized) return;
+  
+  const success = await miniMap3D.initialize(mapCanvas);
+  if (success) {
+    miniMapInitialized = true;
+    console.log('[Main] MiniMap3D initialized');
+  }
+}
+
+function renderMiniMap3D(time: number) {
+  if (!mapVisible || !miniMapInitialized) return;
+  miniMap3D.render(time);
+}
 
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
@@ -383,20 +406,8 @@ function initMapCanvas() {
   mapCanvas.width = Math.floor(width);
   mapCanvas.height = Math.floor(height);
   
-  mapCtx = mapCanvas.getContext('2d');
-  
-  // Clear with black background
-  if (mapCtx) {
-    mapCtx.fillStyle = '#000000';
-    mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
-    
-    // Draw a test rectangle to confirm rendering works
-    mapCtx.fillStyle = '#00ff00';
-    mapCtx.fillRect(50, 50, 100, 100);
-    mapCtx.fillStyle = '#ffffff';
-    mapCtx.font = '20px Arial';
-    mapCtx.fillText('MAP READY', 60, 180);
-  }
+  // Initialize 3D mini-map instead of 2D canvas
+  initMiniMap3D();
 }
 
 function toggleMap() {
@@ -405,9 +416,15 @@ function toggleMap() {
     mapContainer.classList.add('visible');
     // Initialize canvas immediately with fixed dimensions
     initMapCanvas();
-    // Future: Call renderMap() here when map logic is ready
   } else {
     mapContainer.classList.remove('visible');
+  }
+}
+
+// Update miniMap3D current floor when floor changes
+function updateMiniMapFloor(floorId: number) {
+  if (miniMapInitialized) {
+    miniMap3D.setCurrentFloor(floorId);
   }
 }
 window.addEventListener('keydown', (e) => {
@@ -426,6 +443,9 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
     mapRenderer.switchFloor(newFloor);
+    
+    // Update miniMap3D to highlight new floor cube
+    updateMiniMapFloor(newFloor);
     
     // Update renderer's map data texture after floor switch
     if (renderer) {
@@ -452,6 +472,9 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
     mapRenderer.switchFloor(newFloor);
+    
+    // Update miniMap3D to highlight new floor cube
+    updateMiniMapFloor(newFloor);
     
     // Update renderer's map data texture after floor switch
     if (renderer) {
@@ -508,6 +531,9 @@ window.addEventListener('keydown', (e) => {
             }
             
             mapRenderer.switchFloor(newFloor);
+            
+            // Update miniMap3D to highlight new floor cube
+            updateMiniMapFloor(newFloor);
             
             // Update renderer's map data texture after floor switch
             if (renderer) {

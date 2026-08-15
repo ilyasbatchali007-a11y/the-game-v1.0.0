@@ -509,6 +509,9 @@ export class MiniMap3D {
     gl.bindVertexArray(this.vao);
     
     // Ensure instance attributes are enabled before drawing
+    // Must bind instance buffer before setting up vertex attrib pointers
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    
     if (this.instancePosLoc >= 0) {
       gl.enableVertexAttribArray(this.instancePosLoc);
       gl.vertexAttribPointer(this.instancePosLoc, 3, gl.FLOAT, false, 16, 0);

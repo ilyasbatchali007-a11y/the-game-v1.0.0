@@ -41,8 +41,20 @@ export class MiniMap3D {
   // Camera state
   private rotationX: number = Math.PI / 4; // 45 degrees
   private rotationY: number = Math.PI / 4; // 45 degrees
-  private zoom: number = 150.0;
-  private targetZoom: number = 150.0;
+  private zoom: number = 18.0;
+  private targetZoom: number = 18.0;
+  private isDragging: boolean = false;
+  private lastMouseX: number = 0;
+  private lastMouseY: number = 0;
+  
+  // Mouse/Touch event handlers bound to this instance
+  private onMouseDown: (e: MouseEvent) => void;
+  private onMouseMove: (e: MouseEvent) => void;
+  private onMouseUp: () => void;
+  private onTouchStart: (e: TouchEvent) => void;
+  private onTouchMove: (e: TouchEvent) => void;
+  private onTouchEnd: () => void;
+  private onWheel: (e: WheelEvent) => void;
   
   // Grid layout for 100 cubes (10x10 grid)
   private gridCols: number = 10;
@@ -50,7 +62,16 @@ export class MiniMap3D {
   private cubeSize: number = 1.0;
   private spacing: number = 0.1;
 
-  constructor() {}
+  constructor() {
+    // Bind event handlers
+    this.onMouseDown = this.handleMouseDown.bind(this);
+    this.onMouseMove = this.handleMouseMove.bind(this);
+    this.onMouseUp = this.handleMouseUp.bind(this);
+    this.onTouchStart = this.handleTouchStart.bind(this);
+    this.onTouchMove = this.handleTouchMove.bind(this);
+    this.onTouchEnd = this.handleTouchEnd.bind(this);
+    this.onWheel = this.handleWheel.bind(this);
+  }
 
   /**
    * Initialize the 3D mini-map renderer
@@ -95,7 +116,106 @@ export class MiniMap3D {
     this.setupInstanceData();
 
     console.log('[MiniMap3D] Initialized successfully with', this.cubeCount, 'cubes');
+    
+    // Setup event listeners for camera control
+    this.setupEventListeners();
+    
     return true;
+  }
+
+  /**
+   * Setup mouse/touch event listeners for camera rotation and zoom
+   */
+  private setupEventListeners(): void {
+    if (!this.canvas) return;
+    
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
+    document.addEventListener('mousemove', this.onMouseMove);
+    document.addEventListener('mouseup', this.onMouseUp);
+    
+    this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
+    document.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    document.addEventListener('touchend', this.onTouchEnd);
+    
+    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  /**
+   * Remove event listeners (cleanup)
+   */
+  private removeEventListeners(): void {
+    if (!this.canvas) return;
+    
+    this.canvas.removeEventListener('mousedown', this.onMouseDown);
+    document.removeEventListener('mousemove', this.onMouseMove);
+    document.removeEventListener('mouseup', this.onMouseUp);
+    
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    document.removeEventListener('touchmove', this.onTouchMove);
+    document.removeEventListener('touchend', this.onTouchEnd);
+    
+    this.canvas.removeEventListener('wheel', this.onWheel);
+  }
+
+  private handleMouseDown(e: MouseEvent): void {
+    this.isDragging = true;
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    if (!this.isDragging) return;
+    
+    const deltaX = e.clientX - this.lastMouseX;
+    const deltaY = e.clientY - this.lastMouseY;
+    
+    this.rotationY += deltaX * 0.01;
+    this.rotationX += deltaY * 0.01;
+    
+    // Clamp vertical rotation to avoid flipping
+    this.rotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotationX));
+    
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+  }
+
+  private handleMouseUp(): void {
+    this.isDragging = false;
+  }
+
+  private handleTouchStart(e: TouchEvent): void {
+    if (e.touches.length === 1) {
+      this.isDragging = true;
+      this.lastMouseX = e.touches[0].clientX;
+      this.lastMouseY = e.touches[0].clientY;
+      e.preventDefault();
+    }
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    if (!this.isDragging || e.touches.length !== 1) return;
+    
+    const deltaX = e.touches[0].clientX - this.lastMouseX;
+    const deltaY = e.touches[0].clientY - this.lastMouseY;
+    
+    this.rotationY += deltaX * 0.01;
+    this.rotationX += deltaY * 0.01;
+    
+    this.rotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotationX));
+    
+    this.lastMouseX = e.touches[0].clientX;
+    this.lastMouseY = e.touches[0].clientY;
+    e.preventDefault();
+  }
+
+  private handleTouchEnd(): void {
+    this.isDragging = false;
+  }
+
+  private handleWheel(e: WheelEvent): void {
+    e.preventDefault();
+    this.targetZoom += e.deltaY * 0.05;
+    this.targetZoom = Math.max(8.0, Math.min(40.0, this.targetZoom));
   }
 
   /**
@@ -642,13 +762,13 @@ export class MiniMap3D {
    * Create Model-View-Projection matrix
    */
   private createMVPMatrix(aspect: number, time: number): Float32Array {
-    // Slow auto-rotation
-    const rotY = this.rotationY + time * 0.1;
+    // Use manual rotation (from mouse drag) OR auto-rotation if not dragging
+    const rotY = this.isDragging ? this.rotationY : this.rotationY + time * 0.05;
 
-    // Projection matrix (perspective)
-    const fov = Math.PI / 4;
+    // Projection matrix (perspective for TRUE 3D - objects get smaller with distance)
+    const fov = Math.PI / 3.5; // ~51 degrees FOV for good 3D perspective
     const near = 0.1;
-    const far = 1000.0;
+    const far = 100.0;
     const f = 1.0 / Math.tan(fov / 2);
     const nf = 1.0 / (near - far);
 
@@ -659,10 +779,14 @@ export class MiniMap3D {
     proj[11] = -1;
     proj[14] = 2 * far * near * nf;
 
-    // View matrix (camera position)
-    const camX = Math.sin(rotY) * Math.cos(this.rotationX) * this.zoom;
-    const camY = Math.sin(this.rotationX) * this.zoom;
-    const camZ = Math.cos(rotY) * Math.cos(this.rotationX) * this.zoom;
+    // View matrix (camera position - high angle for clear 3D view of all floors)
+    const camDistance = this.zoom;
+    const camAngleX = 0.6; // ~34 degrees down from horizontal (good 3D overview angle)
+    const camAngleY = rotY;
+    
+    const camX = Math.sin(camAngleY) * Math.cos(camAngleX) * camDistance;
+    const camY = Math.sin(camAngleX) * camDistance + 3; // Elevated camera
+    const camZ = Math.cos(camAngleY) * Math.cos(camAngleX) * camDistance;
 
     const view = this.lookAt(camX, camY, camZ, 0, 0, 0);
 

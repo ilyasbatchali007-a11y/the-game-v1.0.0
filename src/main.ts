@@ -84,6 +84,9 @@ canvas.height = window.innerHeight;
   generateTestMap();
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
+  // Update renderer's map data texture after map generation
+  renderer.updateMapDataTexture();
+  
   // Spawn player entity at center of map (avoiding border walls)
   const playerX = getCurrentWorldWidth() / 2;
   const playerY = getCurrentWorldHeight() / 2;
@@ -370,6 +373,11 @@ window.addEventListener('keydown', (e) => {
     const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
     mapRenderer.switchFloor(newFloor);
     
+    // Update renderer's map data texture after floor switch
+    if (renderer) {
+      renderer.updateMapDataTexture();
+    }
+    
     // Teleport player to center of new floor and update camera
     if (world) {
       world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
@@ -390,6 +398,11 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
     mapRenderer.switchFloor(newFloor);
+    
+    // Update renderer's map data texture after floor switch
+    if (renderer) {
+      renderer.updateMapDataTexture();
+    }
     
     // Teleport player to center of new floor and update camera
     if (world) {
@@ -441,6 +454,11 @@ window.addEventListener('keydown', (e) => {
             }
             
             mapRenderer.switchFloor(newFloor);
+            
+            // Update renderer's map data texture after floor switch
+            if (renderer) {
+              renderer.updateMapDataTexture();
+            }
             
             // Teleport player to center of new floor and update camera
             world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;

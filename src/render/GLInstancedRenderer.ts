@@ -597,6 +597,20 @@ export class GLInstancedRenderer {
     this.mapDataTexture = texture;
   }
 
+  /**
+   * Update the map data texture when map dimensions change
+   * Recreates the texture with new dimensions and updated tile data
+   */
+  public updateMapDataTexture(): void {
+    // Dispose of old texture if exists
+    if (this.mapDataTexture) {
+      this.gl.deleteTexture(this.mapDataTexture);
+      this.mapDataTexture = null;
+    }
+    // Create new texture with current map dimensions
+    this.createMapDataTexture();
+  }
+
   private createShader(type: number, source: string): WebGLShader {
     const gl = this.gl;
     const shader = gl.createShader(type);

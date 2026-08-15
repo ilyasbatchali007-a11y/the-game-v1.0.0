@@ -251,6 +251,99 @@ export class MapWindow3DRenderer {
     this.animationFrameId = requestAnimationFrame(this.animate);
   };
 
+  private lastLogState = {
+    zoom: 0,
+    rotX: 0,
+    rotY: 0,
+    isDragging: false,
+    width: 0,
+    height: 0,
+    vertexCount: 0,
+    indexCount: 0,
+    bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 }
+  };
+
+  private logFrameCount = 0;
+
+  private logDebugInfo(): void {
+    this.logFrameCount++;
+    
+    // Calculate bounds if we have vertices
+    let bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    if (this.model && this.model.vertices.length > 0) {
+      const verts = this.model.vertices;
+      for (let i = 0; i < verts.length; i += 3) {
+        const x = verts[i];
+        const y = verts[i + 1];
+        const z = verts[i + 2];
+        if (x < bounds.minX) bounds.minX = x;
+        if (x > bounds.maxX) bounds.maxX = x;
+        if (y < bounds.minY) bounds.minY = y;
+        if (y > bounds.maxY) bounds.maxY = y;
+        if (z < bounds.minZ) bounds.minZ = z;
+        if (z > bounds.maxZ) bounds.maxZ = z;
+      }
+    } else {
+      bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
+    }
+
+    const stateChanged = 
+      Math.abs(this.zoom - this.lastLogState.zoom) > 0.01 ||
+      Math.abs(this.rotationX - this.lastLogState.rotX) > 0.01 ||
+      Math.abs(this.rotationY - this.lastLogState.rotY) > 0.01 ||
+      this.isDragging !== this.lastLogState.isDragging ||
+      this.canvas.width !== this.lastLogState.width ||
+      this.canvas.height !== this.lastLogState.height ||
+      (this.model && (this.model.vertices.length !== this.lastLogState.vertexCount || this.model.indices.length !== this.lastLogState.indexCount)) ||
+      JSON.stringify(bounds) !== JSON.stringify(this.lastLogState.bounds);
+
+    if (!stateChanged && this.logFrameCount % 60 !== 0) {
+      return; // Skip logging if nothing changed, unless it's been 60 frames
+    }
+
+    if (this.logFrameCount === 1 || stateChanged) {
+      console.groupCollapsed('=== 3D RENDER STATE ===');
+      console.log(`Frame: ${this.logFrameCount} | Zoom: ${this.zoom.toFixed(2)} | Rot(X:${this.rotationX.toFixed(2)}, Y:${this.rotationY.toFixed(2)}) | Dragging: ${this.isDragging}`);
+      console.log(`Canvas: ${this.canvas.width}x${this.canvas.height} | Aspect: ${(this.canvas.width / this.canvas.height).toFixed(2)}`);
+      
+      if (this.model) {
+        console.log(`Model: ${this.model.indices.length} indices, ${this.model.vertices.length / 3} vertices`);
+        console.log(`Vertex Bounds -> X:[${bounds.minX.toFixed(2)}, ${bounds.maxX.toFixed(2)}] Y:[${bounds.minY.toFixed(2)}, ${bounds.maxY.toFixed(2)}] Z:[${bounds.minZ.toFixed(2)}, ${bounds.maxZ.toFixed(2)}]`);
+        
+        // Check for extreme aspect ratios in bounds which indicate deformation
+        const spanX = bounds.maxX - bounds.minX;
+        const spanY = bounds.maxY - bounds.minY;
+        const spanZ = bounds.maxZ - bounds.minZ;
+        if (spanX > 0 && spanY > 0 && spanZ > 0) {
+          const ratioXY = spanX / spanY;
+          const ratioXZ = spanX / spanZ;
+          if (ratioXY > 10 || ratioXY < 0.1 || ratioXZ > 10 || ratioXZ < 0.1) {
+            console.warn(`⚠️ POTENTIAL DEFORMATION: Extreme axis ratio detected! X/Y: ${ratioXY.toFixed(2)}, X/Z: ${ratioXZ.toFixed(2)}`);
+          }
+        }
+      }
+
+      // Only log matrices on significant changes or first frame to avoid spam
+      if (this.logFrameCount === 1 || stateChanged) {
+        console.log('Projection Matrix (simplified):', Array.from(this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, this.canvas.width / this.canvas.height, this.zoom)).slice(0, 4).map(n => n.toFixed(2)));
+      }
+      console.groupEnd();
+    }
+
+    // Update last state
+    this.lastLogState = {
+      zoom: this.zoom,
+      rotX: this.rotationX,
+      rotY: this.rotationY,
+      isDragging: this.isDragging,
+      width: this.canvas.width,
+      height: this.canvas.height,
+      vertexCount: this.model ? this.model.vertices.length : 0,
+      indexCount: this.model ? this.model.indices.length : 0,
+      bounds: bounds
+    };
+  }
+
   private render(): void {
     if (!this.gl || !this.program || !this.model) return;
     
@@ -288,17 +381,8 @@ export class MapWindow3DRenderer {
     const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
     const normalMatrix = this.createNormalMatrix(this.rotationY, this.rotationX);
     
-    // DEBUG: Log diagnostic info to console
-    console.log('=== 3D RENDER DEBUG ===');
-    console.log('Zoom:', this.zoom);
-    console.log('Rotation X:', this.rotationX.toFixed(2), 'Y:', this.rotationY.toFixed(2));
-    console.log('Is dragging:', this.isDragging);
-    console.log('Model indices:', this.model.indices.length);
-    console.log('Model vertices:', this.model.vertices ? this.model.vertices.length / 3 : 'N/A');
-    console.log('Canvas size:', this.canvas.width, 'x', this.canvas.height);
-    console.log('Aspect ratio:', aspect);
-    console.log('MVP Matrix:', JSON.stringify(Array.from(matrix)));
-    console.log('Normal Matrix:', JSON.stringify(Array.from(normalMatrix)));
+    // DEBUG: Log diagnostic info to console (consolidated)
+    this.logDebugInfo();
     
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);

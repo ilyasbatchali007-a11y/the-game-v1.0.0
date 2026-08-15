@@ -410,16 +410,16 @@ function toggleMap() {
     mapContainer.classList.remove('visible');
   }
 }
-
 window.addEventListener('keydown', (e) => {
-  if (!gameRunning) return;
-  
-  // Toggle map with M key
+  // Toggle map with M key - works only in game, not in menu
   if (e.key === 'm' || e.key === 'M') {
+    if (!gameRunning) return; // Only allow map toggle during gameplay
     toggleMap();
     return; // Don't process other inputs when toggling map
   }
-  
+
+  if (!gameRunning) return;
+
   // Floor switching with T (previous) and G (next) - also respawn player at center of new floor
   if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {
     floorSwitchCooldown = true;

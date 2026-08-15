@@ -1,5 +1,23 @@
-(index.html is a source file, so no need to add anything to .gitignore)
+```
+# Build artifacts
+dist/
+build/
+*.js
 
-```gitignore
+# Dependencies
+node_modules/
 
+# Editors
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+.env.*
 ```

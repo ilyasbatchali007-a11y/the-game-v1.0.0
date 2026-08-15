@@ -171,6 +171,22 @@ void main() {
         discard; // Void tile - don't render anything
       }
       
+      // Portal tile check: render special colors for portal tiles
+      if (baseTileId > 999.5) {
+        // Portal tiles - use solid colors instead of atlas textures
+        if (baseTileId < 1000.5) {
+          // Tile ID 1000: Next floor portal (blue)
+          vec3 portalBlue = vec3(0.2, 0.4, 1.0);
+          fragColor = vec4(portalBlue, 1.0);
+          return;
+        } else if (baseTileId < 1001.5) {
+          // Tile ID 1001: Previous floor portal (red)
+          vec3 portalRed = vec3(1.0, 0.2, 0.2);
+          fragColor = vec4(portalRed, 1.0);
+          return;
+        }
+      }
+      
       if (isStatic > 0.5) {
         // Static tile: use exact tile ID from map data
         tileId = baseTileId;

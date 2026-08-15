@@ -9,9 +9,13 @@ export class MapWindow3DRenderer {
   private program: WebGLProgram | null = null;
   private model: OBJModel | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
+  private normalBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
   private rotationY: number = 0;
   private rotationX: number = 0.3; // Slight tilt for better view
+  private zoom: number = -3.0; // Camera distance
+  private minZoom: number = -5.0;
+  private maxZoom: number = -1.0;
   private isRunning: boolean = false;
   private animationFrameId: number = 0;
   private isDragging: boolean = false;
@@ -37,18 +41,26 @@ export class MapWindow3DRenderer {
 
     // Create shader program
     const vsSource = `
-      attribute vec4 a_position;
+      attribute vec3 a_position;
+      attribute vec3 a_normal;
       uniform mat4 u_matrix;
+      uniform mat4 u_normalMatrix;
+      varying vec3 v_normal;
       void main() {
-        gl_Position = u_matrix * a_position;
+        gl_Position = u_matrix * vec4(a_position, 1.0);
+        v_normal = (u_normalMatrix * vec4(a_normal, 0.0)).xyz;
       }
     `;
 
     const fsSource = `
       precision mediump float;
+      varying vec3 v_normal;
+      uniform vec3 u_lightDir;
       uniform vec4 u_color;
       void main() {
-        gl_FragColor = u_color;
+        vec3 normal = normalize(v_normal);
+        float light = max(dot(normal, u_lightDir), 0.2);
+        gl_FragColor = u_color * light;
       }
     `;
 
@@ -104,28 +116,51 @@ export class MapWindow3DRenderer {
       this.isDragging = false;
     });
 
+    // Scroll wheel for zoom
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomSpeed = 0.002;
+      this.zoom += e.deltaY * zoomSpeed;
+      this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
+    }, { passive: false });
+
     // Touch support for mobile
     this.canvas.addEventListener('touchstart', (e) => {
       if (e.touches.length === 1) {
         this.isDragging = true;
         this.lastMouseX = e.touches[0].clientX;
         this.lastMouseY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        // Pinch to zoom
+        this.lastMouseY = e.touches[0].clientY;
       }
     });
 
     this.canvas.addEventListener('touchmove', (e) => {
-      if (!this.isDragging || e.touches.length !== 1) return;
-      
-      const deltaX = e.touches[0].clientX - this.lastMouseX;
-      const deltaY = e.touches[0].clientY - this.lastMouseY;
-      
-      this.rotationY += deltaX * 0.01;
-      this.rotationX += deltaY * 0.01;
-      
-      this.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotationX));
-      
-      this.lastMouseX = e.touches[0].clientX;
-      this.lastMouseY = e.touches[0].clientY;
+      if (e.touches.length === 1 && this.isDragging) {
+        const deltaX = e.touches[0].clientX - this.lastMouseX;
+        const deltaY = e.touches[0].clientY - this.lastMouseY;
+        
+        this.rotationY += deltaX * 0.01;
+        this.rotationX += deltaY * 0.01;
+        
+        this.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotationX));
+        
+        this.lastMouseX = e.touches[0].clientX;
+        this.lastMouseY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        // Pinch zoom
+        const prevDist = this.lastMouseY;
+        const currentDist = Math.abs(e.touches[0].clientY - e.touches[1].clientY);
+        const delta = prevDist - currentDist;
+        
+        if (prevDist > 0) {
+          const zoomSpeed = 0.01;
+          this.zoom += delta * zoomSpeed;
+          this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
+          this.lastMouseY = currentDist;
+        }
+      }
     });
 
     this.canvas.addEventListener('touchend', () => {
@@ -181,6 +216,11 @@ export class MapWindow3DRenderer {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.vertices, this.gl.STATIC_DRAW);
         
+        // Create normal buffer
+        this.normalBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.normals, this.gl.STATIC_DRAW);
+        
         // Create index buffer
         this.indexBuffer = this.gl.createBuffer();
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
@@ -225,23 +265,33 @@ export class MapWindow3DRenderer {
     
     // Get attribute and uniform locations
     const positionLocation = gl.getAttribLocation(this.program, 'a_position');
+    const normalLocation = gl.getAttribLocation(this.program, 'a_normal');
     const matrixLocation = gl.getUniformLocation(this.program, 'u_matrix');
+    const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
     const colorLocation = gl.getUniformLocation(this.program, 'u_color');
+    const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
     
-    // Enable vertex attribute
+    // Enable vertex attributes
     gl.enableVertexAttribArray(positionLocation);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+    
+    gl.enableVertexAttribArray(normalLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+    gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
     
     // Bind index buffer
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     
     // Create transformation matrix with proper perspective and view
     const aspect = this.canvas.width / this.canvas.height;
-    const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect);
+    const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+    const normalMatrix = this.createNormalMatrix(this.rotationY, this.rotationX);
     
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
-    gl.uniform4f(colorLocation, 0.8, 0.6, 0.3, 1.0); // Brownish color for dungeon
+    gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
+    gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon
+    gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3); // Light from above-right
     
     // Draw
     gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
@@ -252,7 +302,7 @@ export class MapWindow3DRenderer {
     }
   }
 
-  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number): Float32Array {
+  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number): Float32Array {
     // Model rotation around Y and X axes
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
@@ -269,7 +319,7 @@ export class MapWindow3DRenderer {
     const scaleX = 0.6;
     const scaleY = 0.05;  // Compress Y since dungeon is very tall  
     const scaleZ = 0.4;
-    const zOffset = -3.0; // Push back from camera
+    const zOffset = zoom; // Use dynamic zoom instead of fixed -3.0
     
     // Build proper perspective projection matrix
     const fov = 60 * (Math.PI / 180);
@@ -318,6 +368,22 @@ export class MapWindow3DRenderer {
     return this.multiplyMatrices(proj, vm);
   }
   
+  private createNormalMatrix(angleY: number, angleX: number): Float32Array {
+    const cosY = Math.cos(angleY);
+    const sinY = Math.sin(angleY);
+    const cosX = Math.cos(angleX);
+    const sinX = Math.sin(angleX);
+    
+    // Normal matrix is the inverse transpose of the model-view matrix
+    // For rotation-only transforms, it's just the rotation part
+    return new Float32Array([
+      cosY, 0, -sinY, 0,
+      sinY * sinX, cosX, cosY * sinX, 0,
+      sinY * cosX, -sinX, cosY * cosX, 0,
+      0, 0, 0, 1
+    ]);
+  }
+
   private multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
     const result = new Float32Array(16);
     for (let i = 0; i < 4; i++) {

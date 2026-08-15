@@ -12,11 +12,11 @@ import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
-// MiniMap3D temporarily disabled for build fix
-// import { MiniMap3D } from './render/MiniMap3D';
+import { MiniMap3D } from './render/MiniMap3D';
+
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
-let miniMap3D: any = null;
+let miniMap3D: MiniMap3D | null = null;
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {
@@ -381,18 +381,17 @@ let mapVisible = false;
 let miniMapInitialized = false;
 
 async function initMiniMap3D() {
-  if (miniMapInitialized) return;
+  if (miniMapInitialized || miniMap3D) return; // Already initialized
   
-  const success = await miniMap3D.initialize(mapCanvas);
-  if (success) {
-    miniMapInitialized = true;
-    console.log('[Main] MiniMap3D initialized');
-  }
+  // Create MiniMap3D instance (it initializes in constructor)
+  miniMap3D = new MiniMap3D('map-canvas');
+  miniMapInitialized = true;
+  console.log('[Main] MiniMap3D initialized');
 }
 
 function renderMiniMap3D(time: number) {
-  if (!mapVisible || !miniMapInitialized) return;
-  miniMap3D.render(time);
+  if (!mapVisible || !miniMap3D) return;
+  miniMap3D.render();
 }
 
 function initMapCanvas() {
@@ -424,7 +423,7 @@ function toggleMap() {
 
 // Update miniMap3D current floor when floor changes
 function updateMiniMapFloor(floorId: number) {
-  if (miniMapInitialized) {
+  if (miniMap3D) {
     miniMap3D.setCurrentFloor(floorId);
   }
 }

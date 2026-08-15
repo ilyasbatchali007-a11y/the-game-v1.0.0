@@ -172,7 +172,7 @@ export class MapWindow3DRenderer {
     gl.uniform4f(colorLocation, 0.8, 0.6, 0.3, 1.0); // Brownish color for dungeon
     
     // Draw
-    gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_INT, 0);
+    gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
     
     // Rotate for next frame
     this.rotationY += 0.01;

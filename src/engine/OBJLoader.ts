@@ -5,7 +5,7 @@ export interface OBJModel {
   vertices: Float32Array;
   normals: Float32Array;
   uvs: Float32Array;
-  indices: Uint32Array;
+  indices: Uint16Array;
   vertexCount: number;
 }
 
@@ -106,7 +106,7 @@ export class OBJLoader {
       vertices: new Float32Array(positions),
       normals: new Float32Array(normals),
       uvs: new Float32Array(uvs),
-      indices: new Uint32Array(indices),
+      indices: new Uint16Array(indices),
       vertexCount: Math.floor(positions.length / 3)
     };
   }

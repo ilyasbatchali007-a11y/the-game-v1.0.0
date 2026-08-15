@@ -296,10 +296,10 @@ export class MapWindow3DRenderer {
     // Draw
     gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
     
-    // Auto-rotate only when not dragging
-    if (!this.isDragging) {
-      this.rotationY += 0.005; // Slower auto-rotation
-    }
+    // Auto-rotate only when not dragging (commented out to stop constant rotation)
+    // if (!this.isDragging) {
+    //   this.rotationY += 0.005; // Slower auto-rotation
+    // }
   }
 
   private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number): Float32Array {

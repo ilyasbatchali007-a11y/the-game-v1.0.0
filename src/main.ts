@@ -374,10 +374,13 @@ let mapVisible = false;
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
   
+  // Force visible dimensions for calculation even if container is hidden
+  const width = 400; // Match CSS width
+  const height = window.innerHeight; // Match CSS height
+  
   // Set canvas size to match container display size
-  const rect = mapContainer.getBoundingClientRect();
-  mapCanvas.width = Math.floor(rect.width);
-  mapCanvas.height = Math.floor(rect.height);
+  mapCanvas.width = Math.floor(width);
+  mapCanvas.height = Math.floor(height);
   
   mapCtx = mapCanvas.getContext('2d');
   
@@ -392,14 +395,8 @@ function toggleMap() {
   mapVisible = !mapVisible;
   if (mapVisible) {
     mapContainer.classList.add('visible');
-    // Force reflow to ensure display is applied before initializing canvas
-    void mapContainer.offsetWidth;
-    if (!mapCtx) {
-      initMapCanvas();
-    } else {
-      // Re-initialize to handle resize/zoom
-      initMapCanvas();
-    }
+    // Initialize canvas immediately with fixed dimensions
+    initMapCanvas();
     // Future: Call renderMap() here when map logic is ready
   } else {
     mapContainer.classList.remove('visible');

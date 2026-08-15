@@ -62,49 +62,19 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
   MAP_TILE_DATA = new Float32Array(cols * rows * 2);
   
   if (useAtlas) {
-    // Floor 0 - Atlas texture with central pattern
-    const patternSize = 16;
-    const offsetX = Math.floor((cols - patternSize) / 2);
-    const offsetY = Math.floor((rows - patternSize) / 2);
-    
-    // Initialize all tiles as void (0) first
+    // Floor 0 - Atlas texture, solid floor with no voids
     MAP_DATA.fill(0);
     MAP_TILE_DATA.fill(0);
     
-    // Apply the pattern directly
+    // Fill entire map with atlas grass tiles (ID 100)
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const idx = row * cols + col;
         const dataIdx = idx * 2;
         
-        // Check if within pattern area
-        let isFloor = false;
-        if (row >= offsetY && row < offsetY + patternSize &&
-            col >= offsetX && col < offsetX + patternSize) {
-          const patternRow = row - offsetY;
-          const patternCol = col - offsetX;
-          
-          // Interconnected pattern with ~15% void (38 voids out of 256)
-          isFloor = !(
-            (patternRow === 1 || patternRow === 2) && (patternCol === 5 || patternCol === 6 || patternCol === 9 || patternCol === 10) ||
-            (patternRow === 3 || patternRow === 4) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-            (patternRow === 5 || patternRow === 6) && (patternCol >= 6 && patternCol <= 9) ||
-            (patternRow === 9 || patternRow === 10) && (patternCol === 2 || patternCol === 3 || patternCol === 12 || patternCol === 13) ||
-            (patternRow === 11 || patternRow === 12) && (patternCol === 6 || patternCol === 7 || patternCol === 9 || patternCol === 10)
-          );
-        }
-        
-        if (isFloor) {
-          // Original Atlas Floor - use ID 100 (variation tile)
-          MAP_DATA[idx] = 0; // Floor type
-          MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
-          MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
-        } else {
-          // Void - nothing will be rendered here
-          MAP_DATA[idx] = 0;
-          MAP_TILE_DATA[dataIdx] = 0;      // Tile ID 0 (void)
-          MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
-        }
+        MAP_DATA[idx] = 0; // Floor type
+        MAP_TILE_DATA[dataIdx] = 100;    // Atlas tile ID 100 (green grass)
+        MAP_TILE_DATA[dataIdx + 1] = 0;  // isStatic = false (use variation)
       }
     }
     

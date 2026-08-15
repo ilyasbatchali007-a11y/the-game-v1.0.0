@@ -102,7 +102,7 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
     
   } else {
     // Floors 1-19 - Green chessboard pattern (all tiles are passable floor)
-    // NO portal tiles on floors 1-19, only on Floor 0
+    // Add portal tiles on ALL floors, not just Floor 0
     MAP_DATA.fill(0);
     MAP_TILE_DATA.fill(0);
     
@@ -115,6 +115,28 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
         MAP_TILE_DATA[dataIdx] = 0;      // Tile ID 0 (will be rendered as chessboard by shader)
         MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
       }
+    }
+    
+    // Add portal tiles near spawn point (center of map) on ALL floors
+    const spawnCol = Math.floor(cols / 2);
+    const spawnRow = Math.floor(rows / 2);
+    
+    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
+    const nextPortalCol = spawnCol + 2;
+    const nextPortalRow = spawnRow;
+    if (nextPortalCol < cols && nextPortalRow < rows) {
+      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
+      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
+      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
+    }
+    
+    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
+    const prevPortalCol = spawnCol - 2;
+    const prevPortalRow = spawnRow;
+    if (prevPortalCol >= 0 && prevPortalRow < rows) {
+      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
+      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
+      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
     }
   }
 }

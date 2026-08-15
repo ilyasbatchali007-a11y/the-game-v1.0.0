@@ -383,10 +383,14 @@ let miniMapInitialized = false;
 async function initMiniMap3D() {
   if (miniMapInitialized || miniMap3D) return; // Already initialized
   
-  // Create MiniMap3D instance (it initializes in constructor)
-  miniMap3D = new MiniMap3D('map-canvas');
-  miniMapInitialized = true;
-  console.log('[Main] MiniMap3D initialized');
+  try {
+    // Create MiniMap3D instance (it initializes in constructor)
+    miniMap3D = new MiniMap3D('map-canvas');
+    miniMapInitialized = true;
+    console.log('[Main] MiniMap3D initialized');
+  } catch (error) {
+    console.error('[Main] Failed to initialize MiniMap3D:', error);
+  }
 }
 
 function renderMiniMap3D(time: number) {

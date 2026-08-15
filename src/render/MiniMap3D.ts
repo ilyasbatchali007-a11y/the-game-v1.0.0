@@ -77,16 +77,39 @@ export class MiniMap3D {
   }
 
   private loadOBJFile(): void {
-    fetch('root_dungeon_single_mesh.obj').then(r=>r.text()).then(d=>this.parseOBJ(d)).catch(e=>console.error(e));
+    // Try multiple paths to find the OBJ file
+    const paths = ['root_dungeon_single_mesh.obj', './root_dungeon_single_mesh.obj', '/root_dungeon_single_mesh.obj'];
+    let loaded = false;
+    
+    for (const path of paths) {
+      fetch(path)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.text();
+        })
+        .then(d => {
+          if (!loaded) {
+            loaded = true;
+            this.parseOBJ(d);
+          }
+        })
+        .catch(e => {
+          if (!loaded) console.log(`Tried ${path}:`, e);
+        });
+    }
   }
 
   private parseOBJ(data:string):void {
     const lines=data.split('\n');
     const verts:number[] = [];
     const inds:number[] = [];
-    const centers:{x:number,y:number,z:number}[] = [];
+    const normals:number[] = [];
+    const cubeData:{verts:number[],inds:number[],center:{x:number,y:number,z:number}}[] = [];
     let curVerts:{x:number,y:number,z:number}[] = [];
-    let faces = 0;
+    let curInds:number[] = [];
+    let faceCount = 0;
+    
+    // First pass: collect all vertices
     for(const ln of lines){
       const t=ln.trim();
       if(!t||t[0]==='#') continue;
@@ -94,36 +117,93 @@ export class MiniMap3D {
       if(p[0]==='v'){
         const x=parseFloat(p[1]),y=parseFloat(p[2]),z=parseFloat(p[3]);
         verts.push(x,y,z);
-        curVerts.push({x,y,z});
-      } else if(p[0]==='f'){
+      }
+    }
+    
+    // Second pass: group faces by cube (every 12 faces = 1 cube)
+    for(const ln of lines){
+      const t=ln.trim();
+      if(!t||t[0]==='#') continue;
+      const p=t.split(/\s+/);
+      if(p[0]==='f'){
         const vi=(s:string)=>parseInt(s.split('/')[0])-1;
+        const baseIdx = inds.length;
         inds.push(vi(p[1]),vi(p[2]),vi(p[3]));
         if(p.length>4) inds.push(vi(p[1]),vi(p[3]),vi(p[4]));
-        faces++;
-        if(faces>=12 && curVerts.length>0){
-          let cx=0,cy=0,cz=0;
-          for(const v of curVerts){cx+=v.x;cy+=v.y;cz+=v.z;}
-          cx/=curVerts.length; cy/=curVerts.length; cz/=curVerts.length;
-          centers.push({x:cx,y:cy,z:cz});
-          curVerts = [];
-          faces = 0;
+        faceCount++;
+        
+        // Every 12 faces, we have one complete cube
+        if(faceCount % 12 === 0){
+          // Calculate center of this cube's vertices
+          const cubeVertIndices = new Set<number>();
+          for(let i = baseIdx; i < inds.length; i++){
+            cubeVertIndices.add(inds[i]);
+          }
+          let cx=0,cy=0,cz=0,count=0;
+          for(const idx of cubeVertIndices){
+            cx += verts[idx*3];
+            cy += verts[idx*3+1];
+            cz += verts[idx*3+2];
+            count++;
+          }
+          if(count > 0){
+            cx /= count; cy /= count; cz /= count;
+            cubeData.push({
+              verts: [],
+              inds: inds.slice(0, inds.length),
+              center: {x:cx,y:cy,z:cz}
+            });
+          }
         }
       }
     }
-    this.cubeCount = Math.min(centers.length, 100);
+    
+    this.cubeCount = Math.min(cubeData.length, 100);
+    console.log('Found', cubeData.length, 'cubes, using', this.cubeCount);
+    
+    // Store positions for all cubes
     for(let i=0;i<this.cubeCount;i++){
-      this.cubePositions[i*3]=centers[i].x;
-      this.cubePositions[i*3+1]=centers[i].y;
-      this.cubePositions[i*3+2]=centers[i].z;
+      this.cubePositions[i*3]=cubeData[i].center.x;
+      this.cubePositions[i*3+1]=cubeData[i].center.y;
+      this.cubePositions[i*3+2]=cubeData[i].center.z;
     }
-    console.log('Loaded',this.cubeCount,'cubes');
-    this.vertices = new Float32Array(verts);
-    this.indices = new Uint16Array(inds);
-    const norms:number[] = new Array(verts.length).fill(0);
-    for(let i=0;i<inds.length;i+=3){
-      const i0=inds[i]*3, i1=inds[i+1]*3, i2=inds[i+2]*3;
-      const ax=verts[i1]-verts[i0], ay=verts[i1+1]-verts[i0+1], az=verts[i1+2]-verts[i0+2];
-      const bx=verts[i2]-verts[i0], by=verts[i2+1]-verts[i0+1], bz=verts[i2+2]-verts[i0+2];
+    
+    // Use only the first cube's geometry for instancing
+    const firstCubeFaceCount = 12 * 3; // 12 triangles
+    this.indices = new Uint16Array(inds.slice(0, firstCubeFaceCount));
+    
+    // Extract vertices and normals for just the first cube
+    const usedVerts = new Set<number>();
+    for(let i=0; i<this.indices.length; i++){
+      usedVerts.add(this.indices[i]);
+    }
+    
+    const vertList:number[] = [];
+    const normList:number[] = [];
+    const vertMap = new Map<number,number>();
+    let newIdx = 0;
+    
+    for(const oldIdx of usedVerts){
+      vertMap.set(oldIdx, newIdx);
+      vertList.push(verts[oldIdx*3], verts[oldIdx*3+1], verts[oldIdx*3+2]);
+      normList.push(0, 0, 0);
+      newIdx++;
+    }
+    
+    // Remap indices
+    const newInds:number[] = [];
+    for(let i=0; i<this.indices.length; i++){
+      newInds.push(vertMap.get(this.indices[i])!);
+    }
+    this.indices = new Uint16Array(newInds);
+    this.vertices = new Float32Array(vertList);
+    
+    // Calculate normals
+    const norms:number[] = new Array(vertList.length).fill(0);
+    for(let i=0;i<newInds.length;i+=3){
+      const i0=newInds[i]*3, i1=newInds[i+1]*3, i2=newInds[i+2]*3;
+      const ax=vertList[i1]-vertList[i0], ay=vertList[i1+1]-vertList[i0+1], az=vertList[i1+2]-vertList[i0+2];
+      const bx=vertList[i2]-vertList[i0], by=vertList[i2+1]-vertList[i0+1], bz=vertList[i2+2]-vertList[i0+2];
       const nx=ay*bz-az*by, ny=az*bx-ax*bz, nz=ax*by-ay*bx;
       norms[i0]+=nx; norms[i0+1]+=ny; norms[i0+2]+=nz;
       norms[i1]+=nx; norms[i1+1]+=ny; norms[i1+2]+=nz;
@@ -134,6 +214,8 @@ export class MiniMap3D {
       norms[i]/=l; norms[i+1]/=l; norms[i+2]/=l;
     }
     this.normals = new Float32Array(norms);
+    
+    console.log('First cube:', this.vertices.length/3, 'vertices,', this.indices.length, 'indices');
     this.createBuffers();
   }
 

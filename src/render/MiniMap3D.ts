@@ -34,6 +34,10 @@ export class MiniMap3D {
   private uGlowIntensity: WebGLUniformLocation | null = null;
   private uIsHighlighted: WebGLUniformLocation | null = null;
   
+  // Attribute locations for instanced rendering
+  private instancePosLoc: number = -1;
+  private highlightLoc: number = -1;
+  
   // Camera state
   private rotationX: number = Math.PI / 4; // 45 degrees
   private rotationY: number = Math.PI / 4; // 45 degrees
@@ -408,7 +412,7 @@ export class MiniMap3D {
       const z = (row - this.gridRows / 2) * (this.cubeSize + this.spacing);
       const y = 0;
       
-      instanceData.push(x, y, z); // Position
+      instanceData.push(x, y, z); // Position (3 floats = 12 bytes)
       instanceData.push(i === this.currentFloorId ? 1.0 : 0.0); // IsHighlighted flag
     }
 
@@ -416,17 +420,21 @@ export class MiniMap3D {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(instanceData), gl.DYNAMIC_DRAW);
 
-    // Instance position attribute
+    // Instance position attribute (location 1)
     const instancePosLoc = gl.getAttribLocation(this.program, 'aInstancePos');
     gl.enableVertexAttribArray(instancePosLoc);
     gl.vertexAttribPointer(instancePosLoc, 3, gl.FLOAT, false, 16, 0);
     gl.vertexAttribDivisor(instancePosLoc, 1);
 
-    // Instance highlight flag attribute
+    // Instance highlight flag attribute (location 2)
     const highlightLoc = gl.getAttribLocation(this.program, 'aIsHighlighted');
     gl.enableVertexAttribArray(highlightLoc);
     gl.vertexAttribPointer(highlightLoc, 1, gl.FLOAT, false, 16, 12);
     gl.vertexAttribDivisor(highlightLoc, 1);
+    
+    // Store attribute locations for later use
+    this.instancePosLoc = instancePosLoc;
+    this.highlightLoc = highlightLoc;
   }
 
   /**
@@ -497,8 +505,21 @@ export class MiniMap3D {
     gl.uniform1f(gl.getUniformLocation(this.program, 'uGlowIntensity'), 0.5);
     gl.uniform1f(gl.getUniformLocation(this.program, 'uTime'), time);
 
-    // Bind VAO and draw
+    // Bind VAO and draw instanced cubes
     gl.bindVertexArray(this.vao);
+    
+    // Ensure instance attributes are enabled before drawing
+    if (this.instancePosLoc >= 0) {
+      gl.enableVertexAttribArray(this.instancePosLoc);
+      gl.vertexAttribPointer(this.instancePosLoc, 3, gl.FLOAT, false, 16, 0);
+      gl.vertexAttribDivisor(this.instancePosLoc, 1);
+    }
+    if (this.highlightLoc >= 0) {
+      gl.enableVertexAttribArray(this.highlightLoc);
+      gl.vertexAttribPointer(this.highlightLoc, 1, gl.FLOAT, false, 16, 12);
+      gl.vertexAttribDivisor(this.highlightLoc, 1);
+    }
+    
     gl.drawElementsInstanced(
       gl.TRIANGLES,
       this.cubeIndices!.length,
@@ -515,7 +536,7 @@ export class MiniMap3D {
    * Render a red dot inside the highlighted cube
    */
   private renderRedDotMarker(mvpMatrix: Float32Array, time: number): void {
-    if (!this.gl || !this.program) return;
+    if (!this.gl) return;
     const gl = this.gl;
 
     // Calculate position of current floor cube
@@ -535,6 +556,10 @@ export class MiniMap3D {
       0.0, 0.0, 0.1,
       0.0, 0.0, -0.1,
     ]);
+
+    // Create a separate VAO for the dot to avoid conflicts with instanced rendering
+    const dotVAO = gl.createVertexArray();
+    gl.bindVertexArray(dotVAO);
 
     const dotBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
@@ -566,9 +591,15 @@ export class MiniMap3D {
     const dotProgram = this.compileProgram(dotVs, dotFs);
     if (dotProgram) {
       gl.useProgram(dotProgram);
+      
+      // Setup VAO for dot rendering
+      gl.bindVertexArray(dotVAO);
+      
       const dotPosLoc = gl.getAttribLocation(dotProgram, 'aPosition');
       gl.enableVertexAttribArray(dotPosLoc);
       gl.vertexAttribPointer(dotPosLoc, 3, gl.FLOAT, false, 0, 0);
+      // Disable instance divisors for non-instanced drawing
+      gl.vertexAttribDivisor(dotPosLoc, 0);
 
       const mvpLoc = gl.getUniformLocation(dotProgram, 'uMVP');
       const offsetLoc = gl.getUniformLocation(dotProgram, 'uOffset');
@@ -584,6 +615,10 @@ export class MiniMap3D {
     }
 
     gl.deleteBuffer(dotBuffer);
+    gl.deleteVertexArray(dotVAO);
+    
+    // Restore main VAO for next frame
+    gl.bindVertexArray(this.vao);
   }
 
   /**

@@ -155,13 +155,11 @@ void main() {
       // Portal tiles - use solid bright colors instead of atlas textures or chessboard
       if (baseTileId < 1000.5) {
         // Tile ID 1000: Next floor portal (Bright Red)
-        vec3 portalColor = vec3(1.0, 0.2, 0.2);
-        fragColor = vec4(portalColor, 1.0);
+        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
         return;
-      } else if (baseTileId < 1001.5) {
-        // Tile ID 1001: Previous floor portal (Bright Blue)
-        vec3 portalColor = vec3(0.2, 0.4, 1.0);
-        fragColor = vec4(portalColor, 1.0);
+      } else {
+        // Tile ID 1001: Previous floor portal (Bright Blue/Cyan)
+        fragColor = vec4(0.0, 0.8, 1.0, 1.0);
         return;
       }
     }

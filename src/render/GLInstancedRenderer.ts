@@ -144,10 +144,13 @@ void main() {
     // Check if we should use chessboard pattern (u_useAtlas == 0)
     
     // First, get tile ID from map data for portal check (works for both modes)
+    // Tile ID is stored across R (low byte) and B (high byte) channels
     float tileId = 0.0;
     vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
     vec4 mapData = texture(u_mapDataTexture, mapUV);
-    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
+    float lowByte = mapData.r * 255.0;   // R channel - low byte
+    float highByte = mapData.b * 255.0;  // B channel - high byte
+    float baseTileId = lowByte + (highByte * 256.0);  // Reconstruct full tile ID
     float isStatic = mapData.g;              // Static flag stored in G channel
     
     // Portal tile check: render special colors for portal tiles (BEFORE chessboard/atlas decision)
@@ -557,11 +560,15 @@ export class GLInstancedRenderer {
       const tileId = MAP_TILE_DATA[srcIdx];
       const isStatic = MAP_TILE_DATA[srcIdx + 1];
       
-      // Normalize tileId to [0, 1] range (max 1024 tiles)
-      textureData[dstIdx] = Math.floor((tileId / 1024.0) * 255.0);  // R
-      textureData[dstIdx + 1] = isStatic > 0.5 ? 255 : 0;           // G
-      textureData[dstIdx + 2] = 0;                                   // B
-      textureData[dstIdx + 3] = 255;                                 // A
+      // Store tileId across R and B channels for precision (R = low byte, B = high byte)
+      // This allows tile IDs up to 65535 (256 * 256)
+      const lowByte = tileId & 0xFF;
+      const highByte = Math.floor(tileId / 256) & 0xFF;
+      
+      textureData[dstIdx] = lowByte;           // R - low byte of tileId
+      textureData[dstIdx + 1] = isStatic > 0.5 ? 255 : 0;  // G - isStatic flag
+      textureData[dstIdx + 2] = highByte;      // B - high byte of tileId
+      textureData[dstIdx + 3] = 255;           // A
     }
     
     gl.bindTexture(gl.TEXTURE_2D, texture);

@@ -57,7 +57,7 @@ export class MiniMap3D {
    */
   public async initialize(canvas: HTMLCanvasElement): Promise<boolean> {
     this.canvas = canvas;
-    const gl = canvas.getContext('webgl2');
+    const gl = canvas.getContext('webgl2', { alpha: true, antialias: true });
     if (!gl) {
       console.error('[MiniMap3D] WebGL2 not supported');
       return false;
@@ -78,8 +78,9 @@ export class MiniMap3D {
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
-    // Load and parse OBJ file - path relative to public directory
+    // Load and parse OBJ file - path relative to dist/public directory
     await this.loadOBJFile('root_dungeon_single_mesh.obj');
 
     // Compile shaders and create program

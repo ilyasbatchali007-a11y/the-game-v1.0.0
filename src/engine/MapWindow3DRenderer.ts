@@ -54,6 +54,12 @@ export class MapWindow3DRenderer {
     if (vs && fs) {
       this.program = this.createProgram(vs, fs);
     }
+    
+    // Enable depth testing globally
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
 
     // Start animation loop
     this.isRunning = true;
@@ -143,10 +149,9 @@ export class MapWindow3DRenderer {
     
     const gl = this.gl;
     
-    // Clear canvas
+    // Clear canvas (depth test already enabled in init)
     gl.clearColor(0.1, 0.1, 0.12, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.DEPTH_TEST);
     
     // Use program
     gl.useProgram(this.program);
@@ -164,9 +169,9 @@ export class MapWindow3DRenderer {
     // Bind index buffer
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     
-    // Create transformation matrix
+    // Create transformation matrix with proper perspective and view
     const aspect = this.canvas.width / this.canvas.height;
-    const matrix = this.createRotationMatrix(this.rotationY, aspect);
+    const matrix = this.createModelViewProjectionMatrix(this.rotationY, aspect);
     
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniform4f(colorLocation, 0.8, 0.6, 0.3, 1.0); // Brownish color for dungeon
@@ -178,21 +183,70 @@ export class MapWindow3DRenderer {
     this.rotationY += 0.01;
   }
 
-  private createRotationMatrix(angleY: number, aspect: number): Float32Array {
-    // Simple perspective-like projection combined with rotation
-    const cosY = Math.cos(angleY);
-    const sinY = Math.sin(angleY);
+  private createModelViewProjectionMatrix(angleY: number, aspect: number): Float32Array {
+    // Model rotation around Y axis
+    const cosR = Math.cos(angleY);
+    const sinR = Math.sin(angleY);
     
-    // Combined model-view-projection matrix (simplified)
-    const scale = 0.5;
-    const zOffset = -5.0;
+    // The dungeon model coordinates are roughly:
+    // X: -1 to 1, Y: 0 to 34 (tall), Z: -7 to 7
+    // We need to center it vertically and scale appropriately
     
-    return new Float32Array([
-      cosY * scale, 0, -sinY * scale, 0,
-      0, scale, 0, 0,
-      sinY * scale, 0, cosY * scale, 0,
+    const centerY = -17.0; // Center the tall dungeon vertically
+    
+    // Scale factors - make the dungeon fit nicely in view
+    const scaleX = 0.6;
+    const scaleY = 0.05;  // Compress Y since dungeon is very tall  
+    const scaleZ = 0.4;
+    const zOffset = -3.0; // Push back from camera
+    
+    // Build proper perspective projection matrix
+    const fov = 60 * (Math.PI / 180);
+    const near = 0.1;
+    const far = 100.0;
+    const f = 1.0 / Math.tan(fov / 2);
+    
+    // Projection matrix (column-major)
+    const proj = new Float32Array([
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far + near) / (near - far), -1,
+      0, 0, (2 * far * near) / (near - far), 0
+    ]);
+    
+    // View matrix (translate camera back)
+    const view = new Float32Array([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
       0, 0, zOffset, 1
     ]);
+    
+    // Model matrix (rotation + scale + center)
+    const model = new Float32Array([
+      cosR * scaleX, 0, -sinR * scaleX, 0,
+      0, scaleY, 0, 0,
+      sinR * scaleZ, 0, cosR * scaleZ, 0,
+      0, centerY * scaleY, 0, 1
+    ]);
+    
+    // Multiply: MVP = P * V * M
+    const vm = this.multiplyMatrices(view, model);
+    return this.multiplyMatrices(proj, vm);
+  }
+  
+  private multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
+    const result = new Float32Array(16);
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        let sum = 0;
+        for (let k = 0; k < 4; k++) {
+          sum += a[i * 4 + k] * b[k * 4 + j];
+        }
+        result[i * 4 + j] = sum;
+      }
+    }
+    return result;
   }
 
   public destroy(): void {

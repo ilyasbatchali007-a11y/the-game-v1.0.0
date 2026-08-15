@@ -142,6 +142,30 @@ void main() {
     vec2 localUV = vec2(localX, localY);
     
     // Check if we should use chessboard pattern (u_useAtlas == 0)
+    
+    // First, get tile ID from map data for portal check (works for both modes)
+    float tileId = 0.0;
+    vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
+    vec4 mapData = texture(u_mapDataTexture, mapUV);
+    float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
+    float isStatic = mapData.g;              // Static flag stored in G channel
+    
+    // Portal tile check: render special colors for portal tiles (BEFORE chessboard/atlas decision)
+    if (baseTileId > 999.5) {
+      // Portal tiles - use solid bright colors instead of atlas textures or chessboard
+      if (baseTileId < 1000.5) {
+        // Tile ID 1000: Next floor portal (Bright Red)
+        vec3 portalColor = vec3(1.0, 0.2, 0.2);
+        fragColor = vec4(portalColor, 1.0);
+        return;
+      } else if (baseTileId < 1001.5) {
+        // Tile ID 1001: Previous floor portal (Bright Blue)
+        vec3 portalColor = vec3(0.2, 0.4, 1.0);
+        fragColor = vec4(portalColor, 1.0);
+        return;
+      }
+    }
+    
     if (u_useAtlas == 0) {
       // Simple green chessboard pattern
       // Alternate colors based on tile coordinates
@@ -158,30 +182,6 @@ void main() {
       fragColor = vec4(color, 1.0);
     } else {
       // ATLAS MODE: Determine tile ID from map data or hash
-      float tileId = 0.0;
-      
-      // Sample map data texture to get tile info
-      vec2 mapUV = (vec2(tileX, tileY) + 0.5) / u_mapDimensions;
-      vec4 mapData = texture(u_mapDataTexture, mapUV);
-      float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
-      float isStatic = mapData.g;              // Static flag stored in G channel
-      
-      // Portal tile check: render special colors for portal tiles
-      if (baseTileId > 999.5) {
-        // Portal tiles - use solid bright colors instead of atlas textures
-        if (baseTileId < 1000.5) {
-          // Tile ID 1000: Next floor portal (Bright Cyan/Blue)
-          vec3 portalColor = vec3(0.0, 0.8, 1.0);
-          fragColor = vec4(portalColor, 1.0);
-          return;
-        } else if (baseTileId < 1001.5) {
-          // Tile ID 1001: Previous floor portal (Bright Magenta/Pink)
-          vec3 portalColor = vec3(1.0, 0.0, 0.8);
-          fragColor = vec4(portalColor, 1.0);
-          return;
-        }
-      }
-      
       if (isStatic > 0.5) {
         // Static tile: use exact tile ID from map data
         tileId = baseTileId;

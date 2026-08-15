@@ -288,6 +288,18 @@ export class MapWindow3DRenderer {
     const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
     const normalMatrix = this.createNormalMatrix(this.rotationY, this.rotationX);
     
+    // DEBUG: Log diagnostic info to console
+    console.log('=== 3D RENDER DEBUG ===');
+    console.log('Zoom:', this.zoom);
+    console.log('Rotation X:', this.rotationX.toFixed(2), 'Y:', this.rotationY.toFixed(2));
+    console.log('Is dragging:', this.isDragging);
+    console.log('Model indices:', this.model.indices.length);
+    console.log('Model vertices:', this.model.vertices ? this.model.vertices.length / 3 : 'N/A');
+    console.log('Canvas size:', this.canvas.width, 'x', this.canvas.height);
+    console.log('Aspect ratio:', aspect);
+    console.log('MVP Matrix:', JSON.stringify(Array.from(matrix)));
+    console.log('Normal Matrix:', JSON.stringify(Array.from(normalMatrix)));
+    
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
     gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon

@@ -428,9 +428,8 @@ function updateMiniMapFloor(floorId: number) {
   }
 }
 window.addEventListener('keydown', (e) => {
-  // Toggle map with M key - works only in game, not in menu
+  // Toggle map with M key - works anytime after engine init
   if (e.key === 'm' || e.key === 'M') {
-    if (!gameRunning) return; // Only allow map toggle during gameplay
     toggleMap();
     return; // Don't process other inputs when toggling map
   }

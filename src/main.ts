@@ -374,9 +374,10 @@ let mapVisible = false;
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
   
-  // Force visible dimensions for calculation even if container is hidden
-  const width = 400; // Match CSS width
-  const height = window.innerHeight; // Match CSS height
+  // Get actual container dimensions (works even if just made visible)
+  const rect = mapContainer.getBoundingClientRect();
+  const width = rect.width || 400;
+  const height = rect.height || window.innerHeight;
   
   // Set canvas size to match container display size
   mapCanvas.width = Math.floor(width);
@@ -388,6 +389,13 @@ function initMapCanvas() {
   if (mapCtx) {
     mapCtx.fillStyle = '#000000';
     mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+    
+    // Draw a test rectangle to confirm rendering works
+    mapCtx.fillStyle = '#00ff00';
+    mapCtx.fillRect(50, 50, 100, 100);
+    mapCtx.fillStyle = '#ffffff';
+    mapCtx.font = '20px Arial';
+    mapCtx.fillText('MAP READY', 60, 180);
   }
 }
 

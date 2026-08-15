@@ -362,10 +362,53 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Add keyboard controls for floor switching (T and G keys)
+// Add keyboard controls for floor switching (T and G keys) and map toggle (M key)
 let floorSwitchCooldown = false;
+
+// Map Canvas Setup
+const mapContainer = document.getElementById('map-container') as HTMLElement;
+const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
+let mapCtx: CanvasRenderingContext2D | null = null;
+let mapVisible = false;
+
+function initMapCanvas() {
+  if (!mapCanvas) return;
+  
+  // Set canvas size to match container
+  const rect = mapContainer.getBoundingClientRect();
+  mapCanvas.width = rect.width;
+  mapCanvas.height = rect.height;
+  
+  mapCtx = mapCanvas.getContext('2d');
+  
+  // Clear with black background
+  if (mapCtx) {
+    mapCtx.fillStyle = '#000000';
+    mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+  }
+}
+
+function toggleMap() {
+  mapVisible = !mapVisible;
+  if (mapVisible) {
+    mapContainer.classList.add('visible');
+    if (!mapCtx) {
+      initMapCanvas();
+    }
+    // Future: Call renderMap() here when map logic is ready
+  } else {
+    mapContainer.classList.remove('visible');
+  }
+}
+
 window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
+  
+  // Toggle map with M key
+  if (e.key === 'm' || e.key === 'M') {
+    toggleMap();
+    return; // Don't process other inputs when toggling map
+  }
   
   // Floor switching with T (previous) and G (next) - also respawn player at center of new floor
   if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {

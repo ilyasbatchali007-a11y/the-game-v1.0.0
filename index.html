@@ -270,11 +270,39 @@
       .hidden {
         display: none !important;
       }
+
+      /* Map Window Styles */
+      #map-container {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 400px;
+        height: 100vh;
+        background-color: #000000;
+        border-left: 2px solid #ffffff;
+        z-index: 50;
+        display: none;
+      }
+
+      #map-container.visible {
+        display: block;
+      }
+
+      #map-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
     </style>
   </head>
   <body>
     <div id="game-container">
       <canvas id="canvas"></canvas>
+      
+      <!-- Map Window -->
+      <div id="map-container">
+        <canvas id="map-canvas"></canvas>
+      </div>
       
       <!-- Start Menu -->
       <div id="start-menu">

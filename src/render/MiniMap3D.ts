@@ -1,882 +1,210 @@
-// SRC/render/MiniMap3D.ts
-// 3D Mini-map renderer using WebGL
-// Loads single mesh OBJ file with 100 unit cubes representing floors
-// Highlights current floor cube with X-ray glow effect and red dot indicator
-
-import { getFloorCount } from '../config/FloorMap';
-
-export interface CubeInstance {
-  cubeIndex: number;
-  x: number;
-  y: number;
-  z: number;
-}
-
 export class MiniMap3D {
+  private canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext | null = null;
-  private canvas: HTMLCanvasElement | null = null;
   private program: WebGLProgram | null = null;
-  private vao: WebGLVertexArrayObject | null = null;
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
-  private instanceBuffer: WebGLBuffer | null = null;
-  
-  private cubeVertices: Float32Array | null = null;
-  private cubeIndices: Uint16Array | null = null;
+  private normalBuffer: WebGLBuffer | null = null;
+  private vertices: Float32Array = new Float32Array(0);
+  private normals: Float32Array = new Float32Array(0);
+  private indices: Uint16Array = new Uint16Array(0);
+  private cubePositions: Float32Array = new Float32Array(300);
   private cubeCount: number = 0;
-  
-  private currentFloorId: number = 0;
-  private totalFloors: number = 100;
-  
-  // Uniform locations
-  private uModelViewProjection: WebGLUniformLocation | null = null;
-  private uColor: WebGLUniformLocation | null = null;
-  private uGlowIntensity: WebGLUniformLocation | null = null;
-  private uIsHighlighted: WebGLUniformLocation | null = null;
-  
-  // Attribute locations for instanced rendering
-  private instancePosLoc: number = -1;
-  private highlightLoc: number = -1;
-  
-  // Camera state
-  private rotationX: number = Math.PI / 4; // 45 degrees
-  private rotationY: number = Math.PI / 4; // 45 degrees
-  private zoom: number = 18.0;
-  private targetZoom: number = 18.0;
+  private currentFloor: number = 0;
+  private cameraDistance: number = 35;
+  private cameraAngleX: number = Math.PI / 6;
+  private cameraAngleY: number = Math.PI / 4;
   private isDragging: boolean = false;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
-  
-  // Mouse/Touch event handlers bound to this instance
-  private onMouseDown: (e: MouseEvent) => void;
-  private onMouseMove: (e: MouseEvent) => void;
-  private onMouseUp: () => void;
-  private onTouchStart: (e: TouchEvent) => void;
-  private onTouchMove: (e: TouchEvent) => void;
-  private onTouchEnd: () => void;
-  private onWheel: (e: WheelEvent) => void;
-  
-  // Grid layout for 100 cubes (10x10 grid)
-  private gridCols: number = 10;
-  private gridRows: number = 10;
-  private cubeSize: number = 1.0;
-  private spacing: number = 0.1;
+  private autoRotate: boolean = true;
+  private time: number = 0;
 
-  constructor() {
-    // Bind event handlers
-    this.onMouseDown = this.handleMouseDown.bind(this);
-    this.onMouseMove = this.handleMouseMove.bind(this);
-    this.onMouseUp = this.handleMouseUp.bind(this);
-    this.onTouchStart = this.handleTouchStart.bind(this);
-    this.onTouchMove = this.handleTouchMove.bind(this);
-    this.onTouchEnd = this.handleTouchEnd.bind(this);
-    this.onWheel = this.handleWheel.bind(this);
+  constructor(canvasId: string) {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas) throw new Error(`Canvas "${canvasId}" not found`);
+    this.canvas = canvas;
+    this.setupWebGL();
+    this.setupInputs();
+    this.loadOBJFile();
   }
 
-  /**
-   * Initialize the 3D mini-map renderer
-   */
-  public async initialize(canvas: HTMLCanvasElement): Promise<boolean> {
-    this.canvas = canvas;
-    const gl = canvas.getContext('webgl2', { alpha: true, antialias: true });
-    if (!gl) {
-      console.error('[MiniMap3D] WebGL2 not supported');
-      return false;
-    }
+  private setupWebGL(): void {
+    const gl = this.canvas.getContext('webgl2', { alpha: false, antialias: true });
+    if (!gl) { console.error('WebGL2 not supported'); return; }
     this.gl = gl;
-
-    // Set canvas size
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (rect) {
-      canvas.width = Math.floor(rect.width);
-      canvas.height = Math.floor(rect.height);
-    } else {
-      canvas.width = 200;
-      canvas.height = 200;
-    }
-
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0, 0, 0, 1);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl.BACK);
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-
-    // Load and parse OBJ file - path relative to dist/public directory
-    await this.loadOBJFile('root_dungeon_single_mesh.obj');
-
-    // Compile shaders and create program
-    if (!this.createShaderProgram()) {
-      return false;
-    }
-
-    // Setup geometry
-    this.setupGeometry();
-
-    // Setup instance data for all 100 cubes
-    this.setupInstanceData();
-
-    console.log('[MiniMap3D] Initialized successfully with', this.cubeCount, 'cubes');
-    
-    // Setup event listeners for camera control
-    this.setupEventListeners();
-    
-    return true;
+    const vs = `#version 300 es
+      in vec3 a_position; in vec3 a_normal;
+      uniform mat4 u_mvp, u_cubeTransform;
+      out vec3 v_normal, v_worldPos;
+      void main() {
+        vec4 worldPos = u_cubeTransform * vec4(a_position, 1.0);
+        v_worldPos = worldPos.xyz;
+        gl_Position = u_mvp * worldPos;
+        v_normal = mat3(u_mvp) * a_normal;
+      }`;
+    const fs = `#version 300 es
+      precision mediump float;
+      in vec3 v_normal, v_worldPos;
+      uniform vec3 u_camPos; uniform float u_time;
+      uniform int u_floor; uniform vec3 u_positions[100];
+      out vec4 color;
+      void main() {
+        int idx = -1; float minD = 999.0;
+        for(int i=0;i<100;i++){float d=distance(v_worldPos.xz,u_positions[i].xz);if(d<2.0&&d<minD){minD=d;idx=i;}}
+        vec3 light = normalize(vec3(0.5,1.0,0.3));
+        float diff = max(dot(normalize(v_normal),light),0.4);
+        vec3 base = vec3(0.25,0.25,0.3);
+        if(idx==u_floor){
+          float pulse = 0.8+0.2*sin(u_time*4.0);
+          vec3 glow = vec3(1.0,0.15,0.15)*pulse;
+          vec3 viewDir = normalize(u_camPos-v_worldPos);
+          float edge = pow(1.0-abs(dot(normalize(v_normal),viewDir)),2.5)*1.8;
+          color = vec4(mix(glow*diff,glow,0.6*edge+0.4),1.0);
+        }else{color=vec4(base*diff,1.0);}
+      }`;
+    const vsShader = gl.createShader(gl.VERTEX_SHADER)!;
+    const fsShader = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(vsShader,vs); gl.compileShader(vsShader);
+    gl.shaderSource(fsShader,fs); gl.compileShader(fsShader);
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog,vsShader); gl.attachShader(prog,fsShader);
+    gl.linkProgram(prog);
+    this.program = prog;
   }
 
-  /**
-   * Setup mouse/touch event listeners for camera rotation and zoom
-   */
-  private setupEventListeners(): void {
-    if (!this.canvas) return;
-    
-    this.canvas.addEventListener('mousedown', this.onMouseDown);
-    document.addEventListener('mousemove', this.onMouseMove);
-    document.addEventListener('mouseup', this.onMouseUp);
-    
-    this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
-    document.addEventListener('touchmove', this.onTouchMove, { passive: false });
-    document.addEventListener('touchend', this.onTouchEnd);
-    
-    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+  private loadOBJFile(): void {
+    fetch('root_dungeon_single_mesh.obj').then(r=>r.text()).then(d=>this.parseOBJ(d)).catch(e=>console.error(e));
   }
 
-  /**
-   * Remove event listeners (cleanup)
-   */
-  private removeEventListeners(): void {
-    if (!this.canvas) return;
-    
-    this.canvas.removeEventListener('mousedown', this.onMouseDown);
-    document.removeEventListener('mousemove', this.onMouseMove);
-    document.removeEventListener('mouseup', this.onMouseUp);
-    
-    this.canvas.removeEventListener('touchstart', this.onTouchStart);
-    document.removeEventListener('touchmove', this.onTouchMove);
-    document.removeEventListener('touchend', this.onTouchEnd);
-    
-    this.canvas.removeEventListener('wheel', this.onWheel);
-  }
-
-  private handleMouseDown(e: MouseEvent): void {
-    this.isDragging = true;
-    this.lastMouseX = e.clientX;
-    this.lastMouseY = e.clientY;
-  }
-
-  private handleMouseMove(e: MouseEvent): void {
-    if (!this.isDragging) return;
-    
-    const deltaX = e.clientX - this.lastMouseX;
-    const deltaY = e.clientY - this.lastMouseY;
-    
-    this.rotationY += deltaX * 0.01;
-    this.rotationX += deltaY * 0.01;
-    
-    // Clamp vertical rotation to avoid flipping
-    this.rotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotationX));
-    
-    this.lastMouseX = e.clientX;
-    this.lastMouseY = e.clientY;
-  }
-
-  private handleMouseUp(): void {
-    this.isDragging = false;
-  }
-
-  private handleTouchStart(e: TouchEvent): void {
-    if (e.touches.length === 1) {
-      this.isDragging = true;
-      this.lastMouseX = e.touches[0].clientX;
-      this.lastMouseY = e.touches[0].clientY;
-      e.preventDefault();
-    }
-  }
-
-  private handleTouchMove(e: TouchEvent): void {
-    if (!this.isDragging || e.touches.length !== 1) return;
-    
-    const deltaX = e.touches[0].clientX - this.lastMouseX;
-    const deltaY = e.touches[0].clientY - this.lastMouseY;
-    
-    this.rotationY += deltaX * 0.01;
-    this.rotationX += deltaY * 0.01;
-    
-    this.rotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotationX));
-    
-    this.lastMouseX = e.touches[0].clientX;
-    this.lastMouseY = e.touches[0].clientY;
-    e.preventDefault();
-  }
-
-  private handleTouchEnd(): void {
-    this.isDragging = false;
-  }
-
-  private handleWheel(e: WheelEvent): void {
-    e.preventDefault();
-    this.targetZoom += e.deltaY * 0.05;
-    this.targetZoom = Math.max(8.0, Math.min(40.0, this.targetZoom));
-  }
-
-  /**
-   * Load and parse OBJ file to extract individual cubes
-   */
-  private async loadOBJFile(path: string): Promise<void> {
-    try {
-      const response = await fetch(path);
-      const text = await response.text();
-      this.parseOBJ(text);
-    } catch (error) {
-      console.error('[MiniMap3D] Failed to load OBJ file:', error);
-      // Fallback: generate procedural cubes
-      this.generateProceduralCubes();
-    }
-  }
-
-  /**
-   * Parse OBJ file content and extract cube geometry
-   * The OBJ contains 100 separate cubes (each with 8 vertices and 12 faces)
-   */
-  private parseOBJ(objText: string): void {
-    const lines = objText.split('\n');
-    const vertices: [number, number, number][] = [];
-    const faces: number[][] = [];
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      
-      if (trimmed.startsWith('v ')) {
-        const parts = trimmed.split(/\s+/);
-        const x = parseFloat(parts[1]);
-        const y = parseFloat(parts[2]);
-        const z = parseFloat(parts[3]);
-        vertices.push([x, y, z]);
-      } else if (trimmed.startsWith('f ')) {
-        const parts = trimmed.split(/\s+/);
-        const faceVertices = parts.slice(1).map(p => {
-          // Handle vertex/texture/normal format
-          const vertexIndex = parseInt(p.split('/')[0]) - 1; // OBJ uses 1-based indexing
-          return vertexIndex;
-        });
-        faces.push(faceVertices);
-      }
-    }
-    
-    // Calculate how many complete cubes we have (12 faces per cube)
-    this.cubeCount = Math.floor(faces.length / 12);
-    console.log('[MiniMap3D] Parsed OBJ:', vertices.length, 'vertices,', faces.length, 'faces,', this.cubeCount, 'cubes');
-    
-    // If we found cubes in OBJ, extract one prototype cube; otherwise generate procedurally
-    if (this.cubeCount > 0 && vertices.length >= 8) {
-      // Extract first 8 unique vertices as prototype cube
-      this.buildCubeGeometry(vertices, faces);
-    } else {
-      this.generateProceduralCubes();
-    }
-  }
-
-  /**
-   * Build optimized geometry from parsed OBJ data - extract single prototype cube
-   */
-  private buildCubeGeometry(vertices: [number, number, number][], faces: number[][]): void {
-    // For instanced rendering, we need a single prototype cube (8 vertices, 12 faces)
-    // Extract the first cube's vertices (first 12 faces = one cube)
-    const firstCubeFaces = faces.slice(0, 12);
-    
-    // Collect all vertex indices used by the first cube's faces
-    const firstCubeVertexIndices = new Set<number>();
-    for (const face of firstCubeFaces) {
-      for (const vi of face) {
-        firstCubeVertexIndices.add(vi);
-      }
-    }
-    
-    // Sort indices to maintain consistent ordering
-    const sortedIndices = Array.from(firstCubeVertexIndices).sort((a, b) => a - b);
-    
-    // Extract unique vertices for the first cube in sorted order
-    const prototypeVertices: number[] = [];
-    const indexMap = new Map<number, number>(); // Maps original vertex index to new index
-    
-    for (let i = 0; i < sortedIndices.length; i++) {
-      const origIndex = sortedIndices[i];
-      if (origIndex < vertices.length) {
-        const v = vertices[origIndex];
-        indexMap.set(origIndex, i);
-        prototypeVertices.push(v[0], v[1], v[2]);
-      }
-    }
-    
-    // Build indices for the prototype cube using remapped indices
-    const prototypeIndices: number[] = [];
-    for (const face of firstCubeFaces) {
-      for (const origIndex of face) {
-        const mappedIndex = indexMap.get(origIndex);
-        if (mappedIndex !== undefined) {
-          prototypeIndices.push(mappedIndex);
+  private parseOBJ(data:string):void {
+    const lines=data.split('\n');
+    const verts:number[] = [];
+    const inds:number[] = [];
+    const centers:{x:number,y:number,z:number}[] = [];
+    let curVerts:{x:number,y:number,z:number}[] = [];
+    let faces = 0;
+    for(const ln of lines){
+      const t=ln.trim();
+      if(!t||t[0]==='#') continue;
+      const p=t.split(/\s+/);
+      if(p[0]==='v'){
+        const x=parseFloat(p[1]),y=parseFloat(p[2]),z=parseFloat(p[3]);
+        verts.push(x,y,z);
+        curVerts.push({x,y,z});
+      } else if(p[0]==='f'){
+        const vi=(s:string)=>parseInt(s.split('/')[0])-1;
+        inds.push(vi(p[1]),vi(p[2]),vi(p[3]));
+        if(p.length>4) inds.push(vi(p[1]),vi(p[3]),vi(p[4]));
+        faces++;
+        if(faces>=12 && curVerts.length>0){
+          let cx=0,cy=0,cz=0;
+          for(const v of curVerts){cx+=v.x;cy+=v.y;cz+=v.z;}
+          cx/=curVerts.length; cy/=curVerts.length; cz/=curVerts.length;
+          centers.push({x:cx,y:cy,z:cz});
+          curVerts = [];
+          faces = 0;
         }
       }
     }
-    
-    // Verify we have a valid cube (8 vertices, 36 indices for 12 triangles)
-    if (prototypeVertices.length < 24 || prototypeIndices.length < 36) {
-      console.warn('[MiniMap3D] Invalid cube geometry from OBJ, using procedural fallback');
-      this.generateProceduralCubes();
-      return;
+    this.cubeCount = Math.min(centers.length, 100);
+    for(let i=0;i<this.cubeCount;i++){
+      this.cubePositions[i*3]=centers[i].x;
+      this.cubePositions[i*3+1]=centers[i].y;
+      this.cubePositions[i*3+2]=centers[i].z;
     }
-    
-    this.cubeVertices = new Float32Array(prototypeVertices);
-    this.cubeIndices = new Uint16Array(prototypeIndices);
-    console.log('[MiniMap3D] Built prototype cube with', prototypeVertices.length / 3, 'vertices and', prototypeIndices.length, 'indices');
-  }
-
-  /**
-   * Generate procedural unit cube geometry as fallback
-   */
-  private generateProceduralCubes(): void {
-    // Unit cube centered at origin, size 1
-    const s = 0.5; // half-size
-    const vertices = [
-      // Front face
-      -s, -s,  s,   s, -s,  s,   s,  s,  s,  -s,  s,  s,
-      // Back face
-      -s, -s, -s,  -s,  s, -s,   s,  s, -s,   s, -s, -s,
-      // Top face
-      -s,  s, -s,  -s,  s,  s,   s,  s,  s,   s,  s, -s,
-      // Bottom face
-      -s, -s, -s,   s, -s, -s,   s, -s,  s,  -s, -s,  s,
-      // Right face
-       s, -s, -s,   s,  s, -s,   s,  s,  s,   s, -s,  s,
-      // Left face
-      -s, -s, -s,  -s, -s,  s,  -s,  s,  s,  -s,  s, -s,
-    ];
-    
-    this.cubeVertices = new Float32Array(vertices);
-    
-    // Indices for 6 faces (2 triangles each)
-    const indices = [
-      0, 1, 2,    0, 2, 3,    // Front
-      4, 5, 6,    4, 6, 7,    // Back
-      8, 9, 10,   8, 10, 11,  // Top
-      12, 13, 14, 12, 14, 15, // Bottom
-      16, 17, 18, 16, 18, 19, // Right
-      20, 21, 22, 20, 22, 23, // Left
-    ];
-    
-    this.cubeIndices = new Uint16Array(indices);
-    this.cubeCount = 100; // We'll render 100 instances
-  }
-
-  /**
-   * Create shader program
-   */
-  private createShaderProgram(): boolean {
-    if (!this.gl) return false;
-    const gl = this.gl;
-
-    const vsSource = `#version 300 es
-      precision mediump float;
-      
-      in vec3 aPosition;
-      in vec3 aInstancePos;
-      in float aIsHighlighted;
-      
-      uniform mat4 uMVP;
-      uniform float uTime;
-      
-      out vec3 vWorldPos;
-      out float vIsHighlighted;
-      out vec3 vNormal;
-      
-      void main() {
-        vec3 worldPos = aPosition + aInstancePos;
-        vWorldPos = worldPos;
-        vIsHighlighted = aIsHighlighted;
-        vNormal = normalize(aPosition); // Approximate normal for lighting
-        
-        gl_Position = uMVP * vec4(worldPos, 1.0);
-      }
-    `;
-
-    const fsSource = `#version 300 es
-      precision mediump float;
-      
-      in vec3 vWorldPos;
-      in float vIsHighlighted;
-      in vec3 vNormal;
-      
-      uniform vec3 uBaseColor;
-      uniform vec3 uHighlightColor;
-      uniform float uGlowIntensity;
-      uniform float uTime;
-      
-      out vec4 fragColor;
-      
-      void main() {
-        // Base color for non-highlighted cubes
-        vec3 baseColor = uBaseColor;
-        
-        // Highlighted cube with X-ray glow effect
-        if (vIsHighlighted > 0.5) {
-          // Pulsing glow effect
-          float pulse = sin(uTime * 3.0) * 0.3 + 0.7;
-          vec3 glowColor = uHighlightColor * pulse;
-          
-          // Edge highlight for X-ray effect
-          float edgeFactor = 1.0 - abs(dot(vNormal, vec3(0.577, 0.577, 0.577)));
-          glowColor += vec3(1.0, 0.3, 0.3) * edgeFactor * uGlowIntensity;
-          
-          baseColor = glowColor;
-        }
-        
-        // Simple lighting
-        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
-        float diff = max(dot(vNormal, lightDir), 0.3);
-        
-        fragColor = vec4(baseColor * diff, 1.0);
-      }
-    `;
-
-    const program = this.compileProgram(vsSource, fsSource);
-    if (!program) return false;
-
-    this.program = program;
-    gl.useProgram(program);
-
-    // Get uniform locations
-    this.uModelViewProjection = gl.getUniformLocation(program, 'uMVP');
-    this.uColor = gl.getUniformLocation(program, 'uBaseColor');
-    this.uGlowIntensity = gl.getUniformLocation(program, 'uGlowIntensity');
-    this.uIsHighlighted = gl.getUniformLocation(program, 'uTime');
-
-    return true;
-  }
-
-  /**
-   * Compile vertex and fragment shaders into a program
-   */
-  private compileProgram(vsSource: string, fsSource: string): WebGLProgram | null {
-    if (!this.gl) return null;
-    const gl = this.gl;
-
-    const vs = gl.createShader(gl.VERTEX_SHADER);
-    const fs = gl.createShader(gl.FRAGMENT_SHADER);
-    if (!vs || !fs) return null;
-
-    gl.shaderSource(vs, vsSource);
-    gl.compileShader(vs);
-    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-      console.error('Vertex shader error:', gl.getShaderInfoLog(vs));
-      return null;
+    console.log('Loaded',this.cubeCount,'cubes');
+    this.vertices = new Float32Array(verts);
+    this.indices = new Uint16Array(inds);
+    const norms:number[] = new Array(verts.length).fill(0);
+    for(let i=0;i<inds.length;i+=3){
+      const i0=inds[i]*3, i1=inds[i+1]*3, i2=inds[i+2]*3;
+      const ax=verts[i1]-verts[i0], ay=verts[i1+1]-verts[i0+1], az=verts[i1+2]-verts[i0+2];
+      const bx=verts[i2]-verts[i0], by=verts[i2+1]-verts[i0+1], bz=verts[i2+2]-verts[i0+2];
+      const nx=ay*bz-az*by, ny=az*bx-ax*bz, nz=ax*by-ay*bx;
+      norms[i0]+=nx; norms[i0+1]+=ny; norms[i0+2]+=nz;
+      norms[i1]+=nx; norms[i1+1]+=ny; norms[i1+2]+=nz;
+      norms[i2]+=nx; norms[i2+1]+=ny; norms[i2+2]+=nz;
     }
-
-    gl.shaderSource(fs, fsSource);
-    gl.compileShader(fs);
-    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-      console.error('Fragment shader error:', gl.getShaderInfoLog(fs));
-      return null;
+    for(let i=0;i<norms.length;i+=3){
+      const l=Math.sqrt(norms[i]*norms[i]+norms[i+1]*norms[i+1]+norms[i+2]*norms[i+2])||1;
+      norms[i]/=l; norms[i+1]/=l; norms[i+2]/=l;
     }
-
-    const program = gl.createProgram();
-    if (!program) return null;
-
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
-    gl.linkProgram(program);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program));
-      return null;
-    }
-
-    gl.deleteShader(vs);
-    gl.deleteShader(fs);
-
-    return program;
+    this.normals = new Float32Array(norms);
+    this.createBuffers();
   }
 
-  /**
-   * Setup vertex buffers and VAO
-   */
-  private setupGeometry(): void {
-    if (!this.gl || !this.program || !this.cubeVertices || !this.cubeIndices) return;
-    const gl = this.gl;
-
-    // Create VAO
-    this.vao = gl.createVertexArray();
-    gl.bindVertexArray(this.vao);
-
-    // Vertex buffer
-    this.vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.cubeVertices, gl.STATIC_DRAW);
-
-    const posLoc = gl.getAttribLocation(this.program, 'aPosition');
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
-
-    // Index buffer
-    this.indexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.cubeIndices, gl.STATIC_DRAW);
+  private createBuffers():void{
+    if(!this.gl||!this.program) return;
+    const gl=this.gl;
+    this.vertexBuffer=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER,this.vertices,gl.STATIC_DRAW);
+    this.normalBuffer=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER,this.normals,gl.STATIC_DRAW);
+    this.indexBuffer=gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,this.indices,gl.STATIC_DRAW);
   }
 
-  /**
-   * Setup instance data buffer for all 100 cubes
-   */
-  private setupInstanceData(): void {
-    if (!this.gl || !this.program) return;
-    const gl = this.gl;
-
-    // Generate instance positions for 10x10 grid
-    const instanceData: number[] = [];
-    for (let i = 0; i < this.cubeCount; i++) {
-      const col = i % this.gridCols;
-      const row = Math.floor(i / this.gridCols);
-      
-      const x = (col - this.gridCols / 2) * (this.cubeSize + this.spacing);
-      const z = (row - this.gridRows / 2) * (this.cubeSize + this.spacing);
-      const y = 0;
-      
-      instanceData.push(x, y, z); // Position (3 floats = 12 bytes)
-      instanceData.push(i === this.currentFloorId ? 1.0 : 0.0); // IsHighlighted flag
-    }
-
-    this.instanceBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(instanceData), gl.DYNAMIC_DRAW);
-
-    // Instance position attribute (location 1)
-    const instancePosLoc = gl.getAttribLocation(this.program, 'aInstancePos');
-    gl.enableVertexAttribArray(instancePosLoc);
-    gl.vertexAttribPointer(instancePosLoc, 3, gl.FLOAT, false, 16, 0);
-    gl.vertexAttribDivisor(instancePosLoc, 1);
-
-    // Instance highlight flag attribute (location 2)
-    const highlightLoc = gl.getAttribLocation(this.program, 'aIsHighlighted');
-    gl.enableVertexAttribArray(highlightLoc);
-    gl.vertexAttribPointer(highlightLoc, 1, gl.FLOAT, false, 16, 12);
-    gl.vertexAttribDivisor(highlightLoc, 1);
-    
-    // Store attribute locations for later use
-    this.instancePosLoc = instancePosLoc;
-    this.highlightLoc = highlightLoc;
+  private setupInputs():void{
+    this.canvas.onmousedown=e=>{this.isDragging=true;this.lastMouseX=e.clientX;this.lastMouseY=e.clientY;this.autoRotate=false;};
+    window.onmouseup=()=>{this.isDragging=false;};
+    window.onmousemove=e=>{
+      if(!this.isDragging)return;
+      this.cameraAngleY+=(e.clientX-this.lastMouseX)*0.01;
+      this.cameraAngleX+=(e.clientY-this.lastMouseY)*0.01;
+      this.cameraAngleX=Math.max(0.1,Math.min(Math.PI/2-0.1,this.cameraAngleX));
+      this.lastMouseX=e.clientX;this.lastMouseY=e.clientY;
+    };
+    this.canvas.onwheel=e=>{e.preventDefault();this.cameraDistance+=e.deltaY*0.05;this.cameraDistance=Math.max(15,Math.min(60,this.cameraDistance));};
   }
 
-  /**
-   * Update instance data when current floor changes
-   */
-  public updateInstanceData(): void {
-    if (!this.gl || !this.instanceBuffer) return;
-    const gl = this.gl;
+  public setCurrentFloor(f:number):void{this.currentFloor=Math.max(0,Math.min(99,f));}
 
-    const instanceData: number[] = [];
-    for (let i = 0; i < this.cubeCount; i++) {
-      const col = i % this.gridCols;
-      const row = Math.floor(i / this.gridCols);
-      
-      const x = (col - this.gridCols / 2) * (this.cubeSize + this.spacing);
-      const z = (row - this.gridRows / 2) * (this.cubeSize + this.spacing);
-      const y = 0;
-      
-      instanceData.push(x, y, z); // Position
-      instanceData.push(i === this.currentFloorId ? 1.0 : 0.0); // IsHighlighted flag
-    }
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(instanceData));
-  }
-
-  /**
-   * Set the current floor ID to highlight
-   */
-  public setCurrentFloor(floorId: number): void {
-    const maxFloor = Math.min(this.cubeCount, getFloorCount());
-    this.currentFloorId = Math.max(0, Math.min(floorId, maxFloor - 1));
-    this.updateInstanceData();
-  }
-
-  /**
-   * Get current floor ID
-   */
-  public getCurrentFloor(): number {
-    return this.currentFloorId;
-  }
-
-  /**
-   * Render the 3D mini-map
-   */
-  public render(time: number): void {
-    if (!this.gl || !this.program || !this.vao) return;
-    const gl = this.gl;
-
-    // Clear
-    gl.clearColor(0.05, 0.05, 0.08, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // Update camera
-    this.updateCamera();
-
-    // Create MVP matrix
-    const aspect = gl.canvas.width / gl.canvas.height;
-    const mvpMatrix = this.createMVPMatrix(aspect, time);
-
-    // Use program
-    gl.useProgram(this.program);
-
-    // Set uniforms
-    gl.uniformMatrix4fv(this.uModelViewProjection, false, mvpMatrix);
-    gl.uniform3f(this.uColor, 0.3, 0.3, 0.5); // Base cube color (bluish gray)
-    gl.uniform3f(gl.getUniformLocation(this.program, 'uHighlightColor'), 1.0, 0.2, 0.2); // Red highlight
-    gl.uniform1f(gl.getUniformLocation(this.program, 'uGlowIntensity'), 0.5);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'uTime'), time);
-
-    // Bind VAO and draw instanced cubes
-    gl.bindVertexArray(this.vao);
-    
-    // Ensure instance attributes are enabled before drawing
-    // Must bind instance buffer before setting up vertex attrib pointers
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    
-    if (this.instancePosLoc >= 0) {
-      gl.enableVertexAttribArray(this.instancePosLoc);
-      gl.vertexAttribPointer(this.instancePosLoc, 3, gl.FLOAT, false, 16, 0);
-      gl.vertexAttribDivisor(this.instancePosLoc, 1);
-    }
-    if (this.highlightLoc >= 0) {
-      gl.enableVertexAttribArray(this.highlightLoc);
-      gl.vertexAttribPointer(this.highlightLoc, 1, gl.FLOAT, false, 16, 12);
-      gl.vertexAttribDivisor(this.highlightLoc, 1);
-    }
-    
-    gl.drawElementsInstanced(
-      gl.TRIANGLES,
-      this.cubeIndices!.length,
-      gl.UNSIGNED_SHORT,
-      0,
-      this.cubeCount
-    );
-
-    // Render red dot marker for current floor
-    this.renderRedDotMarker(mvpMatrix, time);
-  }
-
-  /**
-   * Render a red dot inside the highlighted cube
-   */
-  private renderRedDotMarker(mvpMatrix: Float32Array, time: number): void {
-    if (!this.gl) return;
-    const gl = this.gl;
-
-    // Calculate position of current floor cube
-    const col = this.currentFloorId % this.gridCols;
-    const row = Math.floor(this.currentFloorId / this.gridCols);
-    const x = (col - this.gridCols / 2) * (this.cubeSize + this.spacing);
-    const z = (row - this.gridRows / 2) * (this.cubeSize + this.spacing);
-    const y = 0.3; // Slightly above center
-
-    // Simple point/sphere for the red dot
-    const dotVertices = new Float32Array([
-      0.0, 0.0, 0.0,
-      0.1, 0.0, 0.0,
-      0.0, 0.1, 0.0,
-      -0.1, 0.0, 0.0,
-      0.0, -0.1, 0.0,
-      0.0, 0.0, 0.1,
-      0.0, 0.0, -0.1,
-    ]);
-
-    // Create a separate VAO for the dot to avoid conflicts with instanced rendering
-    const dotVAO = gl.createVertexArray();
-    gl.bindVertexArray(dotVAO);
-
-    const dotBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, dotBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, dotVertices, gl.STATIC_DRAW);
-
-    // Create simple shader for dot
-    const dotVs = `#version 300 es
-      precision mediump float;
-      in vec3 aPosition;
-      uniform mat4 uMVP;
-      uniform vec3 uOffset;
-      uniform float uTime;
-      void main() {
-        float scale = 0.15 + sin(uTime * 2.0) * 0.05;
-        vec3 pos = aPosition * scale + uOffset;
-        gl_Position = uMVP * vec4(pos, 1.0);
-        gl_PointSize = 8.0;
-      }
-    `;
-
-    const dotFs = `#version 300 es
-      precision mediump float;
-      out vec4 fragColor;
-      void main() {
-        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-      }
-    `;
-
-    const dotProgram = this.compileProgram(dotVs, dotFs);
-    if (dotProgram) {
-      gl.useProgram(dotProgram);
-      
-      // Setup VAO for dot rendering
-      gl.bindVertexArray(dotVAO);
-      
-      const dotPosLoc = gl.getAttribLocation(dotProgram, 'aPosition');
-      gl.enableVertexAttribArray(dotPosLoc);
-      gl.vertexAttribPointer(dotPosLoc, 3, gl.FLOAT, false, 0, 0);
-      // Disable instance divisors for non-instanced drawing
-      gl.vertexAttribDivisor(dotPosLoc, 0);
-
-      const mvpLoc = gl.getUniformLocation(dotProgram, 'uMVP');
-      const offsetLoc = gl.getUniformLocation(dotProgram, 'uOffset');
-      const timeLoc = gl.getUniformLocation(dotProgram, 'uTime');
-
-      gl.uniformMatrix4fv(mvpLoc, false, mvpMatrix);
-      gl.uniform3f(offsetLoc, x, y, z);
-      gl.uniform1f(timeLoc, time);
-
-      gl.drawArrays(gl.POINTS, 0, 7);
-
-      gl.deleteProgram(dotProgram);
-    }
-
-    gl.deleteBuffer(dotBuffer);
-    gl.deleteVertexArray(dotVAO);
-    
-    // Restore main VAO for next frame
-    gl.bindVertexArray(this.vao);
-  }
-
-  /**
-   * Update camera rotation and zoom
-   */
-  private updateCamera(): void {
-    // Smooth zoom interpolation
-    this.zoom += (this.targetZoom - this.zoom) * 0.1;
-  }
-
-  /**
-   * Create Model-View-Projection matrix
-   */
-  private createMVPMatrix(aspect: number, time: number): Float32Array {
-    // Use manual rotation (from mouse drag) OR auto-rotation if not dragging
-    const rotY = this.isDragging ? this.rotationY : this.rotationY + time * 0.05;
-
-    // Projection matrix (perspective for TRUE 3D - objects get smaller with distance)
-    const fov = Math.PI / 3.5; // ~51 degrees FOV for good 3D perspective
-    const near = 0.1;
-    const far = 100.0;
-    const f = 1.0 / Math.tan(fov / 2);
-    const nf = 1.0 / (near - far);
-
-    const proj = new Float32Array(16);
-    proj[0] = f / aspect;
-    proj[5] = f;
-    proj[10] = (far + near) * nf;
-    proj[11] = -1;
-    proj[14] = 2 * far * near * nf;
-
-    // View matrix (camera position - high angle for clear 3D view of all floors)
-    const camDistance = this.zoom;
-    const camAngleX = 0.6; // ~34 degrees down from horizontal (good 3D overview angle)
-    const camAngleY = rotY;
-    
-    const camX = Math.sin(camAngleY) * Math.cos(camAngleX) * camDistance;
-    const camY = Math.sin(camAngleX) * camDistance + 3; // Elevated camera
-    const camZ = Math.cos(camAngleY) * Math.cos(camAngleX) * camDistance;
-
-    const view = this.lookAt(camX, camY, camZ, 0, 0, 0);
-
-    // Model matrix (identity)
-    const model = new Float32Array(16);
-    model[0] = 1; model[5] = 1; model[10] = 1; model[15] = 1;
-
-    // Multiply matrices: MVP = P * V * M
-    const vp = this.multiplyMatrices(proj, view);
-    const mvp = this.multiplyMatrices(vp, model);
-
-    return mvp;
-  }
-
-  /**
-   * Create lookAt matrix
-   */
-  private lookAt(eyeX: number, eyeY: number, eyeZ: number,
-                 centerX: number, centerY: number, centerZ: number): Float32Array {
-    const zx = eyeX - centerX;
-    const zy = eyeY - centerY;
-    const zz = eyeZ - centerZ;
-    const len = Math.sqrt(zx * zx + zy * zy + zz * zz);
-    const zNormX = zx / len;
-    const zNormY = zy / len;
-    const zNormZ = zz / len;
-
-    const xx = -zNormY * 0 + zNormZ * 0;
-    const xy = -zNormZ * 1 - zNormX * 0;
-    const xz = zNormX * 0 - (-zNormY) * 1;
-    const xLen = Math.sqrt(xx * xx + xy * xy + xz * xz);
-    const xNormX = xx / xLen;
-    const xNormY = xy / xLen;
-    const xNormZ = xz / xLen;
-
-    const yx = zNormY * xNormZ - zNormZ * xNormY;
-    const yy = zNormZ * xNormX - zNormX * xNormZ;
-    const yz = zNormX * xNormY - zNormY * xNormX;
-
-    const mat = new Float32Array(16);
-    mat[0] = xNormX; mat[4] = xNormY; mat[8] = xNormZ;
-    mat[1] = yx; mat[5] = yy; mat[9] = yz;
-    mat[2] = zNormX; mat[6] = zNormY; mat[10] = zNormZ;
-    mat[3] = 0; mat[7] = 0; mat[11] = 0;
-    mat[12] = -(xNormX * eyeX + xNormY * eyeY + xNormZ * eyeZ);
-    mat[13] = -(yx * eyeX + yy * eyeY + yz * eyeY);
-    mat[14] = -(zNormX * eyeX + zNormY * eyeY + zNormZ * eyeZ);
-    mat[15] = 1;
-
-    return mat;
-  }
-
-  /**
-   * Multiply two 4x4 matrices
-   */
-  private multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
-    const result = new Float32Array(16);
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        let sum = 0;
-        for (let k = 0; k < 4; k++) {
-          sum += a[i + k * 4] * b[k + j * 4];
-        }
-        result[i + j * 4] = sum;
-      }
-    }
-    return result;
-  }
-
-  /**
-   * Handle mouse/touch input for camera control
-   */
-  public handleInput(deltaX: number, deltaY: number, wheelDelta: number): void {
-    this.rotationY -= deltaX * 0.01;
-    this.rotationX -= deltaY * 0.01;
-    this.rotationX = Math.max(0.1, Math.min(Math.PI / 2.5, this.rotationX));
-    this.targetZoom += wheelDelta * 0.5;
-    this.targetZoom = Math.max(50, Math.min(300, this.targetZoom));
-  }
-
-  /**
-   * Cleanup resources
-   */
-  public destroy(): void {
-    if (this.gl) {
-      if (this.vao) this.gl.deleteVertexArray(this.vao);
-      if (this.vertexBuffer) this.gl.deleteBuffer(this.vertexBuffer);
-      if (this.indexBuffer) this.gl.deleteBuffer(this.indexBuffer);
-      if (this.instanceBuffer) this.gl.deleteBuffer(this.instanceBuffer);
-      if (this.program) this.gl.deleteProgram(this.program);
+  public render():void{
+    if(!this.gl||!this.program||this.cubeCount===0)return;
+    const gl=this.gl,prog=this.program;
+    this.time+=0.016;
+    if(this.autoRotate)this.cameraAngleY+=0.003;
+    gl.viewport(0,0,this.canvas.width,this.canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(prog);
+    const aspect=this.canvas.width/this.canvas.height;
+    const fov=Math.PI/4,near=0.1,far=100;
+    const proj=new Float32Array([1/(aspect*Math.tan(fov/2)),0,0,0,0,1/Math.tan(fov/2),0,0,0,0,-(far+near)/(far-near),-1,0,0,-2*far*near/(far-near),0]);
+    const cx=Math.sin(this.cameraAngleY)*Math.cos(this.cameraAngleX)*this.cameraDistance;
+    const cy=Math.sin(this.cameraAngleX)*this.cameraDistance;
+    const cz=Math.cos(this.cameraAngleY)*Math.cos(this.cameraAngleX)*this.cameraDistance;
+    const ex=cx,ey=cy+10,ez=cz;
+    const fLen=1/Math.sqrt(ex*ex+ey*ey+ez*ez);
+    const fx=-ex*fLen,fy=-ey*fLen,fz=-ez*fLen;
+    const sx=fz,sy=0,sz=-fx;
+    const sLen=1/Math.sqrt(sx*sx+sy*sy+sz*sz)||1;
+    const ux=fy*sz-fz*sy,uy=fz*sx-fx*sz,uz=fx*sy-fy*sx;
+    const view=new Float32Array([sx,ux,-fx,0,sy,uy,-fy,0,sz,uz,-fz,0,-(sx*ex+sy*ey+sz*ez),-(ux*ex+uy*ey+uz*ez),fx*ex+fy*ey+fz*ez,1]);
+    const mvp=new Float32Array(16);
+    for(let r=0;r<4;r++)for(let c=0;c<4;c++){let sum=0;for(let k=0;k<4;k++)sum+=view[r*4+k]*proj[k*4+c];mvp[r*4+c]=sum;}
+    gl.uniformMatrix4fv(gl.getUniformLocation(prog,'u_mvp'),false,mvp);
+    gl.uniform3f(gl.getUniformLocation(prog,'u_camPos'),ex,ey,ez);
+    gl.uniform1f(gl.getUniformLocation(prog,'u_time'),this.time);
+    gl.uniform1i(gl.getUniformLocation(prog,'u_floor'),this.currentFloor);
+    gl.uniform3fv(gl.getUniformLocation(prog,'u_positions'),this.cubePositions);
+    const posLoc=gl.getAttribLocation(prog,'a_position'),normLoc=gl.getAttribLocation(prog,'a_normal');
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vertexBuffer);
+    gl.enableVertexAttribArray(posLoc); gl.vertexAttribPointer(posLoc,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.normalBuffer);
+    gl.enableVertexAttribArray(normLoc); gl.vertexAttribPointer(normLoc,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);
+    for(let i=0;i<this.cubeCount;i++){
+      const tx=this.cubePositions[i*3],ty=this.cubePositions[i*3+1],tz=this.cubePositions[i*3+2];
+      const transform=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,tx,ty,tz,1]);
+      gl.uniformMatrix4fv(gl.getUniformLocation(prog,'u_cubeTransform'),false,transform);
+      gl.drawElements(gl.TRIANGLES,this.indices.length,gl.UNSIGNED_SHORT,0);
     }
   }
 }

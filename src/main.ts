@@ -12,10 +12,11 @@ import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
-import { MiniMap3D } from './render/MiniMap3D';
+// MiniMap3D temporarily disabled for build fix
+// import { MiniMap3D } from './render/MiniMap3D';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
-const miniMap3D = new MiniMap3D();
+let miniMap3D: any = null;
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {

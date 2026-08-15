@@ -259,6 +259,7 @@ function initNewGame() {
   if (world) {
     world = new World();
     generateTestMap();
+    if (renderer) renderer.updateMapDataTexture();
     
     // Respawn player at center of new map
     const playerX = getCurrentWorldWidth() / 2;

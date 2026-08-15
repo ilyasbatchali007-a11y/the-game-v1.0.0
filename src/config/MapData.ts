@@ -82,19 +82,23 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
     const spawnCol = Math.floor(cols / 2);
     const spawnRow = Math.floor(rows / 2);
     
-    // Next floor portal (ID 1000, blue) - placed to the right of spawn
+    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
     const nextPortalCol = spawnCol + 2;
     const nextPortalRow = spawnRow;
-    const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-    MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-    MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
+    if (nextPortalCol < cols && nextPortalRow < rows) {
+      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
+      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
+      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
+    }
     
-    // Previous floor portal (ID 1001, red) - placed to the left of spawn
+    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
     const prevPortalCol = spawnCol - 2;
     const prevPortalRow = spawnRow;
-    const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-    MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-    MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
+    if (prevPortalCol >= 0 && prevPortalRow < rows) {
+      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
+      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
+      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
+    }
     
   } else {
     // Floors 1-19 - Green chessboard pattern (all tiles are passable floor)

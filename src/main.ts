@@ -12,6 +12,7 @@ import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
+import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -370,6 +371,7 @@ const mapContainer = document.getElementById('map-container') as HTMLElement;
 const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
 let mapCtx: CanvasRenderingContext2D | null = null;
 let mapVisible = false;
+let map3DRenderer: MapWindow3DRenderer | null = null;
 
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
@@ -383,19 +385,19 @@ function initMapCanvas() {
   mapCanvas.width = Math.floor(width);
   mapCanvas.height = Math.floor(height);
   
-  mapCtx = mapCanvas.getContext('2d');
-  
-  // Clear with black background
-  if (mapCtx) {
-    mapCtx.fillStyle = '#000000';
-    mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
-    
-    // Draw a test rectangle to confirm rendering works
-    mapCtx.fillStyle = '#00ff00';
-    mapCtx.fillRect(50, 50, 100, 100);
-    mapCtx.fillStyle = '#ffffff';
-    mapCtx.font = '20px Arial';
-    mapCtx.fillText('MAP READY', 60, 180);
+  // Initialize 3D renderer for the map window
+  if (!map3DRenderer) {
+    map3DRenderer = new MapWindow3DRenderer(mapCanvas);
+    // Load the dungeon 3D model from the public folder (copied from 3d-objects)
+    map3DRenderer.loadOBJ('/3d-objects/root_dungeon_single_mesh.obj')
+      .then(() => {
+        console.log('[Main] 3D dungeon model loaded into map window');
+      })
+      .catch((err) => {
+        console.error('[Main] Failed to load 3D model:', err);
+      });
+  } else {
+    map3DRenderer.resize();
   }
 }
 

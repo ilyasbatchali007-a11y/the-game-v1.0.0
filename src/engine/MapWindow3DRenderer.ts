@@ -316,9 +316,9 @@ export class MapWindow3DRenderer {
     const centerY = -17.0; // Center the tall dungeon vertically
     
     // Scale factors - make the dungeon fit nicely in view
-    const scaleX = 0.6;
-    const scaleY = 0.05;  // Compress Y since dungeon is very tall  
-    const scaleZ = 0.4;
+    const scaleX = 0.8;
+    const scaleY = 0.08;  // Compress Y since dungeon is very tall  
+    const scaleZ = 0.6;
     const zOffset = zoom; // Use dynamic zoom instead of fixed -3.0
     
     // Build proper perspective projection matrix
@@ -327,40 +327,49 @@ export class MapWindow3DRenderer {
     const far = 100.0;
     const f = 1.0 / Math.tan(fov / 2);
     
-    // Projection matrix (column-major)
+    // Projection matrix (column-major for WebGL)
     const proj = new Float32Array([
       f / aspect, 0, 0, 0,
       0, f, 0, 0,
-      0, 0, (far + near) / (near - far), -1,
-      0, 0, (2 * far * near) / (near - far), 0
+      0, 0, (far + near) / (near - far), (2 * far * near) / (near - far),
+      0, 0, -1, 0
     ]);
     
     // View matrix (translate camera back and apply X rotation for tilt)
     const view = new Float32Array([
       1, 0, 0, 0,
-      0, cosX, -sinX, 0,
-      0, sinX, cosX, 0,
+      0, cosX, sinX, 0,
+      0, -sinX, cosX, 0,
       0, 0, zOffset, 1
     ]);
     
-    // Model matrix: Scale -> Translate to center -> Rotate Y
-    // Build rotation around Y axis
-    const rotY = new Float32Array([
-      cosY, 0, sinY, 0,
+    // Model matrix: Translate to center -> Scale -> Rotate Y
+    // First translate to center the model
+    const translate = new Float32Array([
+      1, 0, 0, 0,
       0, 1, 0, 0,
-      -sinY, 0, cosY, 0,
-      0, 0, 0, 1
+      0, 0, 1, 0,
+      0, centerY, 0, 1
     ]);
     
-    // Scale and translate matrix
-    const scaleTrans = new Float32Array([
+    // Then scale
+    const scale = new Float32Array([
       scaleX, 0, 0, 0,
       0, scaleY, 0, 0,
       0, 0, scaleZ, 0,
-      0, centerY * scaleY, 0, 1
+      0, 0, 0, 1
     ]);
     
-    // Multiply: Model = RotY * ScaleTrans
+    // Then rotate around Y
+    const rotY = new Float32Array([
+      cosY, 0, -sinY, 0,
+      0, 1, 0, 0,
+      sinY, 0, cosY, 0,
+      0, 0, 0, 1
+    ]);
+    
+    // Multiply: Model = RotY * Scale * Translate
+    const scaleTrans = this.multiplyMatrices(scale, translate);
     const model = this.multiplyMatrices(rotY, scaleTrans);
     
     // Multiply: MVP = P * V * M
@@ -374,12 +383,12 @@ export class MapWindow3DRenderer {
     const cosX = Math.cos(angleX);
     const sinX = Math.sin(angleX);
     
-    // Normal matrix is the inverse transpose of the model-view matrix
-    // For rotation-only transforms, it's just the rotation part
+    // Normal matrix is the inverse transpose of the model-view matrix (rotation part only)
+    // This is the correct inverse transpose for Y-then-X rotation
     return new Float32Array([
-      cosY, 0, -sinY, 0,
-      sinY * sinX, cosX, cosY * sinX, 0,
-      sinY * cosX, -sinX, cosY * cosX, 0,
+      cosY, sinY * sinX, sinY * cosX, 0,
+      0, cosX, -sinX, 0,
+      -sinY, cosY * sinX, cosY * cosX, 0,
       0, 0, 0, 1
     ]);
   }

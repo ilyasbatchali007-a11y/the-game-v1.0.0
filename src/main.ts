@@ -372,12 +372,12 @@ let mapCtx: CanvasRenderingContext2D | null = null;
 let mapVisible = false;
 
 function initMapCanvas() {
-  if (!mapCanvas) return;
+  if (!mapCanvas || !mapContainer) return;
   
-  // Set canvas size to match container
+  // Set canvas size to match container display size
   const rect = mapContainer.getBoundingClientRect();
-  mapCanvas.width = rect.width;
-  mapCanvas.height = rect.height;
+  mapCanvas.width = Math.floor(rect.width);
+  mapCanvas.height = Math.floor(rect.height);
   
   mapCtx = mapCanvas.getContext('2d');
   
@@ -392,7 +392,12 @@ function toggleMap() {
   mapVisible = !mapVisible;
   if (mapVisible) {
     mapContainer.classList.add('visible');
+    // Force reflow to ensure display is applied before initializing canvas
+    void mapContainer.offsetWidth;
     if (!mapCtx) {
+      initMapCanvas();
+    } else {
+      // Re-initialize to handle resize/zoom
       initMapCanvas();
     }
     // Future: Call renderMap() here when map logic is ready

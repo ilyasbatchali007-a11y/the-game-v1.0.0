@@ -1,6 +1,7 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
 import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
+import { Map3DRenderer } from './render/Map3DRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
 // 2. Fixed export/import style for MovementSystem (switched to default or named depending on your file structure)
@@ -14,6 +15,7 @@ import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
+const map3DRenderer = new Map3DRenderer();
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {
@@ -370,6 +372,7 @@ const mapContainer = document.getElementById('map-container') as HTMLElement;
 const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
 let mapCtx: CanvasRenderingContext2D | null = null;
 let mapVisible = false;
+let map3DInitialized = false;
 
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
@@ -383,10 +386,27 @@ function initMapCanvas() {
   mapCanvas.width = Math.floor(width);
   mapCanvas.height = Math.floor(height);
   
-  mapCtx = mapCanvas.getContext('2d');
+  // Initialize 3D renderer on first open
+  if (!map3DInitialized) {
+    map3DInitialized = map3DRenderer.init(mapCanvas);
+    if (map3DInitialized) {
+      console.log('[Main] 3D Map Renderer initialized successfully');
+      // Update floor assignment for current floor
+      map3DRenderer.updateFloorAssignment(mapRenderer.getCurrentFloorId());
+    } else {
+      console.warn('[Main] Falling back to 2D map rendering');
+      mapCtx = mapCanvas.getContext('2d');
+    }
+  } else {
+    // Resize existing 3D renderer
+    if (map3DInitialized) {
+      map3DRenderer.resize(Math.floor(width), Math.floor(height));
+    }
+  }
   
-  // Clear with black background
-  if (mapCtx) {
+  // For 2D fallback only
+  if (mapCtx && !map3DInitialized) {
+    // Clear with black background
     mapCtx.fillStyle = '#000000';
     mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
     
@@ -399,15 +419,34 @@ function initMapCanvas() {
   }
 }
 
+function renderMap(time: number) {
+  if (map3DInitialized) {
+    map3DRenderer.render(time);
+  }
+}
+
 function toggleMap() {
   mapVisible = !mapVisible;
   if (mapVisible) {
     mapContainer.classList.add('visible');
     // Initialize canvas immediately with fixed dimensions
     initMapCanvas();
-    // Future: Call renderMap() here when map logic is ready
   } else {
     mapContainer.classList.remove('visible');
+  }
+}
+
+// Animation loop for map rendering when visible
+let mapAnimationId: number | null = null;
+function startMapAnimation() {
+  function animate(time: number) {
+    if (mapVisible && map3DInitialized) {
+      renderMap(time);
+      mapAnimationId = requestAnimationFrame(animate);
+    }
+  }
+  if (!mapAnimationId) {
+    mapAnimationId = requestAnimationFrame(animate);
   }
 }
 window.addEventListener('keydown', (e) => {
@@ -415,6 +454,12 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') {
     if (!gameRunning) return; // Only allow map toggle during gameplay
     toggleMap();
+    if (mapVisible) {
+      startMapAnimation();
+    } else if (mapAnimationId) {
+      cancelAnimationFrame(mapAnimationId);
+      mapAnimationId = null;
+    }
     return; // Don't process other inputs when toggling map
   }
 
@@ -426,6 +471,11 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
     mapRenderer.switchFloor(newFloor);
+    
+    // Update 3D map floor assignment
+    if (map3DInitialized) {
+      map3DRenderer.updateFloorAssignment(newFloor);
+    }
     
     // Update renderer's map data texture after floor switch
     if (renderer) {
@@ -452,6 +502,11 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
     mapRenderer.switchFloor(newFloor);
+    
+    // Update 3D map floor assignment
+    if (map3DInitialized) {
+      map3DRenderer.updateFloorAssignment(newFloor);
+    }
     
     // Update renderer's map data texture after floor switch
     if (renderer) {

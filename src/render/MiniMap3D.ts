@@ -79,8 +79,8 @@ export class MiniMap3D {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
 
-    // Load and parse OBJ file
-    await this.loadOBJFile('src/3d-objects/root_dungeon_single_mesh.obj');
+    // Load and parse OBJ file - path relative to public directory
+    await this.loadOBJFile('root_dungeon_single_mesh.obj');
 
     // Compile shaders and create program
     if (!this.createShaderProgram()) {
@@ -121,9 +121,6 @@ export class MiniMap3D {
     const vertices: [number, number, number][] = [];
     const faces: number[][] = [];
     
-    let currentVertexOffset = 0;
-    const cubeBoundaries: number[] = []; // Store vertex indices where each cube starts
-    
     for (const line of lines) {
       const trimmed = line.trim();
       
@@ -141,21 +138,16 @@ export class MiniMap3D {
           return vertexIndex;
         });
         faces.push(faceVertices);
-        
-        // Detect cube boundaries by checking if we have 12 faces (one cube)
-        if (faces.length % 12 === 0) {
-          cubeBoundaries.push(vertices.length);
-        }
       }
     }
     
-    // Calculate how many complete cubes we have
+    // Calculate how many complete cubes we have (12 faces per cube)
     this.cubeCount = Math.floor(faces.length / 12);
     console.log('[MiniMap3D] Parsed OBJ:', vertices.length, 'vertices,', faces.length, 'faces,', this.cubeCount, 'cubes');
     
-    // If we found cubes in OBJ, use them; otherwise generate procedurally
-    if (this.cubeCount > 0) {
-      // Build indexed geometry for instanced rendering
+    // If we found cubes in OBJ, extract one prototype cube; otherwise generate procedurally
+    if (this.cubeCount > 0 && vertices.length >= 8) {
+      // Extract first 8 unique vertices as prototype cube
       this.buildCubeGeometry(vertices, faces);
     } else {
       this.generateProceduralCubes();
@@ -163,45 +155,58 @@ export class MiniMap3D {
   }
 
   /**
-   * Build optimized geometry from parsed OBJ data
+   * Build optimized geometry from parsed OBJ data - extract single prototype cube
    */
   private buildCubeGeometry(vertices: [number, number, number][], faces: number[][]): void {
-    // For instanced rendering, we need a single prototype cube
-    // Extract the first cube's vertices (first 8 unique vertices)
-    const prototypeVertices: number[] = [];
-    const seenVertices = new Set<string>();
+    // For instanced rendering, we need a single prototype cube (8 vertices, 12 faces)
+    // Extract the first cube's vertices (first 12 faces = one cube)
+    const firstCubeFaces = faces.slice(0, 12);
     
-    for (let i = 0; i < vertices.length && prototypeVertices.length < 24; i++) {
-      const v = vertices[i];
-      const key = `${v[0].toFixed(2)},${v[1].toFixed(2)},${v[2].toFixed(2)}`;
-      if (!seenVertices.has(key)) {
-        seenVertices.add(key);
+    // Collect all vertex indices used by the first cube's faces
+    const firstCubeVertexIndices = new Set<number>();
+    for (const face of firstCubeFaces) {
+      for (const vi of face) {
+        firstCubeVertexIndices.add(vi);
+      }
+    }
+    
+    // Sort indices to maintain consistent ordering
+    const sortedIndices = Array.from(firstCubeVertexIndices).sort((a, b) => a - b);
+    
+    // Extract unique vertices for the first cube in sorted order
+    const prototypeVertices: number[] = [];
+    const indexMap = new Map<number, number>(); // Maps original vertex index to new index
+    
+    for (let i = 0; i < sortedIndices.length; i++) {
+      const origIndex = sortedIndices[i];
+      if (origIndex < vertices.length) {
+        const v = vertices[origIndex];
+        indexMap.set(origIndex, i);
         prototypeVertices.push(v[0], v[1], v[2]);
       }
     }
     
-    // Build indices for the prototype cube (first 12 faces)
+    // Build indices for the prototype cube using remapped indices
     const prototypeIndices: number[] = [];
-    for (let i = 0; i < 12 && i * 3 < faces[0]?.length; i++) {
-      const face = faces[i];
-      if (face) {
-        // Remap to prototype vertex indices
-        for (const vi of face) {
-          if (vi < 8) {
-            prototypeIndices.push(vi);
-          }
+    for (const face of firstCubeFaces) {
+      for (const origIndex of face) {
+        const mappedIndex = indexMap.get(origIndex);
+        if (mappedIndex !== undefined) {
+          prototypeIndices.push(mappedIndex);
         }
       }
     }
     
-    // Use standard unit cube if parsing failed
-    if (prototypeVertices.length < 24) {
+    // Verify we have a valid cube (8 vertices, 36 indices for 12 triangles)
+    if (prototypeVertices.length < 24 || prototypeIndices.length < 36) {
+      console.warn('[MiniMap3D] Invalid cube geometry from OBJ, using procedural fallback');
       this.generateProceduralCubes();
       return;
     }
     
     this.cubeVertices = new Float32Array(prototypeVertices);
     this.cubeIndices = new Uint16Array(prototypeIndices);
+    console.log('[MiniMap3D] Built prototype cube with', prototypeVertices.length / 3, 'vertices and', prototypeIndices.length, 'indices');
   }
 
   /**

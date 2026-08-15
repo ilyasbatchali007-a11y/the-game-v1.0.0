@@ -166,23 +166,18 @@ void main() {
       float baseTileId = mapData.r * 1024.0;  // Tile ID stored in R channel
       float isStatic = mapData.g;              // Static flag stored in G channel
       
-      // Void check: if tileId is 0 and isStatic, skip rendering (transparent)
-      if (baseTileId < 0.5 && isStatic > 0.5) {
-        discard; // Void tile - don't render anything
-      }
-      
       // Portal tile check: render special colors for portal tiles
       if (baseTileId > 999.5) {
-        // Portal tiles - use solid colors instead of atlas textures
+        // Portal tiles - use solid bright colors instead of atlas textures
         if (baseTileId < 1000.5) {
-          // Tile ID 1000: Next floor portal (blue)
-          vec3 portalBlue = vec3(0.2, 0.4, 1.0);
-          fragColor = vec4(portalBlue, 1.0);
+          // Tile ID 1000: Next floor portal (Bright Cyan/Blue)
+          vec3 portalColor = vec3(0.0, 0.8, 1.0);
+          fragColor = vec4(portalColor, 1.0);
           return;
         } else if (baseTileId < 1001.5) {
-          // Tile ID 1001: Previous floor portal (red)
-          vec3 portalRed = vec3(1.0, 0.2, 0.2);
-          fragColor = vec4(portalRed, 1.0);
+          // Tile ID 1001: Previous floor portal (Bright Magenta/Pink)
+          vec3 portalColor = vec3(1.0, 0.0, 0.8);
+          fragColor = vec4(portalColor, 1.0);
           return;
         }
       }

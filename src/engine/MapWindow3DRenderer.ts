@@ -11,8 +11,12 @@ export class MapWindow3DRenderer {
   private vertexBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
   private rotationY: number = 0;
+  private rotationX: number = 0.3; // Slight tilt for better view
   private isRunning: boolean = false;
   private animationFrameId: number = 0;
+  private isDragging: boolean = false;
+  private lastMouseX: number = 0;
+  private lastMouseY: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -61,9 +65,72 @@ export class MapWindow3DRenderer {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
 
+    // Setup mouse controls for rotation
+    this.setupMouseControls();
+
     // Start animation loop
     this.isRunning = true;
     this.animate();
+  }
+
+  private setupMouseControls(): void {
+    this.canvas.addEventListener('mousedown', (e) => {
+      this.isDragging = true;
+      this.lastMouseX = e.clientX;
+      this.lastMouseY = e.clientY;
+    });
+
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (!this.isDragging) return;
+      
+      const deltaX = e.clientX - this.lastMouseX;
+      const deltaY = e.clientY - this.lastMouseY;
+      
+      this.rotationY += deltaX * 0.01;
+      this.rotationX += deltaY * 0.01;
+      
+      // Clamp vertical rotation to avoid flipping
+      this.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotationX));
+      
+      this.lastMouseX = e.clientX;
+      this.lastMouseY = e.clientY;
+    });
+
+    this.canvas.addEventListener('mouseup', () => {
+      this.isDragging = false;
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.isDragging = false;
+    });
+
+    // Touch support for mobile
+    this.canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        this.isDragging = true;
+        this.lastMouseX = e.touches[0].clientX;
+        this.lastMouseY = e.touches[0].clientY;
+      }
+    });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      if (!this.isDragging || e.touches.length !== 1) return;
+      
+      const deltaX = e.touches[0].clientX - this.lastMouseX;
+      const deltaY = e.touches[0].clientY - this.lastMouseY;
+      
+      this.rotationY += deltaX * 0.01;
+      this.rotationX += deltaY * 0.01;
+      
+      this.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotationX));
+      
+      this.lastMouseX = e.touches[0].clientX;
+      this.lastMouseY = e.touches[0].clientY;
+    });
+
+    this.canvas.addEventListener('touchend', () => {
+      this.isDragging = false;
+    });
   }
 
   private createShader(type: number, source: string): WebGLShader | null {
@@ -171,7 +238,7 @@ export class MapWindow3DRenderer {
     
     // Create transformation matrix with proper perspective and view
     const aspect = this.canvas.width / this.canvas.height;
-    const matrix = this.createModelViewProjectionMatrix(this.rotationY, aspect);
+    const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect);
     
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniform4f(colorLocation, 0.8, 0.6, 0.3, 1.0); // Brownish color for dungeon
@@ -179,14 +246,18 @@ export class MapWindow3DRenderer {
     // Draw
     gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
     
-    // Rotate for next frame
-    this.rotationY += 0.01;
+    // Auto-rotate only when not dragging
+    if (!this.isDragging) {
+      this.rotationY += 0.005; // Slower auto-rotation
+    }
   }
 
-  private createModelViewProjectionMatrix(angleY: number, aspect: number): Float32Array {
-    // Model rotation around Y axis
-    const cosR = Math.cos(angleY);
-    const sinR = Math.sin(angleY);
+  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number): Float32Array {
+    // Model rotation around Y and X axes
+    const cosY = Math.cos(angleY);
+    const sinY = Math.sin(angleY);
+    const cosX = Math.cos(angleX);
+    const sinX = Math.sin(angleX);
     
     // The dungeon model coordinates are roughly:
     // X: -1 to 1, Y: 0 to 34 (tall), Z: -7 to 7
@@ -214,21 +285,33 @@ export class MapWindow3DRenderer {
       0, 0, (2 * far * near) / (near - far), 0
     ]);
     
-    // View matrix (translate camera back)
+    // View matrix (translate camera back and apply X rotation for tilt)
     const view = new Float32Array([
       1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
+      0, cosX, -sinX, 0,
+      0, sinX, cosX, 0,
       0, 0, zOffset, 1
     ]);
     
-    // Model matrix (rotation + scale + center)
-    const model = new Float32Array([
-      cosR * scaleX, 0, -sinR * scaleX, 0,
+    // Model matrix: Scale -> Translate to center -> Rotate Y
+    // Build rotation around Y axis
+    const rotY = new Float32Array([
+      cosY, 0, sinY, 0,
+      0, 1, 0, 0,
+      -sinY, 0, cosY, 0,
+      0, 0, 0, 1
+    ]);
+    
+    // Scale and translate matrix
+    const scaleTrans = new Float32Array([
+      scaleX, 0, 0, 0,
       0, scaleY, 0, 0,
-      sinR * scaleZ, 0, cosR * scaleZ, 0,
+      0, 0, scaleZ, 0,
       0, centerY * scaleY, 0, 1
     ]);
+    
+    // Multiply: Model = RotY * ScaleTrans
+    const model = this.multiplyMatrices(rotY, scaleTrans);
     
     // Multiply: MVP = P * V * M
     const vm = this.multiplyMatrices(view, model);

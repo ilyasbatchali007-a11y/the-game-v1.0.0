@@ -343,19 +343,20 @@ export class MapWindow3DRenderer {
     const proj = new Float32Array([
       f / aspect, 0, 0, 0,
       0, f, 0, 0,
-      0, 0, (far + near) / (near - far), (2 * far * near) / (near - far),
-      0, 0, -1, 0
+      0, 0, (far + near) / (near - far), -1,
+      0, 0, (2 * far * near) / (near - far), 0
     ]);
     
-    // View matrix (translate camera back and apply X rotation for tilt)
+    // View matrix - just translate camera back along Z axis
+    // No rotation here - rotation is applied to the model
     const view = new Float32Array([
       1, 0, 0, 0,
-      0, cosX, sinX, 0,
-      0, -sinX, cosX, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
       0, 0, zOffset, 1
     ]);
     
-    // Model matrix: Translate to center -> Scale -> Rotate Y
+    // Model matrix: Translate to center -> Scale -> Rotate X -> Rotate Y
     // First translate to center the model
     const translate = new Float32Array([
       1, 0, 0, 0,
@@ -372,7 +373,15 @@ export class MapWindow3DRenderer {
       0, 0, 0, 1
     ]);
     
-    // Then rotate around Y
+    // Then rotate around X axis (tilt)
+    const rotX = new Float32Array([
+      1, 0, 0, 0,
+      0, cosX, sinX, 0,
+      0, -sinX, cosX, 0,
+      0, 0, 0, 1
+    ]);
+    
+    // Then rotate around Y axis (spin)
     const rotY = new Float32Array([
       cosY, 0, -sinY, 0,
       0, 1, 0, 0,
@@ -380,9 +389,10 @@ export class MapWindow3DRenderer {
       0, 0, 0, 1
     ]);
     
-    // Multiply: Model = RotY * Scale * Translate
-    const scaleTrans = this.multiplyMatrices(scale, translate);
-    const model = this.multiplyMatrices(rotY, scaleTrans);
+    // Multiply: Model = RotY * RotX * Scale * Translate
+    const temp1 = this.multiplyMatrices(scale, translate);
+    const temp2 = this.multiplyMatrices(rotX, temp1);
+    const model = this.multiplyMatrices(rotY, temp2);
     
     // Multiply: MVP = P * V * M
     const vm = this.multiplyMatrices(view, model);
@@ -396,11 +406,12 @@ export class MapWindow3DRenderer {
     const sinX = Math.sin(angleX);
     
     // Normal matrix is the inverse transpose of the model-view matrix (rotation part only)
-    // This is the correct inverse transpose for Y-then-X rotation
+    // For RotY * RotX, the normal matrix is the transpose (since rotation matrices are orthogonal)
+    // This gives us: RotX^T * RotY^T = Rot(-X) * Rot(-Y)
     return new Float32Array([
-      cosY, sinY * sinX, sinY * cosX, 0,
-      0, cosX, -sinX, 0,
-      -sinY, cosY * sinX, cosY * cosX, 0,
+      cosY, 0, sinY, 0,
+      sinY * sinX, cosX, -cosY * sinX, 0,
+      sinY * cosX, -sinX, cosY * cosX, 0,
       0, 0, 0, 1
     ]);
   }

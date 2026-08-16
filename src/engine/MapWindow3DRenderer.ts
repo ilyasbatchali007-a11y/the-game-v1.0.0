@@ -743,7 +743,8 @@ export class MapWindow3DRenderer {
     
     const gl = this.gl;
     
-    // Disable depth writing but keep depth testing for X-ray effect
+    // Disable depth testing AND depth writing for true X-ray effect
+    gl.disable(gl.DEPTH_TEST);
     gl.depthMask(false);
     gl.disable(gl.CULL_FACE);
     gl.enable(gl.BLEND);
@@ -795,6 +796,7 @@ export class MapWindow3DRenderer {
     gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
     
     // Restore state
+    gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.BLEND);

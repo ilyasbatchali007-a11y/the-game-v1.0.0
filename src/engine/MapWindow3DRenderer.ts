@@ -153,6 +153,8 @@ export class MapWindow3DRenderer {
   private initGlowingBlock(): void {
     this.glowingBlock = new GlowingBlock(0.5);
     this.createBlockBuffers();
+    // Show the block by default so it's visible
+    this.glowingBlock.show();
   }
 
   private createBlockBuffers(): void {

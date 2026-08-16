@@ -651,6 +651,11 @@ export class MapWindow3DRenderer {
     
     const gl = this.gl;
     
+    // Determine zoom focus point (glowing block if visible, otherwise model center)
+    const focusPoint = (this.glowingBlock && this.glowingBlock.visible) 
+      ? this.glowingBlock.position 
+      : { x: 0, y: 0, z: 0 };
+    
     // Clear canvas (depth test already enabled in init)
     gl.clearColor(0.1, 0.1, 0.12, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -693,9 +698,9 @@ export class MapWindow3DRenderer {
     // Bind index buffer
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     
-    // Create transformation matrix with proper perspective and view
+    // Create transformation matrix with proper perspective and view, focused on glowing block
     const aspect = this.canvas.width / this.canvas.height;
-    const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+    const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom, focusPoint);
     const normalMatrix = this.createNormalMatrix(this.rotationY, this.rotationX);
     
     // Check for NaN/Infinity in matrices
@@ -751,9 +756,9 @@ export class MapWindow3DRenderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
     
-    // Get block position and apply same transformation as main model
+    // Get block position and apply same transformation as main model (focused on block itself)
     const aspect = this.canvas.width / this.canvas.height;
-    const baseMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+    const baseMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom, this.glowingBlock.position);
     
     // Create translation matrix for block position
     const tx = this.glowingBlock.position.x;
@@ -807,7 +812,7 @@ export class MapWindow3DRenderer {
     gl.uniformMatrix4fv(matrixLocation, false, baseMatrix);
   }
 
-  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number): Float32Array {
+  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number, focusPoint: { x: number, y: number, z: number }): Float32Array {
     // Model rotation around Y and X axes
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
@@ -857,7 +862,7 @@ export class MapWindow3DRenderer {
       0, 0, projW, 0                // Column 3
     ]);
     
-    // View matrix - translate camera back along Z axis
+    // View matrix - translate camera back along Z axis AND translate to focus point
     // Camera position is (0, 0, -zoom) because zoom is negative (e.g., -3 means camera at z=3)
     // View matrix translates world by -cameraPos, so we use -(-zoom) = zoom? No.
     // If zoom = -3, we want camera at z=3. View matrix translates by -3.
@@ -868,11 +873,12 @@ export class MapWindow3DRenderer {
     // Translation = -(-zoom) = zoom. Yes, index 14 = zoom is correct IF zoom is the negation of camera Z.
     // Let's verify: zoom=-3 -> camera at z=3 -> translate world by -3. Index 14 = -3. Correct.
     
+    // Apply focus point translation - translate world so focus point is at origin
     const view = new Float32Array([
       1, 0, 0, 0,
       0, 1, 0, 0,
       0, 0, 1, 0,
-      0, 0, zoom, 1  // Translation in Z (column-major index 14)
+      -focusPoint.x, -focusPoint.y, zoom - focusPoint.z, 1  // Translate to focus on glowing block
     ]);
     
     // Model matrix: Scale -> Rotate X -> Rotate Y

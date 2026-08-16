@@ -3,6 +3,7 @@
 __pycache__/
 *.o
 *.obj
+*.class
 *.exe
 *.dll
 *.so
@@ -18,7 +19,7 @@ venv/
 .venv/
 .env
 .env.local
-*.env.*
+.env.*
 
 # Logs and temp files
 *.log
@@ -26,7 +27,7 @@ venv/
 *.swp
 *.swo
 
-# Editors and IDEs
+# Editors
 .vscode/
 .idea/
 *.swp
@@ -36,12 +37,17 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Coverage and testing
+# Coverage
 coverage/
 htmlcov/
 .coverage
-.pytest_cache/
+
+# Python specific
 .mypy_cache/
+.pytest_cache/
+
+# Java/Gradle
+.gradle/
 
 # Compressed files
 *.zip
@@ -66,12 +72,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
-# Gradle
-.gradle/
-
-# Julia
-julia-*/
-
-# Zig
-zig*/

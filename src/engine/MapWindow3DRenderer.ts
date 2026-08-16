@@ -177,13 +177,17 @@ export class MapWindow3DRenderer {
     if (!this.gl) return null;
     
     const shader = this.gl.createShader(type);
-    if (!shader) return null;
+    if (!shader) {
+      this.logBug('[BUG] Failed to create shader object');
+      return null;
+    }
     
     this.gl.shaderSource(shader, source);
     this.gl.compileShader(shader);
     
     if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-      console.error('Shader compile error:', this.gl.getShaderInfoLog(shader));
+      const errorLog = this.gl.getShaderInfoLog(shader);
+      this.logBug(`[BUG] Shader compile error: ${errorLog}`);
       this.gl.deleteShader(shader);
       return null;
     }
@@ -195,14 +199,18 @@ export class MapWindow3DRenderer {
     if (!this.gl) return null;
     
     const program = this.gl.createProgram();
-    if (!program) return null;
+    if (!program) {
+      this.logBug('[BUG] Failed to create program object');
+      return null;
+    }
     
     this.gl.attachShader(program, vs);
     this.gl.attachShader(program, fs);
     this.gl.linkProgram(program);
     
     if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-      console.error('Program link error:', this.gl.getProgramInfoLog(program));
+      const errorLog = this.gl.getProgramInfoLog(program);
+      this.logBug(`[BUG] Program link error: ${errorLog}`);
       this.gl.deleteProgram(program);
       return null;
     }
@@ -221,22 +229,40 @@ export class MapWindow3DRenderer {
         
         // Create vertex buffer
         this.vertexBuffer = this.gl.createBuffer();
+        if (!this.vertexBuffer) {
+          this.logBug('[BUG] Failed to create vertex buffer');
+          return;
+        }
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.vertices, this.gl.STATIC_DRAW);
         
+        // Check for buffer errors
+        if (this.gl.getError() !== this.gl.NO_ERROR) {
+          this.logBug('[BUG] Error setting vertex buffer data');
+        }
+        
         // Create normal buffer
         this.normalBuffer = this.gl.createBuffer();
+        if (!this.normalBuffer) {
+          this.logBug('[BUG] Failed to create normal buffer');
+          return;
+        }
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.normals, this.gl.STATIC_DRAW);
         
         // Create index buffer
         this.indexBuffer = this.gl.createBuffer();
+        if (!this.indexBuffer) {
+          this.logBug('[BUG] Failed to create index buffer');
+          return;
+        }
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
         this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.model.indices, this.gl.STATIC_DRAW);
         
         console.log(`[MapWindow3DRenderer] Buffers created: ${this.model.vertexCount} vertices`);
       }
     } catch (error) {
+      this.logBug(`[BUG] Failed to load OBJ: ${error}`);
       console.error('[MapWindow3DRenderer] Failed to load OBJ:', error);
     }
   }
@@ -274,6 +300,13 @@ export class MapWindow3DRenderer {
   };
 
   private logFrameCount = 0;
+  
+  /**
+   * Centralized bug logging method - all bug reports go through this
+   */
+  private logBug(message: string): void {
+    console.error(`[3D BUG] ${message}`);
+  }
 
   private logDebugInfo(): void {
     this.logFrameCount++;
@@ -373,6 +406,12 @@ export class MapWindow3DRenderer {
     gl.clearColor(0.1, 0.1, 0.12, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
+    // Check for clear errors
+    const clearError = gl.getError();
+    if (clearError !== gl.NO_ERROR) {
+      this.logBug(`[BUG] Error clearing buffer: ${clearError}`);
+    }
+    
     // Use program
     gl.useProgram(this.program);
     
@@ -383,6 +422,14 @@ export class MapWindow3DRenderer {
     const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
     const colorLocation = gl.getUniformLocation(this.program, 'u_color');
     const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
+    
+    // Check for location errors
+    if (positionLocation < 0 || normalLocation < 0) {
+      this.logBug('[BUG] Failed to get attribute locations');
+    }
+    if (!matrixLocation || !normalMatrixLocation || !colorLocation || !lightDirLocation) {
+      this.logBug('[BUG] Failed to get uniform locations');
+    }
     
     // Enable vertex attributes
     gl.enableVertexAttribArray(positionLocation);
@@ -401,6 +448,14 @@ export class MapWindow3DRenderer {
     const matrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
     const normalMatrix = this.createNormalMatrix(this.rotationY, this.rotationX);
     
+    // Check for NaN/Infinity in matrices
+    if (matrix.some(v => isNaN(v) || !isFinite(v))) {
+      this.logBug('[BUG] MVP Matrix contains NaN or Infinity values!');
+    }
+    if (normalMatrix.some(v => isNaN(v) || !isFinite(v))) {
+      this.logBug('[BUG] Normal Matrix contains NaN or Infinity values!');
+    }
+    
     // DEBUG: Log diagnostic info to console (consolidated)
     this.logDebugInfo();
     
@@ -409,8 +464,20 @@ export class MapWindow3DRenderer {
     gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon
     gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3); // Light from above-right
     
+    // Check for uniform errors
+    const uniformError = gl.getError();
+    if (uniformError !== gl.NO_ERROR) {
+      this.logBug(`[BUG] Error setting uniforms: ${uniformError}`);
+    }
+    
     // Draw
     gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
+    
+    // Check for draw errors
+    const drawError = gl.getError();
+    if (drawError !== gl.NO_ERROR) {
+      this.logBug(`[BUG] Error during draw call: ${drawError}`);
+    }
     
     // Auto-rotate only when not dragging (commented out to stop constant rotation)
     // if (!this.isDragging) {

@@ -637,6 +637,19 @@ export class MapWindow3DRenderer {
     }
     return result;
   }
+  
+  /**
+   * [3D BUG DETECTOR] Check if matrix has extreme values that indicate errors
+   */
+  private hasExtremeValues(matrix: Float32Array, threshold: number = 100): boolean {
+    for (let i = 0; i < 16; i++) {
+      const val = matrix[i];
+      if (!isFinite(val) || Math.abs(val) > threshold) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   public destroy(): void {
     this.isRunning = false;

@@ -72,6 +72,9 @@ export class MapWindow3DRenderer {
   // Glowing block for X-ray visualization
   private glowingBlock: GlowingBlock | null = null;
   private blockVertexBuffers: { position: WebGLBuffer | null, index: WebGLBuffer | null } | null = null;
+  
+  // Model bounds for positioning the glowing block
+  private modelBounds: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -155,6 +158,60 @@ export class MapWindow3DRenderer {
     this.createBlockBuffers();
     // Show the block by default so it's visible
     this.glowingBlock.show();
+    
+    // Position at lowest point once model is loaded
+    if (this.modelBounds) {
+      this.positionGlowingBlockAtLowest();
+    }
+  }
+
+  /**
+   * Calculate the bounding box of the loaded model
+   */
+  private calculateModelBounds(): void {
+    if (!this.model || this.model.vertices.length === 0) {
+      this.modelBounds = null;
+      return;
+    }
+
+    const verts = this.model.vertices;
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < verts.length; i += 3) {
+      const x = verts[i];
+      const y = verts[i + 1];
+      const z = verts[i + 2];
+      
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+
+    this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
+    console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}]`);
+    
+    // Automatically position the glowing block at the lowest point
+    this.positionGlowingBlockAtLowest();
+  }
+
+  /**
+   * Position the glowing block at the lowest point of the model
+   */
+  private positionGlowingBlockAtLowest(): void {
+    if (!this.glowingBlock || !this.modelBounds) return;
+    
+    // Position at center X/Z and lowest Y
+    const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
+    const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
+    const lowestY = this.modelBounds.minY;
+    
+    this.glowingBlock.setPosition(centerX, lowestY, centerZ);
+    console.log(`[MapWindow3DRenderer] Glowing block positioned at lowest point: (${centerX.toFixed(2)}, ${lowestY.toFixed(2)}, ${centerZ.toFixed(2)})`);
   }
 
   private createBlockBuffers(): void {
@@ -345,6 +402,9 @@ export class MapWindow3DRenderer {
       if (this.gl && this.model) {
         // The OBJLoader already normalizes the model, so we use the data directly
         console.log('[MapWindow3DRenderer] Using pre-normalized model data');
+        
+        // Calculate model bounds for positioning the glowing block
+        this.calculateModelBounds();
         
         // Create vertex buffer
         this.vertexBuffer = this.gl.createBuffer();

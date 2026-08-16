@@ -302,8 +302,8 @@ export class MapWindow3DRenderer {
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.5 : -0.5;
-      this.zoomLevel = Math.max(-20.0, Math.min(5.0, this.zoomLevel + delta));
-      this.updateCamera();
+      this.zoom = Math.max(-20.0, Math.min(5.0, this.zoom + delta));
+      this.render();
     }, { passive: false });
 
     // Touch support for mobile

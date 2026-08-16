@@ -205,10 +205,10 @@ export class MapWindow3DRenderer {
   private positionGlowingBlockAtLowest(): void {
     if (!this.glowingBlock || !this.modelBounds) return;
     
-    // Position at center X/Z and lowest Y
+    // Position at center X/Z and lowest Y (with small offset)
     const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
     const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
-    const lowestY = this.modelBounds.minY;
+    const lowestY = this.modelBounds.minY + 0.1;
     
     this.glowingBlock.setPosition(centerX, lowestY, centerZ);
     console.log(`[MapWindow3DRenderer] Glowing block positioned at lowest point: (${centerX.toFixed(2)}, ${lowestY.toFixed(2)}, ${centerZ.toFixed(2)})`);

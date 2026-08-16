@@ -39,6 +39,11 @@ export class MapWindow3DRenderer {
     // Set canvas size
     this.resize();
 
+    // Add window resize listener to handle dynamic resizing
+    window.addEventListener('resize', () => {
+      this.resize();
+    });
+
     // Create shader program
     const vsSource = `
       attribute vec3 a_position;

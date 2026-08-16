@@ -216,47 +216,13 @@ export class MapWindow3DRenderer {
       console.log('[MapWindow3DRenderer] Model loaded:', this.model.vertexCount, 'vertices');
       
       if (this.gl && this.model) {
-        // 1. Calculate Bounds and Center to normalize the model
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-
-        const verts = this.model.vertices;
-        for (let i = 0; i < verts.length; i += 3) {
-          const x = verts[i];
-          const y = verts[i + 1];
-          const z = verts[i + 2];
-          if (x < minX) minX = x; if (x > maxX) maxX = x;
-          if (y < minY) minY = y; if (y > maxY) maxY = y;
-          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
-        }
-
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        const centerZ = (minZ + maxZ) / 2;
-
-        const width = maxX - minX;
-        const height = maxY - minY;
-        const depth = maxZ - minZ;
-        const maxDim = Math.max(width, height, depth);
+        // The OBJLoader already normalizes the model, so we use the data directly
+        console.log('[MapWindow3DRenderer] Using pre-normalized model data');
         
-        // Scale factor to fit within -1 to 1 range (with some padding)
-        const scaleFactor = maxDim > 0 ? 1.8 / maxDim : 1.0;
-
-        console.log(`[Model Norm] Original Bounds: X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
-        console.log(`[Model Norm] Scale Factor: ${scaleFactor.toFixed(4)}`);
-
-        // 2. Normalize Vertices (Center at 0,0,0 and Scale)
-        const normalizedVertices = new Float32Array(verts.length);
-        for (let i = 0; i < verts.length; i += 3) {
-          normalizedVertices[i]     = (verts[i] - centerX) * scaleFactor;
-          normalizedVertices[i + 1] = (verts[i + 1] - centerY) * scaleFactor;
-          normalizedVertices[i + 2] = (verts[i + 2] - centerZ) * scaleFactor;
-        }
-
-        // Create vertex buffer with normalized data
+        // Create vertex buffer
         this.vertexBuffer = this.gl.createBuffer();
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, normalizedVertices, this.gl.STATIC_DRAW);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.vertices, this.gl.STATIC_DRAW);
         
         // Create normal buffer
         this.normalBuffer = this.gl.createBuffer();
@@ -268,7 +234,7 @@ export class MapWindow3DRenderer {
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
         this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.model.indices, this.gl.STATIC_DRAW);
         
-        console.log(`[Model Norm] Normalized vertices created: ${normalizedVertices.length / 3}`);
+        console.log(`[MapWindow3DRenderer] Buffers created: ${this.model.vertexCount} vertices`);
       }
     } catch (error) {
       console.error('[MapWindow3DRenderer] Failed to load OBJ:', error);

@@ -3,6 +3,52 @@
 
 import { OBJLoader, OBJModel } from './OBJLoader';
 
+export interface BlockPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export class GlowingBlock {
+  position: BlockPosition;
+  blockSize: number;
+  color: [number, number, number, number];
+  visible: boolean;
+
+  constructor(blockSize: number = 0.5) {
+    this.position = { x: 0, y: 0, z: 0 };
+    this.blockSize = blockSize;
+    this.color = [1.0, 1.0, 0.0, 0.8]; // Yellow with transparency
+    this.visible = false;
+  }
+
+  setPosition(x: number, y: number, z: number): void {
+    this.position.x = x;
+    this.position.y = y;
+    this.position.z = z;
+  }
+
+  moveUp(steps: number = 1): void {
+    this.position.y += steps * this.blockSize;
+  }
+
+  moveDown(steps: number = 1): void {
+    this.position.y -= steps * this.blockSize;
+  }
+
+  setColor(r: number, g: number, b: number, a: number = 0.8): void {
+    this.color = [r, g, b, a];
+  }
+
+  show(): void {
+    this.visible = true;
+  }
+
+  hide(): void {
+    this.visible = false;
+  }
+}
+
 export class MapWindow3DRenderer {
   private gl: WebGLRenderingContext | null = null;
   private canvas: HTMLCanvasElement;
@@ -22,6 +68,10 @@ export class MapWindow3DRenderer {
   private isDragging: boolean = false;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
+  
+  // Glowing block for X-ray visualization
+  private glowingBlock: GlowingBlock | null = null;
+  private blockVertexBuffers: { position: WebGLBuffer | null, index: WebGLBuffer | null } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -86,9 +136,70 @@ export class MapWindow3DRenderer {
     // Setup mouse controls for rotation
     this.setupMouseControls();
 
+    // Initialize glowing block system
+    this.initGlowingBlock();
+
     // Start animation loop
     this.isRunning = true;
     this.animate();
+  }
+
+  private initGlowingBlock(): void {
+    this.glowingBlock = new GlowingBlock(0.5);
+    this.createBlockBuffers();
+  }
+
+  private createBlockBuffers(): void {
+    if (!this.gl) return;
+
+    const blockSize = 0.5;
+    const half = blockSize / 2;
+
+    // Create a cube mesh (8 vertices, 6 faces * 2 triangles * 3 vertices = 36 indices)
+    const vertices = new Float32Array([
+      // Front face
+      -half, -half,  half,
+       half, -half,  half,
+       half,  half,  half,
+      -half,  half,  half,
+      // Back face
+      -half, -half, -half,
+      -half,  half, -half,
+       half,  half, -half,
+       half, -half, -half,
+    ]);
+
+    const indices = new Uint16Array([
+      // Front
+      0, 1, 2, 0, 2, 3,
+      // Back
+      4, 5, 6, 4, 6, 7,
+      // Top
+      3, 2, 6, 3, 6, 5,
+      // Bottom
+      0, 7, 1, 0, 4, 7,
+      // Right
+      1, 7, 6, 1, 6, 2,
+      // Left
+      0, 5, 4, 0, 3, 5,
+    ]);
+
+    // Create position buffer
+    const positionBuffer = this.gl.createBuffer();
+    if (!positionBuffer) return;
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW);
+
+    // Create index buffer
+    const indexBuffer = this.gl.createBuffer();
+    if (!indexBuffer) return;
+    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, indices, this.gl.STATIC_DRAW);
+
+    this.blockVertexBuffers = {
+      position: positionBuffer,
+      index: indexBuffer
+    };
   }
 
   private setupMouseControls(): void {
@@ -264,6 +375,53 @@ export class MapWindow3DRenderer {
     } catch (error) {
       this.logBug(`[BUG] Failed to load OBJ: ${error}`);
       console.error('[MapWindow3DRenderer] Failed to load OBJ:', error);
+    }
+  }
+
+  // Public API for glowing block control
+  public getGlowingBlock(): GlowingBlock | null {
+    return this.glowingBlock;
+  }
+
+  public moveGlowingBlockUp(steps: number = 1): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.moveUp(steps);
+      console.log(`[MapWindow3DRenderer] Glowing block moved UP ${steps} step(s), new Y: ${this.glowingBlock.position.y.toFixed(2)}`);
+    }
+  }
+
+  public moveGlowingBlockDown(steps: number = 1): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.moveDown(steps);
+      console.log(`[MapWindow3DRenderer] Glowing block moved DOWN ${steps} step(s), new Y: ${this.glowingBlock.position.y.toFixed(2)}`);
+    }
+  }
+
+  public setGlowingBlockPosition(x: number, y: number, z: number): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.setPosition(x, y, z);
+      console.log(`[MapWindow3DRenderer] Glowing block positioned to (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`);
+    }
+  }
+
+  public showGlowingBlock(): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.show();
+      console.log('[MapWindow3DRenderer] Glowing block shown');
+    }
+  }
+
+  public hideGlowingBlock(): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.hide();
+      console.log('[MapWindow3DRenderer] Glowing block hidden');
+    }
+  }
+
+  public setGlowingBlockColor(r: number, g: number, b: number, a: number = 0.8): void {
+    if (this.glowingBlock) {
+      this.glowingBlock.setColor(r, g, b, a);
+      console.log(`[MapWindow3DRenderer] Glowing block color set to RGBA(${r}, ${g}, ${b}, ${a})`);
     }
   }
 
@@ -492,7 +650,7 @@ export class MapWindow3DRenderer {
       this.logBug(`[BUG] Error setting uniforms: ${uniformError}`);
     }
     
-    // Draw
+    // Draw the main 3D model
     gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
     
     // Check for draw errors
@@ -501,10 +659,75 @@ export class MapWindow3DRenderer {
       this.logBug(`[BUG] Error during draw call: ${drawError}`);
     }
     
+    // Render glowing block if visible (X-ray mode)
+    this.renderGlowingBlock(matrixLocation);
+    
     // Auto-rotate only when not dragging (commented out to stop constant rotation)
     // if (!this.isDragging) {
     //   this.rotationY += 0.005; // Slower auto-rotation
     // }
+  }
+
+  private renderGlowingBlock(matrixLocation: WebGLUniformLocation | null): void {
+    if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation) return;
+    
+    const gl = this.gl;
+    
+    // Disable depth writing but keep depth testing for X-ray effect
+    gl.depthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
+    
+    // Get block position and apply same transformation as main model
+    const aspect = this.canvas.width / this.canvas.height;
+    const baseMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+    
+    // Create translation matrix for block position
+    const tx = this.glowingBlock.position.x;
+    const ty = this.glowingBlock.position.y;
+    const tz = this.glowingBlock.position.z;
+    
+    const translationMatrix = new Float32Array([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      tx, ty, tz, 1
+    ]);
+    
+    // Combine matrices: final = baseMatrix * translationMatrix
+    const finalMatrix = this.multiplyMatrices(baseMatrix, translationMatrix);
+    
+    // Bind block buffers
+    if (this.blockVertexBuffers.position) {
+      const positionLocation = gl.getAttribLocation(this.program!, 'a_position');
+      gl.enableVertexAttribArray(positionLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.blockVertexBuffers.position);
+      gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+    }
+    
+    if (this.blockVertexBuffers.index) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.blockVertexBuffers.index);
+    }
+    
+    // Set transformation matrix
+    gl.uniformMatrix4fv(matrixLocation, false, finalMatrix);
+    
+    // Set glowing color (ignoring lighting for emissive look)
+    const colorLocation = gl.getUniformLocation(this.program!, 'u_color');
+    const [r, g, b, a] = this.glowingBlock.color;
+    gl.uniform4f(colorLocation, r, g, b, a);
+    
+    // Draw block (18 triangles = 36 indices for a cube)
+    gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+    
+    // Restore state
+    gl.depthMask(true);
+    gl.enable(gl.CULL_FACE);
+    gl.disable(gl.BLEND);
+    
+    // Restore original matrix for next frame
+    gl.uniformMatrix4fv(matrixLocation, false, baseMatrix);
   }
 
   private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number): Float32Array {

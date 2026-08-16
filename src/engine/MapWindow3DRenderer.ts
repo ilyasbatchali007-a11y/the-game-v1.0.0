@@ -215,7 +215,21 @@ export class MapWindow3DRenderer {
     }
     
     // Automatically position the glowing block at the lowest point
-    this.positionGlowingBlockAtLowest();
+    // MANUAL POSITIONING - Adjust these values to place the block exactly where you want
+    const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
+    const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
+    const offset = this.glowingBlock.blockSize / 2; // Half block height to sit on surface
+    const lowestY = this.modelBounds.minY + offset;
+    
+    // TODO: Manually adjust these coordinates to position the green block
+    const manualX = centerX;  // Change this value to move left/right
+    const manualY = lowestY;  // Change this value to move up/down
+    const manualZ = centerZ;  // Change this value to move forward/back
+    
+    this.glowingBlock.setPosition(manualX, manualY, manualZ);
+    console.log(`[MapWindow3DRenderer] Glowing block positioned at: (${manualX.toFixed(2)}, ${manualY.toFixed(2)}, ${manualZ.toFixed(2)}) with size ${this.glowingBlock.blockSize.toFixed(3)}`);
+    console.log(`[MapWindow3DRenderer] Model dimensions: X=${(this.modelBounds.maxX - this.modelBounds.minX).toFixed(2)}, Y=${(this.modelBounds.maxY - this.modelBounds.minY).toFixed(2)}, Z=${(this.modelBounds.maxZ - this.modelBounds.minZ).toFixed(2)}`);
+    console.log(`[MapWindow3DRenderer] Estimated cube size: ${(this.glowingBlock.blockSize / 0.9).toFixed(3)} (block is 90% of this)`);
   }
 
   /**
@@ -904,11 +918,12 @@ export class MapWindow3DRenderer {
     // Let's verify: zoom=-3 -> camera at z=3 -> translate world by -3. Index 14 = -3. Correct.
     
     // Apply focus point translation - translate world so focus point is at origin
+    // Reverted to center on mesh (0,0,0) instead of glowing block
     const view = new Float32Array([
       1, 0, 0, 0,
       0, 1, 0, 0,
       0, 0, 1, 0,
-      -fp.x, -fp.y, zoom - fp.z, 1  // Translate to focus on glowing block
+      0, 0, zoom, 1  // Centered on mesh origin
     ]);
     
     // Model matrix: Scale -> Rotate X -> Rotate Y

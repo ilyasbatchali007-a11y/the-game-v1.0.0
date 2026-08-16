@@ -15,7 +15,7 @@ export class GlowingBlock {
   color: [number, number, number, number];
   visible: boolean;
 
-  constructor(blockSize: number = 0.5) {
+  constructor(blockSize: number = 0.1) {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
     this.color = [0.0, 1.0, 0.0, 0.9]; // Bright Green with high alpha for visibility
@@ -160,7 +160,7 @@ export class MapWindow3DRenderer {
   private createBlockBuffers(): void {
     if (!this.gl) return;
 
-    const blockSize = 0.5;
+    const blockSize = 0.1;
     const half = blockSize / 2;
 
     // Create a cube mesh (8 vertices, 6 faces * 2 triangles * 3 vertices = 36 indices)

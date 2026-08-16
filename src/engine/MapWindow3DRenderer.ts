@@ -626,13 +626,14 @@ export class MapWindow3DRenderer {
 
   private multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
     const result = new Float32Array(16);
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
+    // Column-major multiplication for WebGL
+    for (let j = 0; j < 4; j++) {
+      for (let i = 0; i < 4; i++) {
         let sum = 0;
         for (let k = 0; k < 4; k++) {
-          sum += a[i * 4 + k] * b[k * 4 + j];
+          sum += a[k * 4 + j] * b[i * 4 + k];
         }
-        result[i * 4 + j] = sum;
+        result[j * 4 + i] = sum;
       }
     }
     return result;

@@ -564,16 +564,10 @@ export class MapWindow3DRenderer {
       0, 0, zOffset, 1
     ]);
     
-    // Model matrix: Translate to center -> Scale -> Rotate X -> Rotate Y
-    // First translate to center the model
-    const translate = new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, centerY, 0, 1
-    ]);
+    // Model matrix: Scale -> Rotate X -> Rotate Y
+    // The model is already centered and normalized by OBJLoader
     
-    // Then scale
+    // Scale
     const scale = new Float32Array([
       scaleX, 0, 0, 0,
       0, scaleY, 0, 0,
@@ -597,10 +591,9 @@ export class MapWindow3DRenderer {
       0, 0, 0, 1
     ]);
     
-    // Multiply: Model = RotY * RotX * Scale * Translate
-    const temp1 = this.multiplyMatrices(scale, translate);
-    const temp2 = this.multiplyMatrices(rotX, temp1);
-    const model = this.multiplyMatrices(rotY, temp2);
+    // Multiply: Model = RotY * RotX * Scale
+    const temp1 = this.multiplyMatrices(rotX, scale);
+    const model = this.multiplyMatrices(rotY, temp1);
     
     // Multiply: MVP = P * V * M
     const vm = this.multiplyMatrices(view, model);
@@ -614,11 +607,13 @@ export class MapWindow3DRenderer {
     const sinX = Math.sin(angleX);
     
     // Normal matrix is the inverse transpose of the model-view matrix (rotation part only)
-    // For RotY * RotX, the normal matrix is the transpose (since rotation matrices are orthogonal)
-    // This gives us: RotX^T * RotY^T = Rot(-X) * Rot(-Y)
+    // For RotY * RotX, the normal matrix is RotX^T * RotY^T
+    // RotX^T = [1,0,0; 0,cosX,-sinX; 0,sinX,cosX]
+    // RotY^T = [cosY,0,sinY; 0,1,0; -sinY,0,cosY]
+    // NormalMatrix = RotX^T * RotY^T
     return new Float32Array([
-      cosY, 0, sinY, 0,
-      sinY * sinX, cosX, -cosY * sinX, 0,
+      cosY, 0, -sinY, 0,
+      sinY * sinX, cosX, cosY * sinX, 0,
       sinY * cosX, -sinX, cosY * cosX, 0,
       0, 0, 0, 1
     ]);

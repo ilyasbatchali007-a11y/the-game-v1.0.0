@@ -13,7 +13,8 @@ export class MapWindow3DRenderer {
   private indexBuffer: WebGLBuffer | null = null;
   private rotationY: number = 0;
   private rotationX: number = 0.3; // Slight tilt for better view
-  private zoom: number = -3.0; // Camera distance
+  private zoom: number = -1.80; // Camera distance
+  private readonly STATIC_ZOOM: number = -1.80;
   private minZoom: number = -5.0;
   private maxZoom: number = -1.0;
   private isRunning: boolean = false;
@@ -121,12 +122,11 @@ export class MapWindow3DRenderer {
       this.isDragging = false;
     });
 
-    // Scroll wheel for zoom
+    // Scroll wheel for zoom (DISABLED for static zoom)
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const zoomSpeed = 0.002;
-      this.zoom += e.deltaY * zoomSpeed;
-      this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
+      // Zoom disabled to maintain static zoom level
+      return;
     }, { passive: false });
 
     // Touch support for mobile

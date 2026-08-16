@@ -193,7 +193,18 @@ export class MapWindow3DRenderer {
     }
 
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
-    console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}]`);
+    console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
+    
+    // Calculate grid cell size from model bounds (assuming square grid cells)
+    const cellSizeX = (this.modelBounds.maxX - this.modelBounds.minX) / 10; // Approximate 10 cells across
+    const cellSizeZ = (this.modelBounds.maxZ - this.modelBounds.minZ) / 10;
+    const estimatedCellSize = Math.min(cellSizeX, cellSizeZ);
+    
+    // Set glowing block size to match approximately one grid cell
+    if (this.glowingBlock && estimatedCellSize > 0) {
+      this.glowingBlock.blockSize = estimatedCellSize * 0.8; // 80% of cell size for visual clarity
+      console.log(`[MapWindow3DRenderer] Auto-adjusted block size to ${this.glowingBlock.blockSize.toFixed(3)} based on model dimensions`);
+    }
     
     // Automatically position the glowing block at the lowest point
     this.positionGlowingBlockAtLowest();
@@ -205,19 +216,21 @@ export class MapWindow3DRenderer {
   private positionGlowingBlockAtLowest(): void {
     if (!this.glowingBlock || !this.modelBounds) return;
     
-    // Position at center X/Z and lowest Y (with small offset)
+    // Position at center X/Z and lowest Y (with offset based on block size)
     const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
     const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
-    const lowestY = this.modelBounds.minY + 0.1;
+    const offset = this.glowingBlock.blockSize / 2; // Half block height to sit on surface
+    const lowestY = this.modelBounds.minY + offset;
     
     this.glowingBlock.setPosition(centerX, lowestY, centerZ);
-    console.log(`[MapWindow3DRenderer] Glowing block positioned at lowest point: (${centerX.toFixed(2)}, ${lowestY.toFixed(2)}, ${centerZ.toFixed(2)})`);
+    console.log(`[MapWindow3DRenderer] Glowing block positioned at lowest point: (${centerX.toFixed(2)}, ${lowestY.toFixed(2)}, ${centerZ.toFixed(2)}) with size ${this.glowingBlock.blockSize.toFixed(3)}`);
   }
 
   private createBlockBuffers(): void {
     if (!this.gl) return;
 
-    const blockSize = 0.1;
+    // Use default size, but this will be overridden by calculateModelBounds() after model loads
+    const blockSize = this.glowingBlock ? this.glowingBlock.blockSize : 0.1;
     const half = blockSize / 2;
 
     // Create a cube mesh (8 vertices, 6 faces * 2 triangles * 3 vertices = 36 indices)
@@ -621,8 +634,8 @@ export class MapWindow3DRenderer {
         const actualFovDeg = (actualFovRad * 180 / Math.PI).toFixed(1);
         console.log(`Projection Params: FOV=${actualFovDeg}°, Aspect=${aspect.toFixed(2)}, Near=${near}, Far=${far}`);
         
-        // Also show combined MVP for reference
-        const mvpMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+        // Also show combined MVP for reference (without focus point for debug)
+        const mvpMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom, { x: 0, y: 0, z: 0 });
         console.log('Combined MVP Matrix (Model*View*Projection):');
         for (let i = 0; i < 16; i += 4) {
           const row = Array.from(mvpMatrix).slice(i, i + 4).map(n => n.toFixed(4));
@@ -749,6 +762,9 @@ export class MapWindow3DRenderer {
     if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation || !useLightingLocation) return;
     
     const gl = this.gl;
+    
+    // Recreate block buffers with current size (in case it changed)
+    this.createBlockBuffers();
     
     // Disable depth testing AND depth writing for true X-ray effect
     gl.disable(gl.DEPTH_TEST);

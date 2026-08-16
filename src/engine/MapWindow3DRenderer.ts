@@ -61,8 +61,8 @@ export class MapWindow3DRenderer {
   private rotationX: number = 0.3; // Slight tilt for better view
   private zoom: number = -1.80; // Camera distance
   private readonly STATIC_ZOOM: number = -1.80;
-  private minZoom: number = -5.0;
-  private maxZoom: number = -1.0;
+  private minZoom: number = -20.0; // Allow extreme close-up for debugging
+  private maxZoom: number = 5.0; // Allow far view for debugging
   private isRunning: boolean = false;
   private animationFrameId: number = 0;
   private isDragging: boolean = false;

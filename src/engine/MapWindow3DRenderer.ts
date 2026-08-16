@@ -512,11 +512,15 @@ export class MapWindow3DRenderer {
     const nf = 1 / (near - far);
     
     // Projection matrix (column-major for WebGL) - Standard Perspective
+    // [ f/aspect, 0, 0, 0 ]
+    // [ 0, f, 0, 0 ]
+    // [ 0, 0, (far+near)*nf, -1 ]
+    // [ 0, 0, (2*far*near)*nf, 0 ]
     const proj = new Float32Array([
-      f / aspect, 0, 0, 0,
-      0, f, 0, 0,
-      0, 0, (far + near) * nf, -1,
-      0, 0, (2 * far * near) * nf, 0
+      f / aspect, 0, 0, 0,          // Column 0
+      0, f, 0, 0,                   // Column 1
+      0, 0, (far + near) * nf, -1,  // Column 2
+      0, 0, (2 * far * near) * nf, 0 // Column 3
     ]);
     
     // View matrix - just translate camera back along Z axis

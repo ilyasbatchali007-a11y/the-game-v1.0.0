@@ -555,13 +555,22 @@ export class MapWindow3DRenderer {
       0, 0, projW, 0                // Column 3
     ]);
     
-    // View matrix - just translate camera back along Z axis
-    // No rotation here - rotation is applied to the model
+    // View matrix - translate camera back along Z axis
+    // Camera position is (0, 0, -zoom) because zoom is negative (e.g., -3 means camera at z=3)
+    // View matrix translates world by -cameraPos, so we use -(-zoom) = zoom? No.
+    // If zoom = -3, we want camera at z=3. View matrix translates by -3.
+    // So we put -3 in the translation slot (index 14). 
+    // But zoom IS -3. So we just use zoom directly? 
+    // Wait, standard view matrix for camera at (0,0,cz) has translation -cz in column 3.
+    // We want camera at z = -zoom (since zoom=-3, camera at 3).
+    // Translation = -(-zoom) = zoom. Yes, index 14 = zoom is correct IF zoom is the negation of camera Z.
+    // Let's verify: zoom=-3 -> camera at z=3 -> translate world by -3. Index 14 = -3. Correct.
+    
     const view = new Float32Array([
       1, 0, 0, 0,
       0, 1, 0, 0,
       0, 0, 1, 0,
-      0, 0, zOffset, 1
+      0, 0, zoom, 1  // Translation in Z (column-major index 14)
     ]);
     
     // Model matrix: Scale -> Rotate X -> Rotate Y
@@ -621,14 +630,22 @@ export class MapWindow3DRenderer {
 
   private multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
     const result = new Float32Array(16);
-    // Column-major multiplication for WebGL
-    for (let j = 0; j < 4; j++) {
-      for (let i = 0; i < 4; i++) {
+    // Standard column-major multiplication for WebGL
+    // Result[i][j] = sum(A[k][j] * B[i][k])
+    // In 1D array: result[col*4 + row] = sum(a[col*4 + k] * b[k*4 + row])
+    // Wait, that's wrong. Let's use standard formula:
+    // C[i][j] = sum_k(A[i][k] * B[k][j])
+    // Column-major storage: index = col*4 + row
+    // So A[colA][rowA] is at a[colA*4 + rowA]
+    // C[colC][rowC] = sum_k( A[colA=k][rowC] * B[colC][rowB=k] )
+    //               = sum_k( a[k*4 + rowC] * b[colC*4 + k] )
+    for (let col = 0; col < 4; col++) {
+      for (let row = 0; row < 4; row++) {
         let sum = 0;
         for (let k = 0; k < 4; k++) {
-          sum += a[k * 4 + j] * b[i * 4 + k];
+          sum += a[k * 4 + row] * b[col * 4 + k];
         }
-        result[j * 4 + i] = sum;
+        result[col * 4 + row] = sum;
       }
     }
     return result;

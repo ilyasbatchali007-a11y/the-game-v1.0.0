@@ -652,11 +652,10 @@ export class MapWindow3DRenderer {
     const gl = this.gl;
     
     // Determine zoom focus point (glowing block if visible, otherwise model center)
-    const glowingBlockPos = (this.glowingBlock && this.glowingBlock.visible) 
-      ? this.glowingBlock.position 
-      : { x: 0, y: 0, z: 0 };
-    
-    const focusPoint = glowingBlockPos || { x: 0, y: 0, z: 0 };
+    let focusPoint = { x: 0, y: 0, z: 0 };
+    if (this.glowingBlock && this.glowingBlock.visible && this.glowingBlock.position) {
+      focusPoint = this.glowingBlock.position;
+    }
     
     // Clear canvas (depth test already enabled in init)
     gl.clearColor(0.1, 0.1, 0.12, 1.0);

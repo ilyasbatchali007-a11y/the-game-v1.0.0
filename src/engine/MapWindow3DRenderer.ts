@@ -222,9 +222,9 @@ export class MapWindow3DRenderer {
     const lowestY = this.modelBounds.minY + offset;
     
     // TODO: Manually adjust these coordinates to position the green block
-    const manualX = centerX;  // Change this value to move left/right
-    const manualY = lowestY;  // Change this value to move up/down
-    const manualZ = centerZ;  // Change this value to move forward/back
+    const manualX = centerX + 0;  // Change this value to move left/right
+    const manualY = lowestY + 0;  // Change this value to move up/down
+    const manualZ = centerZ + 0;  // Change this value to move forward/back
     
     this.glowingBlock.setPosition(manualX, manualY, manualZ);
     console.log(`[MapWindow3DRenderer] Glowing block positioned at: (${manualX.toFixed(2)}, ${manualY.toFixed(2)}, ${manualZ.toFixed(2)}) with size ${this.glowingBlock.blockSize.toFixed(3)}`);

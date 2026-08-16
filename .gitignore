@@ -1,3 +1,66 @@
-```ts
+```
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
 
+# Build outputs
+dist/
+build/
+coverage/
+target/
+out/
+.bundle/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+.env
+.env.local
+.env.*
+.env~*
+.envrc
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+ehthumbs.db
+Icon?
+desktop.ini
+
+# Environment specific
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.DS_Store
 ```

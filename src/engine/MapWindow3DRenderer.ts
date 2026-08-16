@@ -335,7 +335,17 @@ export class MapWindow3DRenderer {
 
       // Only log matrices on significant changes or first frame to avoid spam
       if (this.logFrameCount === 1 || stateChanged) {
-        console.log('Projection Matrix (simplified):', Array.from(this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, this.canvas.width / this.canvas.height, this.zoom)).slice(0, 4).map(n => n.toFixed(2)));
+        const projMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, this.canvas.width / this.canvas.height, this.zoom);
+        console.log('Full Projection Matrix:');
+        for (let i = 0; i < 16; i += 4) {
+          const row = Array.from(projMatrix).slice(i, i + 4).map(n => n.toFixed(4));
+          console.log(`  [ ${row[0]}, ${row[1]}, ${row[2]}, ${row[3]} ]`);
+        }
+        
+        // Calculate FOV from projection matrix element at index 5 (assuming standard perspective layout)
+        const fovRad = 2 * Math.atan(1.0 / projMatrix[5]);
+        const fovDeg = (fovRad * 180 / Math.PI).toFixed(1);
+        console.log(`Projection Params: FOV=${fovDeg}°, Aspect=${(this.canvas.width/this.canvas.height).toFixed(2)}, Near=0.1, Far=100.0`);
       }
       console.groupEnd();
     }

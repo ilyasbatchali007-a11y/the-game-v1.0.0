@@ -1,52 +1,90 @@
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
+```gitignore
+# Dependencies
+node_modules/
+
+# Build outputs
 dist/
 build/
 target/
 
-# Dependencies
-.venv/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py.class
+.Python
+env/
 venv/
-node_modules/
-.julia/
-zig*/
-.jest/
-.mypy_cache/
-.pytest_cache/
+.venv/
+.ENV
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
-coverage/
-htmlcov/
-
-# Logs and temp files
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
-*.tmp
+*.pot
+*.po
+*~
+.pytest_cache/
+.hypothesis/
+.coverage*
+htmlcov/
+.pyup.yml
+.isort.cfg
+.mypy_cache/
+.eggs/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Icon?
+*/Icon?
+.davfs2_cache/
+.directory
+*.nib
+*~.nib
+*.plist.bak
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
 
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
+!.env.example
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
+# Coverage
+coverage/
+htmlcov/
+.coverage
+.coverage.*
 
-# System files
-.DS_Store
-Thumbs.db
-
-# Archives
+# Compressed files
 *.zip
 *.gz
 *.tar
@@ -69,3 +107,4 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+```

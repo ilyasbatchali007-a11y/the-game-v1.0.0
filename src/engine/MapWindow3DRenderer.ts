@@ -368,17 +368,39 @@ export class MapWindow3DRenderer {
 
       // Only log matrices on significant changes or first frame to avoid spam
       if (this.logFrameCount === 1 || stateChanged) {
-        const projMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, this.canvas.width / this.canvas.height, this.zoom);
-        console.log('Full Projection Matrix:');
+        // Create pure projection matrix for debugging (separate from MVP)
+        const fov = 60 * (Math.PI / 180);
+        const aspect = this.canvas.width / this.canvas.height;
+        const near = 0.1;
+        const far = 100.0;
+        const f = 1.0 / Math.tan(fov / 2);
+        const nf = 1 / (near - far);
+        
+        const pureProj = new Float32Array([
+          f / aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (far + near) * nf, -1,
+          0, 0, (2 * far * near) * nf, 0
+        ]);
+        
+        console.log('Pure Projection Matrix (before MVP):');
         for (let i = 0; i < 16; i += 4) {
-          const row = Array.from(projMatrix).slice(i, i + 4).map(n => n.toFixed(4));
+          const row = Array.from(pureProj).slice(i, i + 4).map(n => n.toFixed(4));
           console.log(`  [ ${row[0]}, ${row[1]}, ${row[2]}, ${row[3]} ]`);
         }
         
-        // Calculate FOV from projection matrix element at index 5 (assuming standard perspective layout)
-        const fovRad = 2 * Math.atan(1.0 / projMatrix[5]);
-        const fovDeg = (fovRad * 180 / Math.PI).toFixed(1);
-        console.log(`Projection Params: FOV=${fovDeg}°, Aspect=${(this.canvas.width/this.canvas.height).toFixed(2)}, Near=0.1, Far=100.0`);
+        // Calculate actual FOV from pure projection matrix element [5] which should be 'f'
+        const actualFovRad = 2 * Math.atan(1.0 / pureProj[5]);
+        const actualFovDeg = (actualFovRad * 180 / Math.PI).toFixed(1);
+        console.log(`Projection Params: FOV=${actualFovDeg}°, Aspect=${aspect.toFixed(2)}, Near=${near}, Far=${far}`);
+        
+        // Also show combined MVP for reference
+        const mvpMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom);
+        console.log('Combined MVP Matrix (Model*View*Projection):');
+        for (let i = 0; i < 16; i += 4) {
+          const row = Array.from(mvpMatrix).slice(i, i + 4).map(n => n.toFixed(4));
+          console.log(`  [ ${row[0]}, ${row[1]}, ${row[2]}, ${row[3]} ]`);
+        }
       }
       console.groupEnd();
     }
@@ -511,6 +533,16 @@ export class MapWindow3DRenderer {
     const f = 1.0 / Math.tan(fov / 2);
     const nf = 1 / (near - far);
     
+    // [3D BUG DETECTOR] Projection Matrix Calculation Check
+    const projZ = (far + near) * nf;
+    const projW = (2 * far * near) * nf;
+    
+    if (!isFinite(projZ) || !isFinite(projW)) {
+      console.error('[3D BUG] Invalid projection matrix values! Check near/far planes.');
+      console.error(`[3D BUG] near=${near}, far=${far}, nf=${nf}`);
+      console.error(`[3D BUG] Calculated: projZ=${projZ}, projW=${projW}`);
+    }
+    
     // Projection matrix (column-major for WebGL) - Standard Perspective
     // [ f/aspect, 0, 0, 0 ]
     // [ 0, f, 0, 0 ]
@@ -519,8 +551,8 @@ export class MapWindow3DRenderer {
     const proj = new Float32Array([
       f / aspect, 0, 0, 0,          // Column 0
       0, f, 0, 0,                   // Column 1
-      0, 0, (far + near) * nf, -1,  // Column 2
-      0, 0, (2 * far * near) * nf, 0 // Column 3
+      0, 0, projZ, -1,              // Column 2
+      0, 0, projW, 0                // Column 3
     ]);
     
     // View matrix - just translate camera back along Z axis

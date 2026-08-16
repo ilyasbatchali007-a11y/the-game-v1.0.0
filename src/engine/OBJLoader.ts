@@ -132,13 +132,69 @@ export class OBJLoader {
       this.computeFaceNormals(positions, normals, indices);
     }
     
+    // Normalize the model: center it and scale to fit within unit cube
+    const normalizedPositions = this.normalizePositions(positions);
+    
     return {
-      vertices: new Float32Array(positions),
+      vertices: new Float32Array(normalizedPositions),
       normals: new Float32Array(normals),
       uvs: new Float32Array(uvs),
       indices: new Uint16Array(indices),
       vertexCount: Math.floor(positions.length / 3)
     };
+  }
+  
+  /**
+   * Normalize positions: center at origin and scale to fit within -0.8 to 0.8
+   */
+  private static normalizePositions(positions: number[]): number[] {
+    if (positions.length === 0) return positions;
+    
+    // 1. Calculate Bounds
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1];
+      const z = positions[i + 2];
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    
+    // 2. Calculate Center
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    
+    // 3. Calculate Max Dimension
+    const dimX = maxX - minX;
+    const dimY = maxY - minY;
+    const dimZ = maxZ - minZ;
+    const maxDim = Math.max(dimX, Math.max(dimY, dimZ));
+    
+    // 4. Scale Factor (fit within -0.8 to 0.8, so total size 1.6)
+    const targetSize = 1.6;
+    const scale = maxDim > 0 ? targetSize / maxDim : 1.0;
+    
+    console.log(`[OBJ Normalizer] Original Bounds: X[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y[${minY.toFixed(1)}, ${maxY.toFixed(1)}], Z[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`);
+    console.log(`[OBJ Normalizer] Center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)}, ${centerZ.toFixed(2)})`);
+    console.log(`[OBJ Normalizer] Scale Factor: ${scale.toFixed(4)}`);
+    
+    // 5. Apply transformation
+    const normalized = new Array<number>(positions.length);
+    for (let i = 0; i < positions.length; i += 3) {
+      normalized[i] = (positions[i] - centerX) * scale;
+      normalized[i + 1] = (positions[i + 1] - centerY) * scale;
+      normalized[i + 2] = (positions[i + 2] - centerZ) * scale;
+    }
+    
+    return normalized;
   }
   
   /**

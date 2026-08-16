@@ -18,7 +18,7 @@ export class GlowingBlock {
   constructor(blockSize: number = 0.5) {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
-    this.color = [0.0, 1.0, 0.0, 1.0]; // Bright Green (fully opaque for visibility)
+    this.color = [0.0, 1.0, 0.0, 0.9]; // Bright Green with high alpha for visibility
     this.visible = false;
   }
 
@@ -113,10 +113,16 @@ export class MapWindow3DRenderer {
       varying vec3 v_normal;
       uniform vec3 u_lightDir;
       uniform vec4 u_color;
+      uniform bool u_useLighting;
       void main() {
-        vec3 normal = normalize(v_normal);
-        float light = max(dot(normal, u_lightDir), 0.2);
-        gl_FragColor = u_color * light;
+        if (u_useLighting) {
+          vec3 normal = normalize(v_normal);
+          float light = max(dot(normal, u_lightDir), 0.2);
+          gl_FragColor = u_color * light;
+        } else {
+          // Emissive mode - no lighting, pure glow
+          gl_FragColor = u_color;
+        }
       }
     `;
 
@@ -602,12 +608,13 @@ export class MapWindow3DRenderer {
     const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
     const colorLocation = gl.getUniformLocation(this.program, 'u_color');
     const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
+    const useLightingLocation = gl.getUniformLocation(this.program, 'u_useLighting');
     
     // Check for location errors
     if (positionLocation < 0 || normalLocation < 0) {
       this.logBug('[BUG] Failed to get attribute locations');
     }
-    if (!matrixLocation || !normalMatrixLocation || !colorLocation || !lightDirLocation) {
+    if (!matrixLocation || !normalMatrixLocation || !colorLocation || !lightDirLocation || !useLightingLocation) {
       this.logBug('[BUG] Failed to get uniform locations');
     }
     
@@ -643,6 +650,7 @@ export class MapWindow3DRenderer {
     gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
     gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon
     gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3); // Light from above-right
+    gl.uniform1i(useLightingLocation, 1); // Enable lighting for main model
     
     // Check for uniform errors
     const uniformError = gl.getError();
@@ -660,7 +668,7 @@ export class MapWindow3DRenderer {
     }
     
     // Render glowing block if visible (X-ray mode)
-    this.renderGlowingBlock(matrixLocation);
+    this.renderGlowingBlock(matrixLocation, useLightingLocation);
     
     // Auto-rotate only when not dragging (commented out to stop constant rotation)
     // if (!this.isDragging) {
@@ -668,8 +676,8 @@ export class MapWindow3DRenderer {
     // }
   }
 
-  private renderGlowingBlock(matrixLocation: WebGLUniformLocation | null): void {
-    if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation) return;
+  private renderGlowingBlock(matrixLocation: WebGLUniformLocation | null, useLightingLocation: WebGLUniformLocation | null): void {
+    if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation || !useLightingLocation) return;
     
     const gl = this.gl;
     
@@ -713,7 +721,10 @@ export class MapWindow3DRenderer {
     // Set transformation matrix
     gl.uniformMatrix4fv(matrixLocation, false, finalMatrix);
     
-    // Set glowing color (ignoring lighting for emissive look)
+    // Disable lighting for emissive glow effect
+    gl.uniform1i(useLightingLocation, 0);
+    
+    // Set glowing color (emissive - no lighting)
     const colorLocation = gl.getUniformLocation(this.program!, 'u_color');
     const [r, g, b, a] = this.glowingBlock.color;
     gl.uniform4f(colorLocation, r, g, b, a);
@@ -725,6 +736,7 @@ export class MapWindow3DRenderer {
     gl.depthMask(true);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.BLEND);
+    gl.uniform1i(useLightingLocation, 1); // Restore lighting for next frame
     
     // Restore original matrix for next frame
     gl.uniformMatrix4fv(matrixLocation, false, baseMatrix);

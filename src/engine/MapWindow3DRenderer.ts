@@ -813,7 +813,10 @@ export class MapWindow3DRenderer {
     gl.uniformMatrix4fv(matrixLocation, false, baseMatrix);
   }
 
-  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number, focusPoint: { x: number, y: number, z: number }): Float32Array {
+  private createModelViewProjectionMatrix(angleY: number, angleX: number, aspect: number, zoom: number, focusPoint?: { x: number, y: number, z: number }): Float32Array {
+    // Default focus point if not provided
+    const fp = focusPoint || { x: 0, y: 0, z: 0 };
+    
     // Model rotation around Y and X axes
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
@@ -879,7 +882,7 @@ export class MapWindow3DRenderer {
       1, 0, 0, 0,
       0, 1, 0, 0,
       0, 0, 1, 0,
-      -focusPoint.x, -focusPoint.y, zoom - focusPoint.z, 1  // Translate to focus on glowing block
+      -fp.x, -fp.y, zoom - fp.z, 1  // Translate to focus on glowing block
     ]);
     
     // Model matrix: Scale -> Rotate X -> Rotate Y

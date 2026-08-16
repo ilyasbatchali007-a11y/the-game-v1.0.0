@@ -154,14 +154,21 @@ export class MapWindow3DRenderer {
   }
 
   private initGlowingBlock(): void {
-    this.glowingBlock = new GlowingBlock(0.5);
+    // --- EDIT THESE 4 NUMBERS ONLY ---
+    const sizeOffset = 0.9;  // Size: 1.0 = exact cube size, 0.5 = half size
+    const posX = 0.0;        // X Position offset (Left/Right)
+    const posY = 0.0;        // Y Position offset (Up/Down)
+    const posZ = 0.0;        // Z Position offset (Forward/Back)
+    // ---------------------------------
+
+    this.glowingBlock = new GlowingBlock(sizeOffset);
     this.createBlockBuffers();
     // Show the block by default so it's visible
     this.glowingBlock.show();
     
-    // Position at lowest point once model is loaded
-    if (this.modelBounds) {
-      this.positionGlowingBlockAtLowest();
+    // Set initial position using simple offsets
+    if (this.glowingBlock) {
+      this.glowingBlock.setPosition(posX, posY, posZ);
     }
   }
 
@@ -194,42 +201,6 @@ export class MapWindow3DRenderer {
 
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
-    
-    // Calculate grid cell size assuming model is made of 100 uniform cubes
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const depth = maxZ - minZ;
-    
-    // Estimate number of cubes along each axis (assuming roughly cubic arrangement)
-    const totalCubes = 100; // You mentioned 100 cubes
-    const cubesPerAxis = Math.cbrt(totalCubes); // ~4.64 cubes per axis
-    
-    // Calculate approximate cube size
-    const avgDimension = (width + height + depth) / 3;
-    const estimatedCubeSize = avgDimension / cubesPerAxis;
-    
-    // Set glowing block size to match cube size (slightly smaller to fit inside)
-    if (this.glowingBlock && estimatedCubeSize > 0) {
-      this.glowingBlock.blockSize = estimatedCubeSize * 0.9; // 90% of cube size
-      console.log(`[MapWindow3DRenderer] Auto-adjusted block size to ${this.glowingBlock.blockSize.toFixed(3)} based on 100 cubes assumption`);
-    }
-    
-    // Automatically position the glowing block at the lowest point
-    // MANUAL POSITIONING - Adjust these values to place the block exactly where you want
-    const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
-    const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
-    const offset = this.glowingBlock.blockSize / 2; // Half block height to sit on surface
-    const lowestY = this.modelBounds.minY + offset;
-    
-    // TODO: Manually adjust these coordinates to position the green block
-    const manualX = centerX + 0;  // Change this value to move left/right
-    const manualY = lowestY + 0;  // Change this value to move up/down
-    const manualZ = centerZ + 0;  // Change this value to move forward/back
-    
-    this.glowingBlock.setPosition(manualX, manualY, manualZ);
-    console.log(`[MapWindow3DRenderer] Glowing block positioned at: (${manualX.toFixed(2)}, ${manualY.toFixed(2)}, ${manualZ.toFixed(2)}) with size ${this.glowingBlock.blockSize.toFixed(3)}`);
-    console.log(`[MapWindow3DRenderer] Model dimensions: X=${(this.modelBounds.maxX - this.modelBounds.minX).toFixed(2)}, Y=${(this.modelBounds.maxY - this.modelBounds.minY).toFixed(2)}, Z=${(this.modelBounds.maxZ - this.modelBounds.minZ).toFixed(2)}`);
-    console.log(`[MapWindow3DRenderer] Estimated cube size: ${(this.glowingBlock.blockSize / 0.9).toFixed(3)} (block is 90% of this)`);
   }
 
   /**
@@ -237,17 +208,6 @@ export class MapWindow3DRenderer {
    */
   private positionGlowingBlockAtLowest(): void {
     if (!this.glowingBlock || !this.modelBounds) return;
-    
-    // Position at center X/Z and lowest Y (with offset based on block size)
-    const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
-    const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
-    const offset = this.glowingBlock.blockSize / 2; // Half block height to sit on surface
-    const lowestY = this.modelBounds.minY + offset;
-    
-    this.glowingBlock.setPosition(centerX, lowestY, centerZ);
-    console.log(`[MapWindow3DRenderer] Glowing block positioned at lowest point: (${centerX.toFixed(2)}, ${lowestY.toFixed(2)}, ${centerZ.toFixed(2)}) with size ${this.glowingBlock.blockSize.toFixed(3)}`);
-    console.log(`[MapWindow3DRenderer] Model dimensions: X=${(this.modelBounds.maxX - this.modelBounds.minX).toFixed(2)}, Y=${(this.modelBounds.maxY - this.modelBounds.minY).toFixed(2)}, Z=${(this.modelBounds.maxZ - this.modelBounds.minZ).toFixed(2)}`);
-    console.log(`[MapWindow3DRenderer] Estimated cube size: ${(this.glowingBlock.blockSize / 0.9).toFixed(3)} (block is 90% of this)`);
   }
 
   private createBlockBuffers(): void {

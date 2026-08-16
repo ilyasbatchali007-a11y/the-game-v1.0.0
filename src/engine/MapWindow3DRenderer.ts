@@ -18,7 +18,7 @@ export class GlowingBlock {
   constructor(blockSize: number = 0.5) {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
-    this.color = [1.0, 0.0, 0.0, 1.0]; // Bright Red (fully opaque for visibility)
+    this.color = [0.0, 1.0, 0.0, 1.0]; // Bright Green (fully opaque for visibility)
     this.visible = false;
   }
 

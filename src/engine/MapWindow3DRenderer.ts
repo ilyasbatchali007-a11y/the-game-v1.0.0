@@ -520,10 +520,12 @@ export class MapWindow3DRenderer {
     
     const centerY = -17.0; // Center the tall dungeon vertically
     
-    // Scale factors - make the dungeon fit nicely in view
-    const scaleX = 0.8;
-    const scaleY = 0.08;  // Compress Y since dungeon is very tall  
-    const scaleZ = 0.6;
+    // Scale factors - UNIFORM scaling to preserve proportions
+    // The model is already normalized to fit within -0.8 to 0.8 in OBJLoader
+    const uniformScale = 1.0; // Use 1:1 scale since normalization already handled sizing
+    const scaleX = uniformScale;
+    const scaleY = uniformScale;  // Fixed: was 0.08, causing vertical flattening
+    const scaleZ = uniformScale;
     const zOffset = zoom; // Use dynamic zoom instead of fixed -3.0
     
     // Build proper perspective projection matrix

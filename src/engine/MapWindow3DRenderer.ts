@@ -484,13 +484,15 @@ export class MapWindow3DRenderer {
     const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
     const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
 
-    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Epsilon Tie-Breaker ---
+    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Proportional Epsilon Tie-Breaker ---
     // Map each vertex directly to its grid cell index using Math.floor().
-    // FIX: Apply microscopic epsilon (1e-5) to prevent boundary vertices from double-triggering
-    //      adjacent cells. Uses a simple Set<string> for dynamic solid cell detection.
+    // FIX: Apply step-proportional epsilon (0.0001 * worldStep) to prevent boundary vertices
+    //      from double-triggering adjacent cells. Uses conditional subtraction for robustness.
     
-    // Epsilon tie-breaker: microscopic offset to handle exact boundary vertices
-    const eps = 0.00001;
+    // Proportional epsilon tie-breaker: offset relative to step size for robust boundary handling
+    const epsX = 0.0001 * worldStepX;
+    const epsY = 0.0001 * worldStepY;
+    const epsZ = 0.0001 * worldStepZ;
     
     // Dynamic solid set - collects unique occupied cells without hardcoded thresholds
     const solidSet = new Set<string>();
@@ -516,10 +518,16 @@ export class MapWindow3DRenderer {
         const vy = verts[idx + 1];
         const vz = verts[idx + 2];
 
-        // Derive integer cell indices with epsilon tie-breaker to prevent double-counting
-        let i = Math.floor((vx - originalBounds.minX - eps) / worldStepX);
-        let j = Math.floor((vy - originalBounds.minY - eps) / worldStepY);
-        let k = Math.floor((vz - originalBounds.minZ - eps) / worldStepZ);
+        // Calculate relative positions from model origin
+        const relX = vx - originalBounds.minX;
+        const relY = vy - originalBounds.minY;
+        const relZ = vz - originalBounds.minZ;
+
+        // Derive integer cell indices with proportional epsilon tie-breaker
+        // Conditionally subtract epsilon only when rel > eps to handle boundary vertices
+        let i = Math.floor((relX > epsX ? relX - epsX : relX) / worldStepX);
+        let j = Math.floor((relY > epsY ? relY - epsY : relY) / worldStepY);
+        let k = Math.floor((relZ > epsZ ? relZ - epsZ : relZ) / worldStepZ);
 
         // Clamp upper boundary points (e.g., vx === maxX) into the last valid cell
         // This handles floating point precision where (max-min)/step might equal Nx exactly

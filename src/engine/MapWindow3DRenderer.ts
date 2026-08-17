@@ -487,107 +487,88 @@ export class MapWindow3DRenderer {
     const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
     const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
 
-    // Debug: log first vertex world position vs first cell center to verify coordinate alignment
-    let debugLogged = false;
-
-    for (let y = 0; y < ny; y++) {
-      for (let z = 0; z < nz; z++) {
-        for (let x = 0; x < nx; x++) {
-          // Calculate cell center in WORLD SPACE using originalBounds (no double-offset)
-          // FIX: Remove + posX/posY/posZ - worldStartX/Y/Z already includes originalBounds.minX/Y/Z
-          const worldCellCenterX = worldStartX + (x * worldStepX);
-          const worldCellCenterY = worldStartY + (y * worldStepY);
-          const worldCellCenterZ = worldStartZ + (z * worldStepZ);
-          
-          // FIX #1: Geometry Occupancy Check - Test if vertices exist in this cell
-          // Uses 0.499 * stepSize bounding box to test full cell volume without boundary edge issues
-          // Test in WORLD SPACE against original bounds
-          const worldCellMinX = worldCellCenterX - worldHalfStepX;
-          const worldCellMaxX = worldCellCenterX + worldHalfStepX;
-          const worldCellMinY = worldCellCenterY - worldHalfStepY;
-          const worldCellMaxY = worldCellCenterY + worldHalfStepY;
-          const worldCellMinZ = worldCellCenterZ - worldHalfStepZ;
-          const worldCellMaxZ = worldCellCenterZ + worldHalfStepZ;
-          
-          // Quick axis-aligned bounding box test against all vertices (in world space)
-          // FIX #2: Any vertex inside cell boundary marks it solid (threshold = 1)
-          // Option A (Preferred): Use raw un-normalized vertices directly in world space
-          let vertexCount = 0;
-          
-          if (this.model.rawVertices && originalBounds) {
-            // Use raw vertices directly - no transform needed, already in world space
-            const rawVerts = this.model.rawVertices;
-            
-            // Debug log on first vertex of first cell to verify coordinate alignment
-            if (!debugLogged) {
-              console.log(`[Debug Coord Check] First raw vertex world pos: (${rawVerts[0].toFixed(2)}, ${rawVerts[1].toFixed(2)}, ${rawVerts[2].toFixed(2)})`);
-              console.log(`[Debug Coord Check] First cell center: (${worldCellCenterX.toFixed(2)}, ${worldCellCenterY.toFixed(2)}, ${worldCellCenterZ.toFixed(2)})`);
-              console.log(`[Debug Coord Check] Expected world range X[${originalBounds.minX.toFixed(1)}..${originalBounds.maxX.toFixed(1)}], Y[${originalBounds.minY.toFixed(1)}..${originalBounds.maxY.toFixed(1)}], Z[${originalBounds.minZ.toFixed(1)}..${originalBounds.maxZ.toFixed(1)}]`);
-              debugLogged = true;
-            }
-            
-            for (let i = 0; i < rawVerts.length; i += 3) {
-              const vx = rawVerts[i];
-              const vy = rawVerts[i + 1];
-              const vz = rawVerts[i + 2];
-              
-              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
-                  vy >= worldCellMinY && vy <= worldCellMaxY &&
-                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
-                vertexCount++;
-                // Early exit optimization: stop counting once threshold is met
-                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
-              }
-            }
-          } else if (originalBounds && scaleFactor) {
-            // Fallback Option B: Fix the un-normalization equation
-            // worldPos = (normalizedPos / scaleFactor) + centerOffset
-            const verts = this.model.vertices;
-            for (let i = 0; i < verts.length; i += 3) {
-              const vx = (verts[i] / scaleFactor) + centerX;
-              const vy = (verts[i + 1] / scaleFactor) + centerY;
-              const vz = (verts[i + 2] / scaleFactor) + centerZ;
-              
-              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
-                  vy >= worldCellMinY && vy <= worldCellMaxY &&
-                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
-                vertexCount++;
-                // Early exit optimization: stop counting once threshold is met
-                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
-              }
-            }
-          } else {
-            // Fallback: test in normalized space (should not happen if model is properly loaded)
-            console.warn('[Grid System] Falling back to normalized space vertex test - may have coordinate mismatch');
-          }
-          
-          // Add coordinate if cell contains at least one vertex (threshold = 1)
-          if (vertexCount >= MIN_VERTEX_THRESHOLD) {
-            // Convert world-space center to normalized coordinates for WebGL rendering
-            let normalizedX: number, normalizedY: number, normalizedZ: number;
-            
-            if (originalBounds && scaleFactor) {
-              // Convert world center to normalized: normalized = (world - centerOffset) * scaleFactor
-              // Since normalization centers at origin, we need: normalized = world * scaleFactor
-              // But our world coords are already relative to model origin, so:
-              normalizedX = worldCellCenterX * scaleFactor;
-              normalizedY = worldCellCenterY * scaleFactor;
-              normalizedZ = worldCellCenterZ * scaleFactor;
-            } else {
-              // Already in normalized space
-              normalizedX = worldCellCenterX;
-              normalizedY = worldCellCenterY;
-              normalizedZ = worldCellCenterZ;
-            }
-            
-            this.gridCoordinates.push({
-              x: normalizedX + posX,
-              y: normalizedY + posY,
-              z: normalizedZ + posZ
-            });
-          }
-        }
+    // --- OCCUPANCY CHECK: Direct Spatial Indexing ---
+    // Map each vertex directly to its grid cell index using Math.floor().
+    // This eliminates AABB tolerance issues for vertices on cell boundaries.
+    const solidSet = new Set<string>();
+    
+    // Get vertices - prefer rawVertices if available, otherwise un-normalize on the fly
+    let verts: Float32Array;
+    if (this.model.rawVertices) {
+      verts = this.model.rawVertices;
+    } else {
+      // Fallback: un-normalize vertices in place
+      verts = new Float32Array(this.model.vertices.length);
+      for (let i = 0; i < this.model.vertices.length; i += 3) {
+        verts[i] = (this.model.vertices[i] / scaleFactor) + centerX;
+        verts[i + 1] = (this.model.vertices[i + 1] / scaleFactor) + centerY;
+        verts[i + 2] = (this.model.vertices[i + 2] / scaleFactor) + centerZ;
       }
+    }
+
+    // Only proceed if we have valid bounds
+    if (originalBounds) {
+      for (let idx = 0; idx < verts.length; idx += 3) {
+        const vx = verts[idx];
+        const vy = verts[idx + 1];
+        const vz = verts[idx + 2];
+
+        // Derive integer cell indices directly from world position
+        let i = Math.floor((vx - originalBounds.minX) / worldStepX);
+        let j = Math.floor((vy - originalBounds.minY) / worldStepY);
+        let k = Math.floor((vz - originalBounds.minZ) / worldStepZ);
+
+        // Clamp upper boundary points (e.g., vx === maxX) into the last valid cell
+        // This handles floating point precision where (max-min)/step might equal Nx exactly
+        i = Math.min(Math.max(i, 0), nx - 1);
+        j = Math.min(Math.max(j, 0), ny - 1);
+        k = Math.min(Math.max(k, 0), nz - 1);
+
+        solidSet.add(`${i},${j},${k}`);
+      }
+    }
+
+    const solidCellsCount = solidSet.size;
+    console.log(`[Grid] Solid cells detected: ${solidCellsCount} / ${nx * ny * nz}`);
+
+    // Generate Coordinate Targets with manual offsets
+    // FIX #1: Only include coordinates where mesh vertices actually exist
+    this.gridCoordinates = [];
+
+    // Convert Set back to coordinate array for rendering
+    for (const key of solidSet) {
+      const [xStr, yStr, zStr] = key.split(',');
+      const x = parseInt(xStr, 10);
+      const y = parseInt(yStr, 10);
+      const z = parseInt(zStr, 10);
+
+      // Calculate cell center in WORLD SPACE using originalBounds (no double-offset)
+      const worldCellCenterX = worldStartX + (x * worldStepX);
+      const worldCellCenterY = worldStartY + (y * worldStepY);
+      const worldCellCenterZ = worldStartZ + (z * worldStepZ);
+
+      // Convert world-space center to normalized coordinates for WebGL rendering
+      let normalizedX: number, normalizedY: number, normalizedZ: number;
+
+      if (originalBounds && scaleFactor) {
+        // Convert world center to normalized: normalized = (world - centerOffset) * scaleFactor
+        // Since normalization centers at origin, we need: normalized = world * scaleFactor
+        // But our world coords are already relative to model origin, so:
+        normalizedX = worldCellCenterX * scaleFactor;
+        normalizedY = worldCellCenterY * scaleFactor;
+        normalizedZ = worldCellCenterZ * scaleFactor;
+      } else {
+        // Already in normalized space
+        normalizedX = worldCellCenterX;
+        normalizedY = worldCellCenterY;
+        normalizedZ = worldCellCenterZ;
+      }
+
+      this.gridCoordinates.push({
+        x: normalizedX + posX,
+        y: normalizedY + posY,
+        z: normalizedZ + posZ
+      });
     }
 
     const solidCells = this.gridCoordinates.length;

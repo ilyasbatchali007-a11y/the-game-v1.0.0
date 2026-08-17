@@ -511,6 +511,55 @@ export class MapWindow3DRenderer {
     return program;
   }
 
+  /**
+   * Load OBJ model from parsed data (replaces URL-based loading for direct parsing)
+   * @param model - Pre-parsed OBJModel from OBJLoader.parseOBJ()
+   */
+  public loadModel(model: OBJModel): void {
+    try {
+      this.model = model;
+      console.log('[MapWindow3DRenderer] Model loaded:', this.model.vertexCount, 'vertices');
+      
+      if (this.gl && this.model) {
+        // The OBJLoader already normalizes the model, so we use the data directly
+        console.log('[MapWindow3DRenderer] Using pre-normalized model data');
+        
+        // Calculate model bounds for positioning the glowing block
+        this.calculateModelBounds();
+        
+        // Create buffers from loaded model
+        this.createBuffersFromModel();
+        
+        console.log(`[MapWindow3DRenderer] Buffers created: ${this.model.vertexCount} vertices`);
+      }
+    } catch (error) {
+      this.logBug(`[BUG] Failed to load model: ${error}`);
+      console.error('[MapWindow3DRenderer] Failed to load model:', error);
+    }
+  }
+
+  /**
+   * Create WebGL buffers from model vertex data
+   */
+  private createBuffersFromModel(): void {
+    if (!this.gl || !this.model) return;
+    
+    // Create vertex buffer
+    this.vertexBuffer = this.gl.createBuffer();
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.vertices, this.gl.STATIC_DRAW);
+    
+    // Create normal buffer
+    this.normalBuffer = this.gl.createBuffer();
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.normals, this.gl.STATIC_DRAW);
+    
+    // Create index buffer
+    this.indexBuffer = this.gl.createBuffer();
+    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.model.indices, this.gl.STATIC_DRAW);
+  }
+
   public async loadOBJ(url: string): Promise<void> {
     try {
       this.model = await OBJLoader.loadFromURL(url);

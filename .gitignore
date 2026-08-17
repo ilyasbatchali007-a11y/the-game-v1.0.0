@@ -1,57 +1,50 @@
-```
-# Dependencies
-node_modules/
-
-# Build artifacts
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+*.class
+*.exe
+*.dll
+*.so
+*.a
+*.out
 dist/
 build/
 target/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-
-# Virtual environments
+# Dependencies
+node_modules/
 venv/
 .venv/
-env/
-.ENV/
-
-# Logs
-*.log
-
-# Environment variables
 .env
 .env.local
-.env.*
+*.env.*
 
-# IDE
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Editors and IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# System files
 .DS_Store
 Thumbs.db
 
-# Testing
+# Coverage and testing
 .coverage
 coverage/
 htmlcov/
-.pytest_cache/
+
+# Cache directories
 .mypy_cache/
-
-# Distribution / packaging
-*.tar.gz
-*.whl
-*.egg
-
-# Temporary files
-*.tmp
-*.temp
-```
+.pytest_cache/
+.gradle/
+.julia/
+zig*/

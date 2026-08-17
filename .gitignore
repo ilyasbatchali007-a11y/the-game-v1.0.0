@@ -3,7 +3,6 @@
 __pycache__/
 *.o
 *.obj
-*.class
 *.exe
 *.dll
 *.so
@@ -19,7 +18,7 @@ venv/
 .venv/
 .env
 .env.local
-*.env.*
+.env.*
 
 # Logs and temp files
 *.log
@@ -30,8 +29,6 @@ venv/
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # System files
 .DS_Store
@@ -42,13 +39,13 @@ coverage/
 htmlcov/
 .coverage
 
-# Python specific
+# Cache directories
 .mypy_cache/
 .pytest_cache/
-
-# Java/Gradle
 .gradle/
-build/
+.julia/
+zig*/
+julia-*/
 
 # Compressed files
 *.zip

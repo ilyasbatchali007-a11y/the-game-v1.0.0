@@ -274,43 +274,56 @@ export class MapWindow3DRenderer {
 
   /**
    * Plan 1: Calculate Grid Dimensions and Populate Coordinate Targets
-   * Uses detected steps to define Nx, Ny, Nz and generates center points.
+   * HARDCODED to 2.0 unit cubes as per model specifications.
    * Traversal order: Y -> Z -> X for predictable scanline movement.
-   * Also sets the glowing block size dynamically.
    */
   private calculateGridDimensions(): void {
     if (!this.modelBounds) return;
 
     const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
     
-    // Calculate counts based on bounds and steps, ensuring at least 1
-    const nx = Math.max(1, Math.round((maxX - minX) / this.gridSize.x) + 1);
-    const ny = Math.max(1, Math.round((maxY - minY) / this.gridSize.y) + 1);
-    const nz = Math.max(1, Math.round((maxZ - minZ) / this.gridSize.z) + 1);
+    // --- MANUAL CONFIGURATION ---
+    const MANUAL_STEP_SIZE = 2.0; // Exact cube size from your model
+    const sizeOffset = 0.9;       // 1.0 = exact fit, 0.9 = 90% size (gap)
+    const posX = 0.0;             // Manual X offset
+    const posY = 0.5;             // Manual Y offset (lift slightly)
+    const posZ = 0.0;             // Manual Z offset
+    // ----------------------------
+
+    // Force grid size to manual value
+    this.gridSize = { x: MANUAL_STEP_SIZE, y: MANUAL_STEP_SIZE, z: MANUAL_STEP_SIZE };
+
+    // Calculate counts based on bounds and manual step
+    const nx = Math.max(1, Math.round((maxX - minX) / MANUAL_STEP_SIZE) + 1);
+    const ny = Math.max(1, Math.round((maxY - minY) / MANUAL_STEP_SIZE) + 1);
+    const nz = Math.max(1, Math.round((maxZ - minZ) / MANUAL_STEP_SIZE) + 1);
 
     this.gridDimensions = { nx, ny, nz };
 
-    // Dynamic Scaling: Set block size to 90% of the smallest detected step
-    const minStep = Math.min(this.gridSize.x, this.gridSize.y, this.gridSize.z);
-    const newBlockSize = minStep * 0.9;
+    // Apply sizeOffset to block
+    const newBlockSize = MANUAL_STEP_SIZE * sizeOffset;
     
-    // Only rebuild buffers if size changed significantly to save performance
+    // Only rebuild buffers if size changed significantly
     if (this.glowingBlock && Math.abs(newBlockSize - this.glowingBlock.blockSize) > 0.01) {
       this.glowingBlock.blockSize = newBlockSize;
       this.createBlockBuffers(); 
-      console.log(`[MapWindow3DRenderer] Block size set to: ${newBlockSize.toFixed(2)}`);
+      console.log(`[MapWindow3DRenderer] Block size set to: ${newBlockSize.toFixed(2)} (Base: ${MANUAL_STEP_SIZE} * Offset: ${sizeOffset})`);
     }
 
-    // Generate Coordinate Targets (Order: Y -> Z -> X for predictable scanline movement)
+    // Generate Coordinate Targets with manual offsets
     this.gridCoordinates = [];
     
+    const startX = minX + (MANUAL_STEP_SIZE / 2);
+    const startY = minY + (MANUAL_STEP_SIZE / 2);
+    const startZ = minZ + (MANUAL_STEP_SIZE / 2);
+
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
           this.gridCoordinates.push({
-            x: minX + (x * this.gridSize.x),
-            y: minY + (y * this.gridSize.y),
-            z: minZ + (z * this.gridSize.z)
+            x: startX + (x * MANUAL_STEP_SIZE) + posX,
+            y: startY + (y * MANUAL_STEP_SIZE) + posY,
+            z: startZ + (z * MANUAL_STEP_SIZE) + posZ
           });
         }
       }

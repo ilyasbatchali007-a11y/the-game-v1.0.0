@@ -390,7 +390,7 @@ export class MapWindow3DRenderer {
     let stepZ = this.gridSize.z;
 
     // --- MANUAL OFFSETS ONLY (size and position tweaks) ---
-    const visualSizeOffset = 0.9;   // 1.0 = exact fit, 0.9 = 90% size (visual gap only)
+    const visualSizeOffset = 1.0;   // 1.0 = exact fit to cell boundaries (no artificial shrinkage)
     const posX = 0.0;               // Manual X offset
     const posY = 0.0;               // Manual Y offset
     const posZ = 0.0;               // Manual Z offset
@@ -451,6 +451,10 @@ export class MapWindow3DRenderer {
     
     // Use normalized vertices directly - these match what's rendered on screen
     const normVerts = this.model.vertices;
+    
+    // Cell centroid filtering margin: reject vertices sitting on outer 5% boundary wall of a cell
+    // This prevents boundary vertices from double-triggering adjacent air cells
+    const margin = 0.45;
 
     for (let idx = 0; idx < normVerts.length; idx += 3) {
       const vx = normVerts[idx];
@@ -471,8 +475,21 @@ export class MapWindow3DRenderer {
       i = Math.min(Math.max(i, 0), nx - 1);
       j = Math.min(Math.max(j, 0), ny - 1);
       k = Math.min(Math.max(k, 0), nz - 1);
-
-      solidSet.add(`${i},${j},${k}`);
+      
+      // Calculate cell center for centroid filtering
+      const cx = normMinX + (i + 0.5) * stepNormX;
+      const cy = normMinY + (j + 0.5) * stepNormY;
+      const cz = normMinZ + (k + 0.5) * stepNormZ;
+      
+      // Only mark cell as solid if vertex falls within inner core of cell (90% margin)
+      // This rejects vertices sitting on shared edges that would trigger neighboring air cells
+      if (
+        Math.abs(vx - cx) <= stepNormX * margin &&
+        Math.abs(vy - cy) <= stepNormY * margin &&
+        Math.abs(vz - cz) <= stepNormZ * margin
+      ) {
+        solidSet.add(`${i},${j},${k}`);
+      }
     }
 
     const solidCellsCount = solidSet.size;

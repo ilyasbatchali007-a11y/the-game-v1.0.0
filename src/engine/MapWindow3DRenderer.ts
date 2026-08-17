@@ -473,9 +473,16 @@ export class MapWindow3DRenderer {
     const worldStartZ = worldMinZ + (worldStepZ / 2);
 
     // Pre-compute world-space cell half-extents for occupancy testing
-    const worldHalfStepX = worldStepX / 2;
-    const worldHalfStepY = worldStepY / 2;
-    const worldHalfStepZ = worldStepZ / 2;
+    // FIX: Shrink tolerance margin from 0.50 to 0.45 to prevent exterior wall vertices
+    // from triggering occupancy in adjacent air cells (prevents false positives on boundaries)
+    const toleranceMargin = 0.45;
+    const worldHalfStepX = worldStepX * toleranceMargin;
+    const worldHalfStepY = worldStepY * toleranceMargin;
+    const worldHalfStepZ = worldStepZ * toleranceMargin;
+
+    // Minimum vertex density threshold - require at least 4 vertices inside cell boundary
+    // to mark as solid (prevents single touching boundary vertex from flagging air cells)
+    const MIN_VERTEX_THRESHOLD = 4;
 
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
@@ -485,7 +492,8 @@ export class MapWindow3DRenderer {
           const worldCellCenterY = worldStartY + (y * worldStepY) + posY;
           const worldCellCenterZ = worldStartZ + (z * worldStepZ) + posZ;
           
-          // FIX #1: Geometry Occupancy Check - Test if any vertices exist in this cell
+          // FIX #1: Geometry Occupancy Check - Test if vertices exist in this cell
+          // Uses SHRUNKEN bounding box (0.45 * stepSize instead of 0.50) to avoid boundary false positives
           // Test in WORLD SPACE against original bounds
           const worldCellMinX = worldCellCenterX - worldHalfStepX;
           const worldCellMaxX = worldCellCenterX + worldHalfStepX;
@@ -495,7 +503,8 @@ export class MapWindow3DRenderer {
           const worldCellMaxZ = worldCellCenterZ + worldHalfStepZ;
           
           // Quick axis-aligned bounding box test against all vertices (in world space)
-          let hasVertices = false;
+          // FIX #2: Count vertices instead of early exit - require minimum density threshold
+          let vertexCount = 0;
           const verts = this.model.vertices;
           
           if (originalBounds && scaleFactor) {
@@ -508,8 +517,9 @@ export class MapWindow3DRenderer {
               if (vx >= worldCellMinX && vx <= worldCellMaxX &&
                   vy >= worldCellMinY && vy <= worldCellMaxY &&
                   vz >= worldCellMinZ && vz <= worldCellMaxZ) {
-                hasVertices = true;
-                break;
+                vertexCount++;
+                // Early exit optimization: stop counting once threshold is met
+                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
               }
             }
           } else {
@@ -522,14 +532,15 @@ export class MapWindow3DRenderer {
               if (vx >= worldCellMinX && vx <= worldCellMaxX &&
                   vy >= worldCellMinY && vy <= worldCellMaxY &&
                   vz >= worldCellMinZ && vz <= worldCellMaxZ) {
-                hasVertices = true;
-                break;
+                vertexCount++;
+                // Early exit optimization: stop counting once threshold is met
+                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
               }
             }
           }
           
-          // Only add coordinate if cell contains actual mesh geometry
-          if (hasVertices) {
+          // Only add coordinate if cell contains sufficient vertex density (not just boundary touches)
+          if (vertexCount >= MIN_VERTEX_THRESHOLD) {
             // Convert world-space center to normalized coordinates for WebGL rendering
             let normalizedX: number, normalizedY: number, normalizedZ: number;
             

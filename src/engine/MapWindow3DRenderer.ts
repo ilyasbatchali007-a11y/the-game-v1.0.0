@@ -435,14 +435,16 @@ export class MapWindow3DRenderer {
     }
 
     // Calculate counts in WORLD SPACE using clean integer division
-    const nx = Math.max(1, Math.round((worldMaxX - worldMinX) / worldStepX) + 1);
-    const ny = Math.max(1, Math.round((worldMaxY - worldMinY) / worldStepY) + 1);
-    const nz = Math.max(1, Math.round((worldMaxZ - worldMinZ) / worldStepZ) + 1);
+    // FIX: Use Math.round() without +1 to eliminate floating-point boundary padding
+    const nx = Math.max(1, Math.round((worldMaxX - worldMinX) / worldStepX));
+    const ny = Math.max(1, Math.round((worldMaxY - worldMinY) / worldStepY));
+    const nz = Math.max(1, Math.round((worldMaxZ - worldMinZ) / worldStepZ));
 
     this.gridDimensions = { nx, ny, nz };
 
     // FIX #3: Anisotropic Unit Cell Sizing - Per-axis block dimensions
     // Visual rendering uses 90% scale, but logical collision uses 100%
+    // Preserve full float precision for normalized steps (no rounding/truncation)
     const visualBlockSizeX = stepX * visualSizeOffset;
     const visualBlockSizeY = stepY * visualSizeOffset;
     const visualBlockSizeZ = stepZ * visualSizeOffset;
@@ -458,6 +460,7 @@ export class MapWindow3DRenderer {
     
     // FIX: Re-create block buffers immediately after updating block size
     // This ensures the glowing wireframe matches the newly detected grid step sizes
+    // Uses exact, unrounded normalized step sizes for tight cell fit
     this.createBlockBuffers();
 
     // Generate Coordinate Targets with manual offsets

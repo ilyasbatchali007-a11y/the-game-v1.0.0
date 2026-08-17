@@ -560,15 +560,19 @@ export class MapWindow3DRenderer {
       const worldCellCenterZ = worldStartZ + (z * worldStepZ);
 
       // Convert world-space center to normalized coordinates for WebGL rendering
+      // FIX: Use correct inverse normalization: normalized = (world - center) * scaleFactor
       let normalizedX: number, normalizedY: number, normalizedZ: number;
 
       if (originalBounds && scaleFactor) {
-        // Convert world center to normalized: normalized = (world - centerOffset) * scaleFactor
-        // Since normalization centers at origin, we need: normalized = world * scaleFactor
-        // But our world coords are already relative to model origin, so:
-        normalizedX = worldCellCenterX * scaleFactor;
-        normalizedY = worldCellCenterY * scaleFactor;
-        normalizedZ = worldCellCenterZ * scaleFactor;
+        // Correct inverse of: normalized = (world - center) * scaleFactor
+        // So: normalized = (worldCellCenter - center) * scaleFactor
+        const centerX = (originalBounds.minX + originalBounds.maxX) / 2;
+        const centerY = (originalBounds.minY + originalBounds.maxY) / 2;
+        const centerZ = (originalBounds.minZ + originalBounds.maxZ) / 2;
+        
+        normalizedX = (worldCellCenterX - centerX) * scaleFactor;
+        normalizedY = (worldCellCenterY - centerY) * scaleFactor;
+        normalizedZ = (worldCellCenterZ - centerZ) * scaleFactor;
       } else {
         // Already in normalized space
         normalizedX = worldCellCenterX;

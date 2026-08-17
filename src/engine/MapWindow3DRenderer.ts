@@ -396,194 +396,106 @@ export class MapWindow3DRenderer {
     const posZ = 0.0;               // Manual Z offset
     // -------------------------------------------------------
 
-    // CRITICAL FIX: Compute grid counts in WORLD SPACE to avoid floating-point drift
-    // Extract original bounds and scale factor for world-space calculation
-    const originalBounds = this.model.originalBounds;
-    const scaleFactor = this.model.scaleFactor || 1.0;
+    // CRITICAL FIX: Run occupancy detection in NORMALIZED SPACE to match rendered geometry
+    // This eliminates coordinate mismatch where highlight box floated in mid-air
+    const stepNormX = stepX;  // Already in normalized space from detectGridStepSize()
+    const stepNormY = stepY;
+    const stepNormZ = stepZ;
     
-    let worldStepX: number, worldStepY: number, worldStepZ: number;
-    let worldMinX: number, worldMaxX: number, worldMinY: number, worldMaxY: number, worldMinZ: number, worldMaxZ: number;
+    // Normalized bounds (what's actually rendered on screen)
+    const normMinX = minX;
+    const normMaxX = maxX;
+    const normMinY = minY;
+    const normMaxY = maxY;
+    const normMinZ = minZ;
+    const normMaxZ = maxZ;
     
-    if (originalBounds) {
-      // Convert normalized steps back to world space
-      worldStepX = stepX / scaleFactor;
-      worldStepY = stepY / scaleFactor;
-      worldStepZ = stepZ / scaleFactor;
-      
-      worldMinX = originalBounds.minX;
-      worldMaxX = originalBounds.maxX;
-      worldMinY = originalBounds.minY;
-      worldMaxY = originalBounds.maxY;
-      worldMinZ = originalBounds.minZ;
-      worldMaxZ = originalBounds.maxZ;
-      
-      console.log(`[Grid System] Computing grid in WORLD SPACE: steps=[${worldStepX.toFixed(2)}, ${worldStepY.toFixed(2)}, ${worldStepZ.toFixed(2)}]`);
-    } else {
-      // Fallback: use normalized space (should not happen if OBJLoader provides originalBounds)
-      worldStepX = stepX;
-      worldStepY = stepY;
-      worldStepZ = stepZ;
-      
-      worldMinX = minX;
-      worldMaxX = maxX;
-      worldMinY = minY;
-      worldMaxY = maxY;
-      worldMinZ = minZ;
-      worldMaxZ = maxZ;
-      
-      console.warn(`[Grid System] Missing originalBounds - computing in normalized space (may have rounding drift)`);
-    }
-
-    // Calculate counts in WORLD SPACE using clean integer division
-    // FIX: Use Math.round() without +1 to eliminate floating-point boundary padding
-    const nx = Math.max(1, Math.round((worldMaxX - worldMinX) / worldStepX));
-    const ny = Math.max(1, Math.round((worldMaxY - worldMinY) / worldStepY));
-    const nz = Math.max(1, Math.round((worldMaxZ - worldMinZ) / worldStepZ));
+    console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE: steps=[${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
+    
+    // Calculate grid counts from normalized bounds using Math.round() to avoid float drift
+    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepNormX));
+    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepNormY));
+    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepNormZ));
 
     this.gridDimensions = { nx, ny, nz };
 
+    // Starting position for cell centers (half-step offset from min bound)
+    const normStartX = normMinX + (stepNormX / 2);
+    const normStartY = normMinY + (stepNormY / 2);
+    const normStartZ = normMinZ + (stepNormZ / 2);
+
     // FIX #3: Anisotropic Unit Cell Sizing - Per-axis block dimensions
     // Visual rendering uses 90% scale, but logical collision uses 100%
-    // Preserve full float precision for normalized steps (no rounding/truncation)
-    const visualBlockSizeX = stepX * visualSizeOffset;
-    const visualBlockSizeY = stepY * visualSizeOffset;
-    const visualBlockSizeZ = stepZ * visualSizeOffset;
+    const visualBlockSizeX = stepNormX * visualSizeOffset;
+    const visualBlockSizeY = stepNormY * visualSizeOffset;
+    const visualBlockSizeZ = stepNormZ * visualSizeOffset;
     
     // Update glowing block with per-axis sizing
     if (this.glowingBlock) {
       this.glowingBlock.setBlockSizeVector(visualBlockSizeX, visualBlockSizeY, visualBlockSizeZ);
-      // Also update legacy blockSize for backward compatibility (use average)
       this.glowingBlock.blockSize = (visualBlockSizeX + visualBlockSizeY + visualBlockSizeZ) / 3;
     }
     
-    console.log(`[Grid System] Visual block sizes: [${visualBlockSizeX.toFixed(2)}, ${visualBlockSizeY.toFixed(2)}, ${visualBlockSizeZ.toFixed(2)}]`);
+    console.log(`[Grid System] Visual block sizes: [${visualBlockSizeX.toFixed(4)}, ${visualBlockSizeY.toFixed(4)}, ${visualBlockSizeZ.toFixed(4)}]`);
     
-    // FIX: Re-create block buffers immediately after updating block size
-    // This ensures the glowing wireframe matches the newly detected grid step sizes
-    // Uses exact, unrounded normalized step sizes for tight cell fit
+    // Re-create block buffers immediately after updating block size
     this.createBlockBuffers();
 
-    // Generate Coordinate Targets with manual offsets
-    // FIX #1: Only include coordinates where mesh vertices actually exist
-    this.gridCoordinates = [];
-    
-    // Calculate world-space cell centers using clean integer arithmetic
-    const worldStartX = worldMinX + (worldStepX / 2);
-    const worldStartY = worldMinY + (worldStepY / 2);
-    const worldStartZ = worldMinZ + (worldStepZ / 2);
-
-    // Pre-compute world-space cell half-extents for occupancy testing
-    // FIX: Use 0.499 * stepSize to test full cell volume without double-counting exact boundary edges
-    const toleranceMargin = 0.499;
-    const worldHalfStepX = worldStepX * toleranceMargin;
-    const worldHalfStepY = worldStepY * toleranceMargin;
-    const worldHalfStepZ = worldStepZ * toleranceMargin;
-
-    // Calculate model center for reversing normalization transform
-    const centerX = originalBounds ? (originalBounds.minX + originalBounds.maxX) / 2 : 0;
-    const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
-    const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
-
-    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Proportional Epsilon Tie-Breaker ---
-    // Map each vertex directly to its grid cell index using Math.floor().
-    // FIX: Apply step-proportional epsilon (0.0001 * worldStep) to prevent boundary vertices
-    //      from double-triggering adjacent cells. Uses conditional subtraction for robustness.
-    
     // Proportional epsilon tie-breaker: offset relative to step size for robust boundary handling
-    const epsX = 0.0001 * worldStepX;
-    const epsY = 0.0001 * worldStepY;
-    const epsZ = 0.0001 * worldStepZ;
+    const epsX = 0.0001 * stepNormX;
+    const epsY = 0.0001 * stepNormY;
+    const epsZ = 0.0001 * stepNormZ;
     
     // Dynamic solid set - collects unique occupied cells without hardcoded thresholds
     const solidSet = new Set<string>();
     
-    // Get vertices - prefer rawVertices if available, otherwise un-normalize on the fly
-    let verts: Float32Array;
-    if (this.model.rawVertices) {
-      verts = this.model.rawVertices;
-    } else {
-      // Fallback: un-normalize vertices in place
-      verts = new Float32Array(this.model.vertices.length);
-      for (let i = 0; i < this.model.vertices.length; i += 3) {
-        verts[i] = (this.model.vertices[i] / scaleFactor) + centerX;
-        verts[i + 1] = (this.model.vertices[i + 1] / scaleFactor) + centerY;
-        verts[i + 2] = (this.model.vertices[i + 2] / scaleFactor) + centerZ;
-      }
-    }
+    // Use normalized vertices directly - these match what's rendered on screen
+    const normVerts = this.model.vertices;
 
-    // Only proceed if we have valid bounds
-    if (originalBounds) {
-      for (let idx = 0; idx < verts.length; idx += 3) {
-        const vx = verts[idx];
-        const vy = verts[idx + 1];
-        const vz = verts[idx + 2];
+    for (let idx = 0; idx < normVerts.length; idx += 3) {
+      const vx = normVerts[idx];
+      const vy = normVerts[idx + 1];
+      const vz = normVerts[idx + 2];
 
-        // Calculate relative positions from model origin
-        const relX = vx - originalBounds.minX;
-        const relY = vy - originalBounds.minY;
-        const relZ = vz - originalBounds.minZ;
+      // Calculate relative positions from normalized model origin
+      const relX = vx - normMinX;
+      const relY = vy - normMinY;
+      const relZ = vz - normMinZ;
 
-        // Derive integer cell indices with proportional epsilon tie-breaker
-        // Conditionally subtract epsilon only when rel > eps to handle boundary vertices
-        let i = Math.floor((relX > epsX ? relX - epsX : relX) / worldStepX);
-        let j = Math.floor((relY > epsY ? relY - epsY : relY) / worldStepY);
-        let k = Math.floor((relZ > epsZ ? relZ - epsZ : relZ) / worldStepZ);
+      // Derive integer cell indices with proportional epsilon tie-breaker
+      let i = Math.floor((relX > epsX ? relX - epsX : relX) / stepNormX);
+      let j = Math.floor((relY > epsY ? relY - epsY : relY) / stepNormY);
+      let k = Math.floor((relZ > epsZ ? relZ - epsZ : relZ) / stepNormZ);
 
-        // Clamp upper boundary points (e.g., vx === maxX) into the last valid cell
-        // This handles floating point precision where (max-min)/step might equal Nx exactly
-        i = Math.min(Math.max(i, 0), nx - 1);
-        j = Math.min(Math.max(j, 0), ny - 1);
-        k = Math.min(Math.max(k, 0), nz - 1);
+      // Clamp upper boundary points into the last valid cell
+      i = Math.min(Math.max(i, 0), nx - 1);
+      j = Math.min(Math.max(j, 0), ny - 1);
+      k = Math.min(Math.max(k, 0), nz - 1);
 
-        // Add to solid set - any vertex inside marks the cell as occupied
-        solidSet.add(`${i},${j},${k}`);
-      }
+      solidSet.add(`${i},${j},${k}`);
     }
 
     const solidCellsCount = solidSet.size;
     console.log(`[Grid] Solid cells detected: ${solidCellsCount} / ${nx * ny * nz}`);
 
-    // Generate Coordinate Targets with manual offsets
-    // FIX #1: Only include coordinates where mesh vertices actually exist
+    // Generate Coordinate Targets - only include occupied cells
     this.gridCoordinates = [];
 
-    // Convert Set back to coordinate array for rendering
     for (const key of solidSet) {
       const [xStr, yStr, zStr] = key.split(',');
       const x = parseInt(xStr, 10);
       const y = parseInt(yStr, 10);
       const z = parseInt(zStr, 10);
 
-      // Calculate cell center in WORLD SPACE using originalBounds (no double-offset)
-      const worldCellCenterX = worldStartX + (x * worldStepX);
-      const worldCellCenterY = worldStartY + (y * worldStepY);
-      const worldCellCenterZ = worldStartZ + (z * worldStepZ);
-
-      // Convert world-space center to normalized coordinates for WebGL rendering
-      // FIX: Use correct inverse normalization: normalized = (world - center) * scaleFactor
-      let normalizedX: number, normalizedY: number, normalizedZ: number;
-
-      if (originalBounds && scaleFactor) {
-        // Correct inverse of: normalized = (world - center) * scaleFactor
-        // So: normalized = (worldCellCenter - center) * scaleFactor
-        const centerX = (originalBounds.minX + originalBounds.maxX) / 2;
-        const centerY = (originalBounds.minY + originalBounds.maxY) / 2;
-        const centerZ = (originalBounds.minZ + originalBounds.maxZ) / 2;
-        
-        normalizedX = (worldCellCenterX - centerX) * scaleFactor;
-        normalizedY = (worldCellCenterY - centerY) * scaleFactor;
-        normalizedZ = (worldCellCenterZ - centerZ) * scaleFactor;
-      } else {
-        // Already in normalized space
-        normalizedX = worldCellCenterX;
-        normalizedY = worldCellCenterY;
-        normalizedZ = worldCellCenterZ;
-      }
+      // Calculate cell center directly in NORMALIZED SPACE (matches rendered geometry)
+      const normCellCenterX = normStartX + (x * stepNormX);
+      const normCellCenterY = normStartY + (y * stepNormY);
+      const normCellCenterZ = normStartZ + (z * stepNormZ);
 
       this.gridCoordinates.push({
-        x: normalizedX + posX,
-        y: normalizedY + posY,
-        z: normalizedZ + posZ
+        x: normCellCenterX + posX,
+        y: normCellCenterY + posY,
+        z: normCellCenterZ + posZ
       });
     }
 

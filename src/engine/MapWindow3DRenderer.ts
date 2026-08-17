@@ -482,6 +482,11 @@ export class MapWindow3DRenderer {
     // Minimum vertex density threshold - any vertex inside cell boundary marks it solid
     const MIN_VERTEX_THRESHOLD = 1;
 
+    // Calculate model center for reversing normalization transform
+    const centerX = originalBounds ? (originalBounds.minX + originalBounds.maxX) / 2 : 0;
+    const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
+    const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
+
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
@@ -507,10 +512,11 @@ export class MapWindow3DRenderer {
           
           if (originalBounds && scaleFactor) {
             // Convert vertex positions to world space for comparison
+            // Reverse normalization: worldPos = (normalizedPos / scaleFactor) + centerOffset
             for (let i = 0; i < verts.length; i += 3) {
-              const vx = verts[i] / scaleFactor;
-              const vy = verts[i + 1] / scaleFactor;
-              const vz = verts[i + 2] / scaleFactor;
+              const vx = (verts[i] / scaleFactor) + centerX;
+              const vy = (verts[i + 1] / scaleFactor) + centerY;
+              const vz = (verts[i + 2] / scaleFactor) + centerZ;
               
               if (vx >= worldCellMinX && vx <= worldCellMaxX &&
                   vy >= worldCellMinY && vy <= worldCellMaxY &&

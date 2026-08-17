@@ -452,9 +452,9 @@ export class MapWindow3DRenderer {
     // Use normalized vertices directly - these match what's rendered on screen
     const normVerts = this.model.vertices;
     
-    // Cell centroid filtering margin: reject vertices sitting on outer 5% boundary wall of a cell
+    // Cell centroid filtering margin: reject vertices sitting on outer 30% boundary wall of a cell
     // This prevents boundary vertices from double-triggering adjacent air cells
-    const margin = 0.45;
+    const margin = 0.35;
 
     for (let idx = 0; idx < normVerts.length; idx += 3) {
       const vx = normVerts[idx];
@@ -504,10 +504,10 @@ export class MapWindow3DRenderer {
       const y = parseInt(yStr, 10);
       const z = parseInt(zStr, 10);
 
-      // Calculate cell center directly in NORMALIZED SPACE (matches rendered geometry)
-      const normCellCenterX = normStartX + (x * stepNormX);
-      const normCellCenterY = normStartY + (y * stepNormY);
-      const normCellCenterZ = normStartZ + (z * stepNormZ);
+      // Calculate cell center directly in NORMALIZED SPACE using index formula (no accumulation drift)
+      const normCellCenterX = normMinX + (x + 0.5) * stepNormX;
+      const normCellCenterY = normMinY + (y + 0.5) * stepNormY;
+      const normCellCenterZ = normMinZ + (z + 0.5) * stepNormZ;
 
       this.gridCoordinates.push({
         x: normCellCenterX + posX,

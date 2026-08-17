@@ -484,19 +484,15 @@ export class MapWindow3DRenderer {
     const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
     const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
 
-    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Epsilon Inset ---
+    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Epsilon Tie-Breaker ---
     // Map each vertex directly to its grid cell index using Math.floor().
-    // FIX: Apply epsilon inset to pull boundary vertices toward actual cell volume
-    //      and use multi-hit threshold to filter isolated noise vertices.
+    // FIX: Apply microscopic epsilon (1e-5) to prevent boundary vertices from double-triggering
+    //      adjacent cells. Uses a simple Set<string> for dynamic solid cell detection.
     
-    // Epsilon inset: tiny inner offset (0.001 * stepSize) to handle boundary vertices
-    const epsX = 0.001 * worldStepX;
-    const epsY = 0.001 * worldStepY;
-    const epsZ = 0.001 * worldStepZ;
+    // Epsilon tie-breaker: microscopic offset to handle exact boundary vertices
+    const eps = 0.00001;
     
-    // Multi-hit threshold: require at least 2 vertex hits per cell to qualify as solid
-    const MIN_VERTEX_THRESHOLD = 2;
-    const hitCounts = new Map<string, number>();
+    // Dynamic solid set - collects unique occupied cells without hardcoded thresholds
     const solidSet = new Set<string>();
     
     // Get vertices - prefer rawVertices if available, otherwise un-normalize on the fly
@@ -520,10 +516,10 @@ export class MapWindow3DRenderer {
         const vy = verts[idx + 1];
         const vz = verts[idx + 2];
 
-        // Derive integer cell indices with epsilon inset to pull boundary vertices inward
-        let i = Math.floor((vx - originalBounds.minX - epsX) / worldStepX);
-        let j = Math.floor((vy - originalBounds.minY - epsY) / worldStepY);
-        let k = Math.floor((vz - originalBounds.minZ - epsZ) / worldStepZ);
+        // Derive integer cell indices with epsilon tie-breaker to prevent double-counting
+        let i = Math.floor((vx - originalBounds.minX - eps) / worldStepX);
+        let j = Math.floor((vy - originalBounds.minY - eps) / worldStepY);
+        let k = Math.floor((vz - originalBounds.minZ - eps) / worldStepZ);
 
         // Clamp upper boundary points (e.g., vx === maxX) into the last valid cell
         // This handles floating point precision where (max-min)/step might equal Nx exactly
@@ -531,16 +527,8 @@ export class MapWindow3DRenderer {
         j = Math.min(Math.max(j, 0), ny - 1);
         k = Math.min(Math.max(k, 0), nz - 1);
 
-        // Increment hit count for this cell
-        const key = `${i},${j},${k}`;
-        hitCounts.set(key, (hitCounts.get(key) || 0) + 1);
-      }
-      
-      // Filter cells that meet the minimum vertex threshold
-      for (const [key, count] of hitCounts.entries()) {
-        if (count >= MIN_VERTEX_THRESHOLD) {
-          solidSet.add(key);
-        }
+        // Add to solid set - any vertex inside marks the cell as occupied
+        solidSet.add(`${i},${j},${k}`);
       }
     }
 

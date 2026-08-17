@@ -75,6 +75,14 @@ export class MapWindow3DRenderer {
   
   // Model bounds for positioning the glowing block
   private modelBounds: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number } | null = null;
+  
+  // Grid detection for automated spatial mapping
+  private gridSize: { x: number, y: number, z: number } = { x: 2.0, y: 2.0, z: 2.0 };
+  private gridDimensions: { nx: number, ny: number, nz: number } = { nx: 0, ny: 0, nz: 0 };
+  private gridCoordinates: BlockPosition[] = [];
+  private currentGridIndex: number = 0;
+  private lastGridMoveTime: number = 0;
+  private readonly GRID_MOVE_INTERVAL: number = 500; // ms between moves
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -154,26 +162,20 @@ export class MapWindow3DRenderer {
   }
 
   private initGlowingBlock(): void {
-    // --- EDIT THESE 4 NUMBERS ONLY ---
-    const sizeOffset = 0.9;  // Size: 1.0 = exact cube size, 0.5 = half size
-    const posX = 0.0;        // X Position offset (Left/Right)
-    const posY = 0.0;        // Y Position offset (Up/Down)
-    const posZ = 0.0;        // Z Position offset (Forward/Back)
-    // ---------------------------------
-
-    this.glowingBlock = new GlowingBlock(sizeOffset);
+    // Initialize with default size, will be updated after grid detection
+    this.glowingBlock = new GlowingBlock(2.0);
     this.createBlockBuffers();
     // Show the block by default so it's visible
     this.glowingBlock.show();
     
-    // Set initial position using simple offsets
+    // Set initial position
     if (this.glowingBlock) {
-      this.glowingBlock.setPosition(posX, posY, posZ);
+      this.glowingBlock.setPosition(0, 0, 0);
     }
   }
 
   /**
-   * Calculate the bounding box of the loaded model
+   * Calculate the bounding box of the loaded model and detect grid size
    */
   private calculateModelBounds(): void {
     if (!this.model || this.model.vertices.length === 0) {
@@ -201,6 +203,87 @@ export class MapWindow3DRenderer {
 
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
+    
+    // Detect grid step size from vertices
+    this.detectGridStepSize();
+    
+    // Calculate grid dimensions and coordinates
+    this.calculateGridDimensions();
+    
+    // Update glowing block size to match grid
+    if (this.glowingBlock) {
+      const minStep = Math.min(this.gridSize.x, this.gridSize.y, this.gridSize.z);
+      this.glowingBlock.blockSize = minStep * 0.9;
+      this.createBlockBuffers();
+      console.log(`[MapWindow3DRenderer] Grid detected: ${this.gridDimensions.nx}x${this.gridDimensions.ny}x${this.gridDimensions.nz}, blockSize=${this.glowingBlock.blockSize.toFixed(2)}`);
+    }
+  }
+
+  /**
+   * Detect the smallest repeating vertex distance along each axis
+   */
+  private detectGridStepSize(): void {
+    if (!this.model || this.model.vertices.length === 0) return;
+
+    const verts = this.model.vertices;
+    const epsilon = 0.01;
+    
+    // Collect all unique differences along each axis
+    const xDiffs = new Set<number>();
+    const yDiffs = new Set<number>();
+    const zDiffs = new Set<number>();
+
+    for (let i = 0; i < verts.length; i += 3) {
+      for (let j = i + 3; j < verts.length; j += 3) {
+        const dx = Math.abs(verts[j] - verts[i]);
+        const dy = Math.abs(verts[j + 1] - verts[i + 1]);
+        const dz = Math.abs(verts[j + 2] - verts[i + 2]);
+        
+        if (dx > epsilon) xDiffs.add(Math.round(dx * 100) / 100);
+        if (dy > epsilon) yDiffs.add(Math.round(dy * 100) / 100);
+        if (dz > epsilon) zDiffs.add(Math.round(dz * 100) / 100);
+      }
+    }
+
+    // Find the minimum non-zero difference (the grid step)
+    const xArray = Array.from(xDiffs).sort((a, b) => a - b);
+    const yArray = Array.from(yDiffs).sort((a, b) => a - b);
+    const zArray = Array.from(zDiffs).sort((a, b) => a - b);
+
+    this.gridSize.x = xArray.length > 0 ? xArray[0] : 2.0;
+    this.gridSize.y = yArray.length > 0 ? yArray[0] : 2.0;
+    this.gridSize.z = zArray.length > 0 ? zArray[0] : 2.0;
+
+    console.log(`[MapWindow3DRenderer] Detected grid steps: Δx=${this.gridSize.x}, Δy=${this.gridSize.y}, Δz=${this.gridSize.z}`);
+  }
+
+  /**
+   * Calculate grid dimensions and populate coordinate targets
+   */
+  private calculateGridDimensions(): void {
+    if (!this.modelBounds) return;
+
+    const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
+    
+    this.gridDimensions.nx = Math.round((maxX - minX) / this.gridSize.x) + 1;
+    this.gridDimensions.ny = Math.round((maxY - minY) / this.gridSize.y) + 1;
+    this.gridDimensions.nz = Math.round((maxZ - minZ) / this.gridSize.z) + 1;
+
+    // Generate all grid coordinates
+    this.gridCoordinates = [];
+    for (let x = 0; x < this.gridDimensions.nx; x++) {
+      for (let y = 0; y < this.gridDimensions.ny; y++) {
+        for (let z = 0; z < this.gridDimensions.nz; z++) {
+          this.gridCoordinates.push({
+            x: minX + x * this.gridSize.x,
+            y: minY + y * this.gridSize.y,
+            z: minZ + z * this.gridSize.z
+          });
+        }
+      }
+    }
+
+    console.log(`[MapWindow3DRenderer] Grid dimensions: ${this.gridDimensions.nx}x${this.gridDimensions.ny}x${this.gridDimensions.nz} = ${this.gridCoordinates.length} positions`);
   }
 
   /**
@@ -208,6 +291,42 @@ export class MapWindow3DRenderer {
    */
   private positionGlowingBlockAtLowest(): void {
     if (!this.glowingBlock || !this.modelBounds) return;
+    
+    // Position at the center X/Z and lowest Y of the model bounds
+    const centerX = (this.modelBounds.minX + this.modelBounds.maxX) / 2;
+    const centerZ = (this.modelBounds.minZ + this.modelBounds.maxZ) / 2;
+    const lowestY = this.modelBounds.minY;
+    
+    this.glowingBlock.setPosition(centerX, lowestY, centerZ);
+  }
+
+  /**
+   * Public method to start/stop grid animation
+   */
+  public toggleGridAnimation(enabled: boolean): void {
+    if (enabled) {
+      this.currentGridIndex = 0;
+      this.lastGridMoveTime = Date.now();
+      console.log('[MapWindow3DRenderer] Grid animation started');
+    } else {
+      console.log('[MapWindow3DRenderer] Grid animation stopped');
+    }
+  }
+
+  /**
+   * Public method to manually move to next grid position
+   */
+  public moveToNextGridPosition(): void {
+    if (this.gridCoordinates.length === 0 || !this.glowingBlock) return;
+    
+    if (this.currentGridIndex < this.gridCoordinates.length) {
+      const pos = this.gridCoordinates[this.currentGridIndex];
+      this.glowingBlock.setPosition(pos.x, pos.y, pos.z);
+      this.currentGridIndex++;
+      console.log(`[MapWindow3DRenderer] Manual grid step ${this.currentGridIndex}/${this.gridCoordinates.length}`);
+    } else {
+      this.currentGridIndex = 0;
+    }
   }
 
   private createBlockBuffers(): void {
@@ -507,9 +626,37 @@ export class MapWindow3DRenderer {
   private animate = (): void => {
     if (!this.isRunning) return;
     
+    // Update glowing block position in grid animation loop
+    this.updateGlowingBlockAnimation();
+    
     this.render();
     this.animationFrameId = requestAnimationFrame(this.animate);
   };
+
+  /**
+   * Animate the glowing block moving through all grid coordinates
+   */
+  private updateGlowingBlockAnimation(): void {
+    if (!this.glowingBlock || this.gridCoordinates.length === 0) return;
+    
+    const now = Date.now();
+    if (now - this.lastGridMoveTime < this.GRID_MOVE_INTERVAL) return;
+    
+    this.lastGridMoveTime = now;
+    
+    // Move to next grid coordinate
+    if (this.currentGridIndex < this.gridCoordinates.length) {
+      const pos = this.gridCoordinates[this.currentGridIndex];
+      this.glowingBlock.setPosition(pos.x, pos.y, pos.z);
+      this.currentGridIndex++;
+      
+      console.log(`[MapWindow3DRenderer] Grid step ${this.currentGridIndex}/${this.gridCoordinates.length}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`);
+    } else {
+      // Reset to start when done
+      this.currentGridIndex = 0;
+      console.log('[MapWindow3DRenderer] Grid scan complete, restarting...');
+    }
+  }
 
   private lastLogState = {
     zoom: 0,

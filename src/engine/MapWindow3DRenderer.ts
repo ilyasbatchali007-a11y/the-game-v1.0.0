@@ -479,17 +479,24 @@ export class MapWindow3DRenderer {
     const worldHalfStepY = worldStepY * toleranceMargin;
     const worldHalfStepZ = worldStepZ * toleranceMargin;
 
-    // Minimum vertex density threshold - any vertex inside cell boundary marks it solid
-    const MIN_VERTEX_THRESHOLD = 1;
-
     // Calculate model center for reversing normalization transform
     const centerX = originalBounds ? (originalBounds.minX + originalBounds.maxX) / 2 : 0;
     const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
     const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
 
-    // --- OCCUPANCY CHECK: Direct Spatial Indexing ---
+    // --- OCCUPANCY CHECK: Direct Spatial Indexing with Epsilon Inset ---
     // Map each vertex directly to its grid cell index using Math.floor().
-    // This eliminates AABB tolerance issues for vertices on cell boundaries.
+    // FIX: Apply epsilon inset to pull boundary vertices toward actual cell volume
+    //      and use multi-hit threshold to filter isolated noise vertices.
+    
+    // Epsilon inset: tiny inner offset (0.001 * stepSize) to handle boundary vertices
+    const epsX = 0.001 * worldStepX;
+    const epsY = 0.001 * worldStepY;
+    const epsZ = 0.001 * worldStepZ;
+    
+    // Multi-hit threshold: require at least 2 vertex hits per cell to qualify as solid
+    const MIN_VERTEX_THRESHOLD = 2;
+    const hitCounts = new Map<string, number>();
     const solidSet = new Set<string>();
     
     // Get vertices - prefer rawVertices if available, otherwise un-normalize on the fly
@@ -513,10 +520,10 @@ export class MapWindow3DRenderer {
         const vy = verts[idx + 1];
         const vz = verts[idx + 2];
 
-        // Derive integer cell indices directly from world position
-        let i = Math.floor((vx - originalBounds.minX) / worldStepX);
-        let j = Math.floor((vy - originalBounds.minY) / worldStepY);
-        let k = Math.floor((vz - originalBounds.minZ) / worldStepZ);
+        // Derive integer cell indices with epsilon inset to pull boundary vertices inward
+        let i = Math.floor((vx - originalBounds.minX - epsX) / worldStepX);
+        let j = Math.floor((vy - originalBounds.minY - epsY) / worldStepY);
+        let k = Math.floor((vz - originalBounds.minZ - epsZ) / worldStepZ);
 
         // Clamp upper boundary points (e.g., vx === maxX) into the last valid cell
         // This handles floating point precision where (max-min)/step might equal Nx exactly
@@ -524,7 +531,16 @@ export class MapWindow3DRenderer {
         j = Math.min(Math.max(j, 0), ny - 1);
         k = Math.min(Math.max(k, 0), nz - 1);
 
-        solidSet.add(`${i},${j},${k}`);
+        // Increment hit count for this cell
+        const key = `${i},${j},${k}`;
+        hitCounts.set(key, (hitCounts.get(key) || 0) + 1);
+      }
+      
+      // Filter cells that meet the minimum vertex threshold
+      for (const [key, count] of hitCounts.entries()) {
+        if (count >= MIN_VERTEX_THRESHOLD) {
+          solidSet.add(key);
+        }
       }
     }
 

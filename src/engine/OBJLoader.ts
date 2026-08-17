@@ -11,6 +11,8 @@ export interface OBJModel {
   originalBounds?: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number };
   // Original scale factor applied during normalization
   scaleFactor?: number;
+  // Raw un-normalized vertices in world space for direct occupancy testing (Option A fix)
+  rawVertices?: Float32Array;
 }
 
 export class OBJLoader {
@@ -146,7 +148,8 @@ export class OBJLoader {
       indices: new Uint16Array(indices),
       vertexCount: Math.floor(positions.length / 3),
       originalBounds,
-      scaleFactor
+      scaleFactor,
+      rawVertices: new Float32Array(positions) // Store raw un-normalized vertices for direct world-space occupancy testing
     };
   }
   

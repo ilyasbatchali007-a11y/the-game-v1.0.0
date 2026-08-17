@@ -487,6 +487,9 @@ export class MapWindow3DRenderer {
     const centerY = originalBounds ? (originalBounds.minY + originalBounds.maxY) / 2 : 0;
     const centerZ = originalBounds ? (originalBounds.minZ + originalBounds.maxZ) / 2 : 0;
 
+    // Debug: log first vertex world position vs first cell center to verify coordinate alignment
+    let debugLogged = false;
+
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
@@ -507,12 +510,38 @@ export class MapWindow3DRenderer {
           
           // Quick axis-aligned bounding box test against all vertices (in world space)
           // FIX #2: Any vertex inside cell boundary marks it solid (threshold = 1)
+          // Option A (Preferred): Use raw un-normalized vertices directly in world space
           let vertexCount = 0;
-          const verts = this.model.vertices;
           
-          if (originalBounds && scaleFactor) {
-            // Convert vertex positions to world space for comparison
-            // Reverse normalization: worldPos = (normalizedPos / scaleFactor) + centerOffset
+          if (this.model.rawVertices && originalBounds) {
+            // Use raw vertices directly - no transform needed, already in world space
+            const rawVerts = this.model.rawVertices;
+            
+            // Debug log on first vertex of first cell to verify coordinate alignment
+            if (!debugLogged) {
+              console.log(`[Debug Coord Check] First raw vertex world pos: (${rawVerts[0].toFixed(2)}, ${rawVerts[1].toFixed(2)}, ${rawVerts[2].toFixed(2)})`);
+              console.log(`[Debug Coord Check] First cell center: (${worldCellCenterX.toFixed(2)}, ${worldCellCenterY.toFixed(2)}, ${worldCellCenterZ.toFixed(2)})`);
+              console.log(`[Debug Coord Check] Expected world range X[${originalBounds.minX.toFixed(1)}..${originalBounds.maxX.toFixed(1)}], Y[${originalBounds.minY.toFixed(1)}..${originalBounds.maxY.toFixed(1)}], Z[${originalBounds.minZ.toFixed(1)}..${originalBounds.maxZ.toFixed(1)}]`);
+              debugLogged = true;
+            }
+            
+            for (let i = 0; i < rawVerts.length; i += 3) {
+              const vx = rawVerts[i];
+              const vy = rawVerts[i + 1];
+              const vz = rawVerts[i + 2];
+              
+              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
+                  vy >= worldCellMinY && vy <= worldCellMaxY &&
+                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
+                vertexCount++;
+                // Early exit optimization: stop counting once threshold is met
+                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
+              }
+            }
+          } else if (originalBounds && scaleFactor) {
+            // Fallback Option B: Fix the un-normalization equation
+            // worldPos = (normalizedPos / scaleFactor) + centerOffset
+            const verts = this.model.vertices;
             for (let i = 0; i < verts.length; i += 3) {
               const vx = (verts[i] / scaleFactor) + centerX;
               const vy = (verts[i + 1] / scaleFactor) + centerY;
@@ -527,20 +556,8 @@ export class MapWindow3DRenderer {
               }
             }
           } else {
-            // Fallback: test in normalized space
-            for (let i = 0; i < verts.length; i += 3) {
-              const vx = verts[i];
-              const vy = verts[i + 1];
-              const vz = verts[i + 2];
-              
-              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
-                  vy >= worldCellMinY && vy <= worldCellMaxY &&
-                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
-                vertexCount++;
-                // Early exit optimization: stop counting once threshold is met
-                if (vertexCount >= MIN_VERTEX_THRESHOLD) break;
-              }
-            }
+            // Fallback: test in normalized space (should not happen if model is properly loaded)
+            console.warn('[Grid System] Falling back to normalized space vertex test - may have coordinate mismatch');
           }
           
           // Add coordinate if cell contains at least one vertex (threshold = 1)

@@ -398,9 +398,6 @@ export class MapWindow3DRenderer {
 
     // CRITICAL FIX: Run occupancy detection in NORMALIZED SPACE to match rendered geometry
     // This eliminates coordinate mismatch where highlight box floated in mid-air
-    const stepNormX = stepX;  // Already in normalized space from detectGridStepSize()
-    const stepNormY = stepY;
-    const stepNormZ = stepZ;
     
     // Normalized bounds (what's actually rendered on screen)
     const normMinX = minX;
@@ -410,14 +407,22 @@ export class MapWindow3DRenderer {
     const normMinZ = minZ;
     const normMaxZ = maxZ;
     
-    console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE: steps=[${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
+    console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE`);
     
-    // Calculate grid counts from normalized bounds using Math.round() to avoid float drift
-    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepNormX));
-    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepNormY));
-    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepNormZ));
+    // FIX: Override auto-detection with exact authored grid resolution (5x10x2 = 100 total cells)
+    // This prevents auto-detector from splitting model into 714 micro-voxels causing boundary bleed
+    const nx = 5; 
+    const ny = 10; 
+    const nz = 2; 
 
     this.gridDimensions = { nx, ny, nz };
+
+    // Derive normalized step sizes directly from total bounds and block counts
+    const stepNormX = (normMaxX - normMinX) / nx;
+    const stepNormY = (normMaxY - normMinY) / ny;
+    const stepNormZ = (normMaxZ - normMinZ) / nz;
+    
+    console.log(`[Grid System] LOCKED to ${nx}x${ny}x${nz} = ${nx*ny*nz} cells. Recalculated steps: [${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
 
     // Starting position for cell centers (half-step offset from min bound)
     const normStartX = normMinX + (stepNormX / 2);
@@ -477,20 +482,8 @@ export class MapWindow3DRenderer {
       j = Math.min(Math.max(j, 0), ny - 1);
       k = Math.min(Math.max(k, 0), nz - 1);
       
-      // Calculate cell center for centroid filtering
-      const cx = normMinX + (i + 0.5) * stepNormX;
-      const cy = normMinY + (j + 0.5) * stepNormY;
-      const cz = normMinZ + (k + 0.5) * stepNormZ;
-      
-      // Only mark cell as solid if vertex falls within inner core of cell (90% margin)
-      // This rejects vertices sitting on shared edges that would trigger neighboring air cells
-      if (
-        Math.abs(vx - cx) <= stepNormX * margin &&
-        Math.abs(vy - cy) <= stepNormY * margin &&
-        Math.abs(vz - cz) <= stepNormZ * margin
-      ) {
-        solidSet.add(`${i},${j},${k}`);
-      }
+      // Standard occupancy mapping - no margin filtering needed with fixed grid
+      solidSet.add(`${i},${j},${k}`);
     }
 
     const solidCellsCount = solidSet.size;

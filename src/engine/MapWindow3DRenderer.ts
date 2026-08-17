@@ -377,16 +377,17 @@ export class MapWindow3DRenderer {
    * 
    * FIX #1: Filters out grid cells with zero mesh vertices (eliminates phantom air tiles).
    * FIX #3: Uses per-axis block sizing for anisotropic grids.
+   * FIX: Computes grid counts and cell centers in WORLD SPACE to prevent floating-point rounding drift.
    */
   private calculateGridDimensions(): void {
     if (!this.modelBounds || !this.model || this.model.vertices.length === 0) return;
 
     const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
     
-    // Use DETECTED step sizes instead of hardcoded values
-    const stepX = this.gridSize.x;
-    const stepY = this.gridSize.y;
-    const stepZ = this.gridSize.z;
+    // Use DETECTED step sizes (currently in normalized space)
+    let stepX = this.gridSize.x;
+    let stepY = this.gridSize.y;
+    let stepZ = this.gridSize.z;
 
     // --- MANUAL OFFSETS ONLY (size and position tweaks) ---
     const visualSizeOffset = 0.9;   // 1.0 = exact fit, 0.9 = 90% size (visual gap only)
@@ -395,10 +396,48 @@ export class MapWindow3DRenderer {
     const posZ = 0.0;               // Manual Z offset
     // -------------------------------------------------------
 
-    // Calculate counts based on bounds and detected steps
-    const nx = Math.max(1, Math.round((maxX - minX) / stepX) + 1);
-    const ny = Math.max(1, Math.round((maxY - minY) / stepY) + 1);
-    const nz = Math.max(1, Math.round((maxZ - minZ) / stepZ) + 1);
+    // CRITICAL FIX: Compute grid counts in WORLD SPACE to avoid floating-point drift
+    // Extract original bounds and scale factor for world-space calculation
+    const originalBounds = this.model.originalBounds;
+    const scaleFactor = this.model.scaleFactor || 1.0;
+    
+    let worldStepX: number, worldStepY: number, worldStepZ: number;
+    let worldMinX: number, worldMaxX: number, worldMinY: number, worldMaxY: number, worldMinZ: number, worldMaxZ: number;
+    
+    if (originalBounds) {
+      // Convert normalized steps back to world space
+      worldStepX = stepX / scaleFactor;
+      worldStepY = stepY / scaleFactor;
+      worldStepZ = stepZ / scaleFactor;
+      
+      worldMinX = originalBounds.minX;
+      worldMaxX = originalBounds.maxX;
+      worldMinY = originalBounds.minY;
+      worldMaxY = originalBounds.maxY;
+      worldMinZ = originalBounds.minZ;
+      worldMaxZ = originalBounds.maxZ;
+      
+      console.log(`[Grid System] Computing grid in WORLD SPACE: steps=[${worldStepX.toFixed(2)}, ${worldStepY.toFixed(2)}, ${worldStepZ.toFixed(2)}]`);
+    } else {
+      // Fallback: use normalized space (should not happen if OBJLoader provides originalBounds)
+      worldStepX = stepX;
+      worldStepY = stepY;
+      worldStepZ = stepZ;
+      
+      worldMinX = minX;
+      worldMaxX = maxX;
+      worldMinY = minY;
+      worldMaxY = maxY;
+      worldMinZ = minZ;
+      worldMaxZ = maxZ;
+      
+      console.warn(`[Grid System] Missing originalBounds - computing in normalized space (may have rounding drift)`);
+    }
+
+    // Calculate counts in WORLD SPACE using clean integer division
+    const nx = Math.max(1, Math.round((worldMaxX - worldMinX) / worldStepX) + 1);
+    const ny = Math.max(1, Math.round((worldMaxY - worldMinY) / worldStepY) + 1);
+    const nz = Math.max(1, Math.round((worldMaxZ - worldMinZ) / worldStepZ) + 1);
 
     this.gridDimensions = { nx, ny, nz };
 
@@ -425,52 +464,90 @@ export class MapWindow3DRenderer {
     // FIX #1: Only include coordinates where mesh vertices actually exist
     this.gridCoordinates = [];
     
-    const startX = minX + (stepX / 2);
-    const startY = minY + (stepY / 2);
-    const startZ = minZ + (stepZ / 2);
+    // Calculate world-space cell centers using clean integer arithmetic
+    const worldStartX = worldMinX + (worldStepX / 2);
+    const worldStartY = worldMinY + (worldStepY / 2);
+    const worldStartZ = worldMinZ + (worldStepZ / 2);
 
-    // Pre-compute cell half-extents for occupancy testing
-    const halfStepX = stepX / 2;
-    const halfStepY = stepY / 2;
-    const halfStepZ = stepZ / 2;
+    // Pre-compute world-space cell half-extents for occupancy testing
+    const worldHalfStepX = worldStepX / 2;
+    const worldHalfStepY = worldStepY / 2;
+    const worldHalfStepZ = worldStepZ / 2;
 
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
-          const cellCenterX = startX + (x * stepX) + posX;
-          const cellCenterY = startY + (y * stepY) + posY;
-          const cellCenterZ = startZ + (z * stepZ) + posZ;
+          // Calculate cell center in WORLD SPACE (clean integer arithmetic)
+          const worldCellCenterX = worldStartX + (x * worldStepX) + posX;
+          const worldCellCenterY = worldStartY + (y * worldStepY) + posY;
+          const worldCellCenterZ = worldStartZ + (z * worldStepZ) + posZ;
           
           // FIX #1: Geometry Occupancy Check - Test if any vertices exist in this cell
-          const cellMinX = cellCenterX - halfStepX;
-          const cellMaxX = cellCenterX + halfStepX;
-          const cellMinY = cellCenterY - halfStepY;
-          const cellMaxY = cellCenterY + halfStepY;
-          const cellMinZ = cellCenterZ - halfStepZ;
-          const cellMaxZ = cellCenterZ + halfStepZ;
+          // Test in WORLD SPACE against original bounds
+          const worldCellMinX = worldCellCenterX - worldHalfStepX;
+          const worldCellMaxX = worldCellCenterX + worldHalfStepX;
+          const worldCellMinY = worldCellCenterY - worldHalfStepY;
+          const worldCellMaxY = worldCellCenterY + worldHalfStepY;
+          const worldCellMinZ = worldCellCenterZ - worldHalfStepZ;
+          const worldCellMaxZ = worldCellCenterZ + worldHalfStepZ;
           
-          // Quick axis-aligned bounding box test against all vertices
+          // Quick axis-aligned bounding box test against all vertices (in world space)
           let hasVertices = false;
           const verts = this.model.vertices;
-          for (let i = 0; i < verts.length; i += 3) {
-            const vx = verts[i];
-            const vy = verts[i + 1];
-            const vz = verts[i + 2];
-            
-            if (vx >= cellMinX && vx <= cellMaxX &&
-                vy >= cellMinY && vy <= cellMaxY &&
-                vz >= cellMinZ && vz <= cellMaxZ) {
-              hasVertices = true;
-              break;
+          
+          if (originalBounds && scaleFactor) {
+            // Convert vertex positions to world space for comparison
+            for (let i = 0; i < verts.length; i += 3) {
+              const vx = verts[i] / scaleFactor;
+              const vy = verts[i + 1] / scaleFactor;
+              const vz = verts[i + 2] / scaleFactor;
+              
+              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
+                  vy >= worldCellMinY && vy <= worldCellMaxY &&
+                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
+                hasVertices = true;
+                break;
+              }
+            }
+          } else {
+            // Fallback: test in normalized space
+            for (let i = 0; i < verts.length; i += 3) {
+              const vx = verts[i];
+              const vy = verts[i + 1];
+              const vz = verts[i + 2];
+              
+              if (vx >= worldCellMinX && vx <= worldCellMaxX &&
+                  vy >= worldCellMinY && vy <= worldCellMaxY &&
+                  vz >= worldCellMinZ && vz <= worldCellMaxZ) {
+                hasVertices = true;
+                break;
+              }
             }
           }
           
           // Only add coordinate if cell contains actual mesh geometry
           if (hasVertices) {
+            // Convert world-space center to normalized coordinates for WebGL rendering
+            let normalizedX: number, normalizedY: number, normalizedZ: number;
+            
+            if (originalBounds && scaleFactor) {
+              // Convert world center to normalized: normalized = (world - centerOffset) * scaleFactor
+              // Since normalization centers at origin, we need: normalized = world * scaleFactor
+              // But our world coords are already relative to model origin, so:
+              normalizedX = worldCellCenterX * scaleFactor;
+              normalizedY = worldCellCenterY * scaleFactor;
+              normalizedZ = worldCellCenterZ * scaleFactor;
+            } else {
+              // Already in normalized space
+              normalizedX = worldCellCenterX;
+              normalizedY = worldCellCenterY;
+              normalizedZ = worldCellCenterZ;
+            }
+            
             this.gridCoordinates.push({
-              x: cellCenterX,
-              y: cellCenterY,
-              z: cellCenterZ
+              x: normalizedX + posX,
+              y: normalizedY + posY,
+              z: normalizedZ + posZ
             });
           }
         }

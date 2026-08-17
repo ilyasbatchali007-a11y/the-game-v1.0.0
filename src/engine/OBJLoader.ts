@@ -7,6 +7,10 @@ export interface OBJModel {
   uvs: Float32Array;
   indices: Uint16Array;
   vertexCount: number;
+  // Pre-normalization bounds for accurate grid detection (Fix over-segmentation)
+  originalBounds?: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number };
+  // Original scale factor applied during normalization
+  scaleFactor?: number;
 }
 
 export class OBJLoader {
@@ -133,24 +137,27 @@ export class OBJLoader {
     }
     
     // Normalize the model: center it and scale to fit within unit cube
-    const normalizedPositions = this.normalizePositions(positions);
+    const { normalized: normalizedPositions, bounds: originalBounds, scaleFactor } = this.normalizePositions(positions);
     
     return {
       vertices: new Float32Array(normalizedPositions),
       normals: new Float32Array(normals),
       uvs: new Float32Array(uvs),
       indices: new Uint16Array(indices),
-      vertexCount: Math.floor(positions.length / 3)
+      vertexCount: Math.floor(positions.length / 3),
+      originalBounds,
+      scaleFactor
     };
   }
   
   /**
    * Normalize positions: center at origin and scale to fit within -0.8 to 0.8
+   * Returns normalized positions along with original bounds and scale factor for grid detection
    */
-  private static normalizePositions(positions: number[]): number[] {
-    if (positions.length === 0) return positions;
+  private static normalizePositions(positions: number[]): { normalized: number[], bounds: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number }, scaleFactor: number } {
+    if (positions.length === 0) return { normalized: positions, bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 }, scaleFactor: 1.0 };
     
-    // 1. Calculate Bounds
+    // 1. Calculate Bounds (ORIGINAL world-space bounds before normalization)
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
@@ -166,6 +173,9 @@ export class OBJLoader {
       if (z < minZ) minZ = z;
       if (z > maxZ) maxZ = z;
     }
+    
+    // Store original bounds for grid detection
+    const originalBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     
     // 2. Calculate Center
     const centerX = (minX + maxX) / 2;
@@ -194,7 +204,7 @@ export class OBJLoader {
       normalized[i + 2] = (positions[i + 2] - centerZ) * scale;
     }
     
-    return normalized;
+    return { normalized, bounds: originalBounds, scaleFactor: scale };
   }
   
   /**

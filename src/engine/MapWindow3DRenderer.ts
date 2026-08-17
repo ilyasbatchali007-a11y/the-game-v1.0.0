@@ -220,8 +220,9 @@ export class MapWindow3DRenderer {
   }
 
   /**
-   * Plan 1: Autodetect Step Size using O(V log V) sorting algorithm.
-   * Avoids O(V^2) pairwise comparison. Uses dynamic tolerance based on mesh diagonal.
+   * Plan 1: Autodetect Step Size using O(V log V) sorting algorithm with histogram mode filtering.
+   * Uses PRE-normalized geometry coordinates to avoid sub-face/bevel vertex noise.
+   * Selects dominant step size (statistical mode) instead of median to avoid over-segmentation.
    */
   private detectGridStepSize(): void {
     // Guard clause: Check for empty or uninitialized mesh
@@ -231,71 +232,132 @@ export class MapWindow3DRenderer {
       return;
     }
 
-    const vertices = this.model.vertices;
+    // FIX: Use pre-normalized vertices for step detection (avoids float noise from normalization)
+    const originalBounds = this.model.originalBounds;
+    const scaleFactor = this.model.scaleFactor || 1.0;
     
-    // Calculate mesh diagonal for dynamic tolerance (Fix Flaw #2 & #6)
-    // Tolerance scales with model size: 0.1% of diagonal
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
+    if (!originalBounds) {
+      console.warn("[MapWindow3DRenderer] Missing originalBounds - falling back to normalized coordinates");
+      // Fallback to current behavior if bounds not available
+    }
+
+    // Calculate diagonal from ORIGINAL bounds for dynamic tolerance
+    let diagX: number, diagY: number, diagZ: number, meshDiagonal: number;
     
-    for (let i = 0; i < vertices.length; i += 3) {
-      const x = vertices[i];
-      const y = vertices[i + 1];
-      const z = vertices[i + 2];
+    if (originalBounds) {
+      diagX = originalBounds.maxX - originalBounds.minX;
+      diagY = originalBounds.maxY - originalBounds.minY;
+      diagZ = originalBounds.maxZ - originalBounds.minZ;
+      meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
+      console.log(`[MapWindow3DRenderer] Using ORIGINAL bounds for grid detection: X[${originalBounds.minX.toFixed(1)}, ${originalBounds.maxX.toFixed(1)}], Scale factor: ${scaleFactor.toFixed(4)}`);
+    } else {
+      // Fallback: calculate from normalized vertices
+      const vertices = this.model.vertices;
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let minZ = Infinity, maxZ = -Infinity;
       
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
+      for (let i = 0; i < vertices.length; i += 3) {
+        const x = vertices[i];
+        const y = vertices[i + 1];
+        const z = vertices[i + 2];
+        
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+      }
+      
+      diagX = maxX - minX;
+      diagY = maxY - minY;
+      diagZ = maxZ - minZ;
+      meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
     }
     
-    const diagX = maxX - minX;
-    const diagY = maxY - minY;
-    const diagZ = maxZ - minZ;
-    const meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
     const tolerance = meshDiagonal * 0.001; // Dynamic tolerance: 0.1% of diagonal
     
     console.log(`[MapWindow3DRenderer] Mesh diagonal: ${meshDiagonal.toFixed(3)}, Dynamic tolerance: ${tolerance.toFixed(4)}`);
 
-    // Helper: Extract unique sorted coordinates for an axis (no toFixed rounding)
+    // Helper: Extract unique sorted coordinates from ORIGINAL space (or normalized if originalBounds missing)
     const getSortedUniqueCoords = (offset: number): number[] => {
       const coords = new Set<number>();
-      for (let i = offset; i < vertices.length; i += 3) {
-        coords.add(vertices[i]); // No toFixed - use dynamic tolerance instead
+      
+      if (originalBounds && this.model && this.model.scaleFactor) {
+        // Convert normalized coordinates back to world space for clean integer detection
+        const scale = this.model.scaleFactor;
+        const verts = this.model.vertices;
+        for (let i = offset; i < verts.length; i += 3) {
+          // Reverse normalization: worldCoord = normalizedCoord / scale
+          coords.add(verts[i] / scale);
+        }
+      } else {
+        // Use normalized coordinates directly (fallback)
+        const verts = this.model!.vertices;
+        for (let i = offset; i < verts.length; i += 3) {
+          coords.add(verts[i]);
+        }
       }
+      
       return Array.from(coords).sort((a, b) => a - b);
     };
 
-    // Helper: Calculate median step size from sorted coordinates
-    const calculateMedianStep = (coords: number[]): number => {
+    // Helper: Calculate DOMINANT step size using histogram mode (not median)
+    // This avoids over-segmentation by selecting the most common structural unit cell size
+    const calculateDominantStep = (coords: number[]): number => {
       if (coords.length < 2) return 0;
       
-      const steps: number[] = [];
+      // Build frequency histogram of step sizes
+      const stepCounts = new Map<number, number>();
+      const stepBuckets: number[] = [];
+      
       for (let i = 1; i < coords.length; i++) {
         const diff = coords[i] - coords[i - 1];
         if (diff > tolerance) {
-          steps.push(diff);
+          // Round to nearest meaningful unit for histogram binning (avoid micro-variations)
+          const bucketSize = Math.max(tolerance, diff * 0.05); // 5% bucket or tolerance, whichever larger
+          const bucket = Math.round(diff / bucketSize) * bucketSize;
+          
+          const existingCount = stepCounts.get(bucket) || 0;
+          stepCounts.set(bucket, existingCount + 1);
+          stepBuckets.push(bucket);
         }
       }
 
-      if (steps.length === 0) return 0;
+      if (stepCounts.size === 0) return 0;
 
-      // Sort steps to find median (robust against outliers)
-      steps.sort((a, b) => a - b);
-      const medianIndex = Math.floor(steps.length / 2);
-      return steps[medianIndex];
+      // Find the mode (most frequent step size) - this is the dominant structural unit
+      let dominantStep = 0;
+      let maxCount = 0;
+      
+      for (const [step, count] of stepCounts.entries()) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantStep = step;
+        }
+      }
+      
+      console.log(`[MapWindow3DRenderer] Step histogram: ${stepCounts.size} unique buckets, dominant=${dominantStep.toFixed(3)} (count=${maxCount})`);
+      
+      return dominantStep;
     };
 
     const xCoords = getSortedUniqueCoords(0);
     const yCoords = getSortedUniqueCoords(1);
     const zCoords = getSortedUniqueCoords(2);
 
-    let stepX = calculateMedianStep(xCoords);
-    let stepY = calculateMedianStep(yCoords);
-    let stepZ = calculateMedianStep(zCoords);
+    let stepX = calculateDominantStep(xCoords);
+    let stepY = calculateDominantStep(yCoords);
+    let stepZ = calculateDominantStep(zCoords);
+
+    // If original bounds were used, steps are in world units - must scale down to normalized space
+    if (originalBounds && scaleFactor) {
+      console.log(`[MapWindow3DRenderer] Converting world-space steps to normalized space (scale=${scaleFactor.toFixed(4)})`);
+      stepX *= scaleFactor;
+      stepY *= scaleFactor;
+      stepZ *= scaleFactor;
+    }
 
     // Fallback only if detection completely fails (e.g., single point)
     const defaultStep = 2.0;
@@ -305,7 +367,7 @@ export class MapWindow3DRenderer {
       z: stepZ > 0 ? stepZ : defaultStep
     };
 
-    console.log(`[MapWindow3DRenderer] Detected grid steps (O(V log V)): Δx=${this.gridSize.x.toFixed(2)}, Δy=${this.gridSize.y.toFixed(2)}, Δz=${this.gridSize.z.toFixed(2)}`);
+    console.log(`[MapWindow3DRenderer] Detected grid steps (histogram mode): Δx=${this.gridSize.x.toFixed(2)}, Δy=${this.gridSize.y.toFixed(2)}, Δz=${this.gridSize.z.toFixed(2)}`);
   }
 
   /**
@@ -354,6 +416,10 @@ export class MapWindow3DRenderer {
     }
     
     console.log(`[Grid System] Visual block sizes: [${visualBlockSizeX.toFixed(2)}, ${visualBlockSizeY.toFixed(2)}, ${visualBlockSizeZ.toFixed(2)}]`);
+    
+    // FIX: Re-create block buffers immediately after updating block size
+    // This ensures the glowing wireframe matches the newly detected grid step sizes
+    this.createBlockBuffers();
 
     // Generate Coordinate Targets with manual offsets
     // FIX #1: Only include coordinates where mesh vertices actually exist

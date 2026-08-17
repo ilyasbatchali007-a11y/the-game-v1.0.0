@@ -868,12 +868,12 @@ export class MapWindow3DRenderer {
   }
 
   private renderGlowingBlock(matrixLocation: WebGLUniformLocation | null, useLightingLocation: WebGLUniformLocation | null): void {
-    if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation || !useLightingLocation) return;
+    if (!this.gl || !this.glowingBlock || !this.glowingBlock.visible || !this.blockVertexBuffers || !matrixLocation || !useLightingLocation || !this.program) return;
+    
+    // Additional safety: ensure buffers are valid WebGL objects
+    if (!this.blockVertexBuffers.position || !this.blockVertexBuffers.index) return;
     
     const gl = this.gl;
-    
-    // Recreate block buffers with current size (in case it changed)
-    this.createBlockBuffers();
     
     // Disable depth testing AND depth writing for true X-ray effect
     gl.disable(gl.DEPTH_TEST);

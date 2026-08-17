@@ -321,7 +321,11 @@ export class MapWindow3DRenderer {
     // Reset animation to start
     this.currentGridIndex = 0;
     if (this.gridCoordinates.length > 0) {
-      this.updateGlowingBlockPosition(this.gridCoordinates[0]);
+      const firstPos = this.gridCoordinates[0];
+      if (this.glowingBlock && this.glowingBlock.mesh) {
+        this.glowingBlock.position = { ...firstPos };
+        this.glowingBlock.mesh.position.set(firstPos.x, firstPos.y, firstPos.z);
+      }
     }
   }
 

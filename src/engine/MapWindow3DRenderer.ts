@@ -9,6 +9,13 @@ export interface BlockPosition {
   z: number;
 }
 
+export interface MapBlock {
+  id: string;
+  position: { x: number; y: number; z: number }; // world-space center
+  size: { x: number; y: number; z: number };
+  type?: string;
+}
+
 export class GlowingBlock {
   position: BlockPosition;
   blockSize: number;
@@ -82,9 +89,7 @@ export class MapWindow3DRenderer {
   // Model bounds for positioning the glowing block
   private modelBounds: { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number } | null = null;
   
-  // Grid detection for automated spatial mapping
-  private gridSize: { x: number, y: number, z: number } = { x: 2.0, y: 2.0, z: 2.0 };
-  private gridDimensions: { nx: number, ny: number, nz: number } = { nx: 0, ny: 0, nz: 0 };
+  // Grid coordinates from pre-fusion block metadata
   private gridCoordinates: BlockPosition[] = [];
   private currentGridIndex: number = 0;
   private lastGridMoveTime: number = 0;
@@ -181,12 +186,12 @@ export class MapWindow3DRenderer {
   }
 
   /**
-   * Calculate the bounding box of the loaded model and detect grid size
+   * Calculate the bounding box of the loaded model for positioning reference
    */
   private calculateModelBounds(): void {
     // Guard clause: Check for empty or uninitialized mesh
     if (!this.model || !this.model.vertices || this.model.vertices.length === 0) {
-      console.error("[MapWindow3DRenderer] Cannot calculate grid on empty or uninitialized mesh.");
+      console.error("[MapWindow3DRenderer] Cannot calculate bounds on empty or uninitialized mesh.");
       this.modelBounds = null;
       return;
     }
@@ -211,321 +216,73 @@ export class MapWindow3DRenderer {
 
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
-    
-    // Detect grid step size from vertices (O(V log V) algorithm) with dynamic tolerance
-    this.detectGridStepSize();
-    
-    // Calculate grid dimensions and coordinates (also sets block size)
-    this.calculateGridDimensions();
   }
 
   /**
-   * Plan 1: Autodetect Step Size using O(V log V) sorting algorithm with histogram mode filtering.
-   * Uses PRE-normalized geometry coordinates to avoid sub-face/bevel vertex noise.
-   * Selects dominant step size (statistical mode) instead of median to avoid over-segmentation.
+   * Set map blocks from pre-fusion metadata. Replaces mesh-based grid detection.
+   * Converts each block's world-space position to normalized mesh space and populates gridCoordinates.
+   * @param blocks - Array of MapBlock objects in generation order (preserved traversal order)
    */
-  private detectGridStepSize(): void {
-    // Guard clause: Check for empty or uninitialized mesh
-    if (!this.model || !this.model.vertices || this.model.vertices.length === 0) {
-      console.error("[MapWindow3DRenderer] Cannot detect grid step size on empty or uninitialized mesh.");
-      this.gridSize = { x: 2.0, y: 2.0, z: 2.0 };
+  public setMapBlocks(blocks: MapBlock[]): void {
+    console.log('[SETUP: PRE-FUSION BLOCK METADATA] setMapBlocks() — replaces old mesh-based grid detection. See MapWindow3DRenderer.ts.');
+    
+    if (!this.model || !this.model.originalBounds || !this.model.scaleFactor) {
+      console.error('[MapWindow3DRenderer] Cannot set map blocks: model or bounds not initialized');
       return;
     }
-
-    // FIX: Use pre-normalized vertices for step detection (avoids float noise from normalization)
+    
     const originalBounds = this.model.originalBounds;
-    const scaleFactor = this.model.scaleFactor || 1.0;
+    const scaleFactor = this.model.scaleFactor;
     
-    if (!originalBounds) {
-      console.warn("[MapWindow3DRenderer] Missing originalBounds - falling back to normalized coordinates");
-      // Fallback to current behavior if bounds not available
-    }
-
-    // Calculate diagonal from ORIGINAL bounds for dynamic tolerance
-    let diagX: number, diagY: number, diagZ: number, meshDiagonal: number;
+    // Calculate center and scale for normalization (must match OBJLoader.normalizePositions)
+    const centerX = (originalBounds.minX + originalBounds.maxX) / 2;
+    const centerY = (originalBounds.minY + originalBounds.maxY) / 2;
+    const centerZ = (originalBounds.minZ + originalBounds.maxZ) / 2;
+    const dimX = originalBounds.maxX - originalBounds.minX;
+    const dimY = originalBounds.maxY - originalBounds.minY;
+    const dimZ = originalBounds.maxZ - originalBounds.minZ;
+    const maxDim = Math.max(dimX, Math.max(dimY, dimZ));
+    const targetSize = 1.6;
+    const scale = maxDim > 0 ? targetSize / maxDim : 1.0;
     
-    if (originalBounds) {
-      diagX = originalBounds.maxX - originalBounds.minX;
-      diagY = originalBounds.maxY - originalBounds.minY;
-      diagZ = originalBounds.maxZ - originalBounds.minZ;
-      meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
-      console.log(`[MapWindow3DRenderer] Using ORIGINAL bounds for grid detection: X[${originalBounds.minX.toFixed(1)}, ${originalBounds.maxX.toFixed(1)}], Scale factor: ${scaleFactor.toFixed(4)}`);
-    } else {
-      // Fallback: calculate from normalized vertices
-      const vertices = this.model.vertices;
-      let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
-      let minZ = Infinity, maxZ = -Infinity;
-      
-      for (let i = 0; i < vertices.length; i += 3) {
-        const x = vertices[i];
-        const y = vertices[i + 1];
-        const z = vertices[i + 2];
-        
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        if (z < minZ) minZ = z;
-        if (z > maxZ) maxZ = z;
-      }
-      
-      diagX = maxX - minX;
-      diagY = maxY - minY;
-      diagZ = maxZ - minZ;
-      meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
-    }
+    console.log(`[MapWindow3DRenderer] Converting ${blocks.length} blocks from world-space to normalized space`);
+    console.log(`[MapWindow3DRenderer] Original bounds: X[${originalBounds.minX.toFixed(1)}, ${originalBounds.maxX.toFixed(1)}], Y[${originalBounds.minY.toFixed(1)}, ${originalBounds.maxY.toFixed(1)}], Z[${originalBounds.minZ.toFixed(1)}, ${originalBounds.maxZ.toFixed(1)}]`);
+    console.log(`[MapWindow3DRenderer] Center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)}, ${centerZ.toFixed(2)}), Scale: ${scale.toFixed(4)}`);
     
-    const tolerance = meshDiagonal * 0.001; // Dynamic tolerance: 0.1% of diagonal
-    
-    console.log(`[MapWindow3DRenderer] Mesh diagonal: ${meshDiagonal.toFixed(3)}, Dynamic tolerance: ${tolerance.toFixed(4)}`);
-
-    // Helper: Extract unique sorted coordinates from ORIGINAL space (or normalized if originalBounds missing)
-    const getSortedUniqueCoords = (offset: number): number[] => {
-      const coords = new Set<number>();
-      
-      if (originalBounds && this.model && this.model.scaleFactor) {
-        // Convert normalized coordinates back to world space for clean integer detection
-        const scale = this.model.scaleFactor;
-        const verts = this.model.vertices;
-        for (let i = offset; i < verts.length; i += 3) {
-          // Reverse normalization: worldCoord = normalizedCoord / scale
-          coords.add(verts[i] / scale);
-        }
-      } else {
-        // Use normalized coordinates directly (fallback)
-        const verts = this.model!.vertices;
-        for (let i = offset; i < verts.length; i += 3) {
-          coords.add(verts[i]);
-        }
-      }
-      
-      return Array.from(coords).sort((a, b) => a - b);
-    };
-
-    // Helper: Calculate DOMINANT step size using float-safe Euclidean GCD algorithm
-    // This handles boolean fusion seams and sliver triangles in CSG-modified meshes
-    const calculateDominantStep = (coords: number[], tolerance: number): number => {
-      if (coords.length < 2) return 0;
-      
-      // Build array of gaps between consecutive coordinates
-      const gaps: number[] = [];
-      for (let i = 1; i < coords.length; i++) {
-        const diff = coords[i] - coords[i - 1];
-        if (diff > tolerance) gaps.push(diff);
-      }
-      if (gaps.length === 0) return 0;
-      
-      // Sort gaps ascending to start with smallest meaningful unit
-      gaps.sort((a, b) => a - b);
-      
-      // Float-safe GCD approximation using Euclidean algorithm
-      const approxGCD = (a: number, b: number): number => {
-        while (b > tolerance) {
-          const r = a % b;
-          a = b;
-          b = r;
-        }
-        return a;
-      };
-      
-      // Iteratively compute GCD across all gaps
-      let unit = gaps[0];
-      for (let i = 1; i < gaps.length; i++) {
-        unit = approxGCD(unit, gaps[i]);
-        if (unit <= tolerance) break;
-      }
-      
-      console.log(`[MapWindow3DRenderer] GCD step detection: ${gaps.length} gaps, dominant unit=${unit.toFixed(4)}`);
-      return unit;
-    };
-
-    const xCoords = getSortedUniqueCoords(0);
-    const yCoords = getSortedUniqueCoords(1);
-    const zCoords = getSortedUniqueCoords(2);
-
-    let stepX = calculateDominantStep(xCoords, tolerance);
-    let stepY = calculateDominantStep(yCoords, tolerance);
-    let stepZ = calculateDominantStep(zCoords, tolerance);
-
-    // If original bounds were used, steps are in world units - must scale down to normalized space
-    if (originalBounds && scaleFactor) {
-      console.log(`[MapWindow3DRenderer] Converting world-space steps to normalized space (scale=${scaleFactor.toFixed(4)})`);
-      stepX *= scaleFactor;
-      stepY *= scaleFactor;
-      stepZ *= scaleFactor;
-    }
-
-    // Fallback only if detection completely fails (e.g., single point)
-    const defaultStep = 2.0;
-    this.gridSize = {
-      x: stepX > 0 ? stepX : defaultStep,
-      y: stepY > 0 ? stepY : defaultStep,
-      z: stepZ > 0 ? stepZ : defaultStep
-    };
-
-    console.log(`[MapWindow3DRenderer] Detected grid steps (histogram mode): Δx=${this.gridSize.x.toFixed(2)}, Δy=${this.gridSize.y.toFixed(2)}, Δz=${this.gridSize.z.toFixed(2)}`);
-  }
-
-  /**
-   * Plan 1: Calculate Grid Dimensions and Populate Coordinate Targets
-   * Uses AUTOMATIC detection from model vertices (O(V log V) algorithm).
-   * Traversal order: Y -> Z -> X for predictable scanline movement.
-   * 
-   * FIX #1: Filters out grid cells with zero mesh vertices (eliminates phantom air tiles).
-   * FIX #3: Uses per-axis block sizing for anisotropic grids.
-   * FIX: Computes grid counts and cell centers in WORLD SPACE to prevent floating-point rounding drift.
-   */
-  private calculateGridDimensions(): void {
-    if (!this.modelBounds || !this.model || this.model.vertices.length === 0) return;
-
-    const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
-    
-    // Use DETECTED step sizes (currently in normalized space)
-    let stepX = this.gridSize.x;
-    let stepY = this.gridSize.y;
-    let stepZ = this.gridSize.z;
-
-    // --- MANUAL OFFSETS ONLY (size and position tweaks) ---
-    const visualSizeOffset = 1.0;   // 1.0 = exact fit to cell boundaries (no artificial shrinkage)
-    const posX = 0.0;               // Manual X offset
-    const posY = 0.0;               // Manual Y offset
-    const posZ = 0.0;               // Manual Z offset
-    // -------------------------------------------------------
-
-    // CRITICAL FIX: Run occupancy detection in NORMALIZED SPACE to match rendered geometry
-    // This eliminates coordinate mismatch where highlight box floated in mid-air
-    
-    // Normalized bounds (what's actually rendered on screen)
-    const normMinX = minX;
-    const normMaxX = maxX;
-    const normMinY = minY;
-    const normMaxY = maxY;
-    const normMinZ = minZ;
-    const normMaxZ = maxZ;
-    
-    console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE`);
-    
-    // Use auto-detected grid dimensions from detectGridStepSize()
-    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepX));
-    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepY));
-    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepZ));
-
-    this.gridDimensions = { nx, ny, nz };
-
-    // Derive normalized step sizes from bounds and detected grid counts
-    const stepNormX = (normMaxX - normMinX) / nx;
-    const stepNormY = (normMaxY - normMinY) / ny;
-    const stepNormZ = (normMaxZ - normMinZ) / nz;
-    
-    console.log(`[Grid System] Auto-detected ${nx}x${ny}x${nz} = ${nx*ny*nz} cells. Steps: [${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
-
-    // Starting position for cell centers (half-step offset from min bound)
-    const normStartX = normMinX + (stepNormX / 2);
-    const normStartY = normMinY + (stepNormY / 2);
-    const normStartZ = normMinZ + (stepNormZ / 2);
-
-    // FIX #3: Anisotropic Unit Cell Sizing - Per-axis block dimensions
-    // Visual rendering uses 90% scale, but logical collision uses 100%
-    const visualBlockSizeX = stepNormX * visualSizeOffset;
-    const visualBlockSizeY = stepNormY * visualSizeOffset;
-    const visualBlockSizeZ = stepNormZ * visualSizeOffset;
-    
-    // Update glowing block with per-axis sizing
-    if (this.glowingBlock) {
-      this.glowingBlock.setBlockSizeVector(visualBlockSizeX, visualBlockSizeY, visualBlockSizeZ);
-      this.glowingBlock.blockSize = (visualBlockSizeX + visualBlockSizeY + visualBlockSizeZ) / 3;
-    }
-    
-    console.log(`[Grid System] Visual block sizes: [${visualBlockSizeX.toFixed(4)}, ${visualBlockSizeY.toFixed(4)}, ${visualBlockSizeZ.toFixed(4)}]`);
-    
-    // Re-create block buffers immediately after updating block size
-    this.createBlockBuffers();
-
-    // Proportional epsilon tie-breaker: offset relative to step size for robust boundary handling
-    const epsX = 0.0001 * stepNormX;
-    const epsY = 0.0001 * stepNormY;
-    const epsZ = 0.0001 * stepNormZ;
-    
-    // Dynamic solid set - collects unique occupied cells without hardcoded thresholds
-    const solidSet = new Set<string>();
-    
-    // Use normalized vertices directly - these match what's rendered on screen
-    const normVerts = this.model.vertices;
-    
-    // Cell centroid filtering margin: reject vertices sitting on outer boundary wall of a cell
-    // Set to 0.5 to disable filtering (accept all vertices within full cell bounds)
-    // This prevents boundary vertices from double-triggering adjacent air cells
-    const margin = 0.5;
-
-    for (let idx = 0; idx < normVerts.length; idx += 3) {
-      const vx = normVerts[idx];
-      const vy = normVerts[idx + 1];
-      const vz = normVerts[idx + 2];
-
-      // Calculate relative positions from normalized model origin
-      const relX = vx - normMinX;
-      const relY = vy - normMinY;
-      const relZ = vz - normMinZ;
-
-      // Derive integer cell indices with proportional epsilon tie-breaker
-      let i = Math.floor((relX > epsX ? relX - epsX : relX) / stepNormX);
-      let j = Math.floor((relY > epsY ? relY - epsY : relY) / stepNormY);
-      let k = Math.floor((relZ > epsZ ? relZ - epsZ : relZ) / stepNormZ);
-
-      // Clamp upper boundary points into the last valid cell
-      i = Math.min(Math.max(i, 0), nx - 1);
-      j = Math.min(Math.max(j, 0), ny - 1);
-      k = Math.min(Math.max(k, 0), nz - 1);
-      
-      // Standard occupancy mapping - no margin filtering needed with fixed grid
-      solidSet.add(`${i},${j},${k}`);
-    }
-
-    const solidCellsCount = solidSet.size;
-    console.log(`[Grid] Solid cells detected: ${solidCellsCount} / ${nx * ny * nz}`);
-
-    // Validation warning for unexpected block counts
-    const EXPECTED_BLOCK_COUNT = 100;
-    if (solidCellsCount !== EXPECTED_BLOCK_COUNT) {
-      console.warn(`[MapWindow3DRenderer] Grid detection produced ${solidCellsCount} blocks, expected ${EXPECTED_BLOCK_COUNT}.`);
-    }
-
-    // Generate Coordinate Targets - only include occupied cells
+    // Convert each block's world-space position to normalized space
+    // Preserve the input order exactly - no reordering, no inference
     this.gridCoordinates = [];
-
-    for (const key of solidSet) {
-      const [xStr, yStr, zStr] = key.split(',');
-      const x = parseInt(xStr, 10);
-      const y = parseInt(yStr, 10);
-      const z = parseInt(zStr, 10);
-
-      // Calculate cell center directly in NORMALIZED SPACE using index formula (no accumulation drift)
-      const normCellCenterX = normMinX + (x + 0.5) * stepNormX;
-      const normCellCenterY = normMinY + (y + 0.5) * stepNormY;
-      const normCellCenterZ = normMinZ + (z + 0.5) * stepNormZ;
-
+    for (const block of blocks) {
+      const worldPos = block.position;
+      
+      // Apply same transformation as OBJLoader: (worldCoord - center) * scale
+      const normX = (worldPos.x - centerX) * scale;
+      const normY = (worldPos.y - centerY) * scale;
+      const normZ = (worldPos.z - centerZ) * scale;
+      
       this.gridCoordinates.push({
-        x: normCellCenterX + posX,
-        y: normCellCenterY + posY,
-        z: normCellCenterZ + posZ
+        x: normX,
+        y: normY,
+        z: normZ
       });
     }
-
-    const solidCells = this.gridCoordinates.length;
-    const totalCells = nx * ny * nz;
-    const filteredOut = totalCells - solidCells;
     
-    console.log(`[Grid System] Dimensions: ${nx}x${ny}x${nz}, Total cells: ${totalCells}, Solid cells: ${solidCells}, Filtered air: ${filteredOut}`);
+    // Update glowing block size based on first block (if available)
+    if (blocks.length > 0 && this.glowingBlock) {
+      const firstBlock = blocks[0];
+      this.glowingBlock.setBlockSizeVector(firstBlock.size.x, firstBlock.size.y, firstBlock.size.z);
+      this.glowingBlock.blockSize = (firstBlock.size.x + firstBlock.size.y + firstBlock.size.z) / 3;
+      this.createBlockBuffers();
+    }
     
     // Reset animation to start
     this.currentGridIndex = 0;
-    if (this.gridCoordinates.length > 0) {
+    if (this.gridCoordinates.length > 0 && this.glowingBlock) {
       const firstPos = this.gridCoordinates[0];
-      if (this.glowingBlock) {
-        this.glowingBlock.position = { ...firstPos };
-      }
+      this.glowingBlock.position = { ...firstPos };
     }
+    
+    console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
   }
 
   /**

@@ -676,7 +676,10 @@ export class MapWindow3DRenderer {
    * Animate the glowing block moving through all grid coordinates
    */
   private updateGlowingBlockAnimation(): void {
-    if (!this.glowingBlock || this.gridCoordinates.length === 0) return;
+    // Safety check: Ensure glowing block exists and grid coordinates are populated
+    if (!this.glowingBlock || !this.gridCoordinates || this.gridCoordinates.length === 0) {
+      return; // Silently skip if grid not ready yet
+    }
     
     const now = Date.now();
     if (now - this.lastGridMoveTime < this.GRID_MOVE_INTERVAL) return;
@@ -689,7 +692,10 @@ export class MapWindow3DRenderer {
       this.glowingBlock.setPosition(pos.x, pos.y, pos.z);
       this.currentGridIndex++;
       
-      console.log(`[MapWindow3DRenderer] Grid step ${this.currentGridIndex}/${this.gridCoordinates.length}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`);
+      // Only log every 10 steps to reduce console spam
+      if (this.currentGridIndex % 10 === 0 || this.currentGridIndex === 1) {
+        console.log(`[MapWindow3DRenderer] Grid step ${this.currentGridIndex}/${this.gridCoordinates.length}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`);
+      }
     } else {
       // Reset to start when done
       this.currentGridIndex = 0;

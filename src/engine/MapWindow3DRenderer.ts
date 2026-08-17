@@ -12,12 +12,14 @@ export interface BlockPosition {
 export class GlowingBlock {
   position: BlockPosition;
   blockSize: number;
+  blockSizeVector: { x: number, y: number, z: number }; // Per-axis sizing for anisotropic grids
   color: [number, number, number, number];
   visible: boolean;
 
   constructor(blockSize: number = 0.1) {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
+    this.blockSizeVector = { x: blockSize, y: blockSize, z: blockSize };
     this.color = [0.0, 1.0, 0.0, 0.9]; // Bright Green with high alpha for visibility
     this.visible = false;
   }
@@ -28,12 +30,16 @@ export class GlowingBlock {
     this.position.z = z;
   }
 
+  setBlockSizeVector(x: number, y: number, z: number): void {
+    this.blockSizeVector = { x, y, z };
+  }
+
   moveUp(steps: number = 1): void {
-    this.position.y += steps * this.blockSize;
+    this.position.y += steps * this.blockSizeVector.y;
   }
 
   moveDown(steps: number = 1): void {
-    this.position.y -= steps * this.blockSize;
+    this.position.y -= steps * this.blockSizeVector.y;
   }
 
   setColor(r: number, g: number, b: number, a: number = 0.8): void {
@@ -178,7 +184,9 @@ export class MapWindow3DRenderer {
    * Calculate the bounding box of the loaded model and detect grid size
    */
   private calculateModelBounds(): void {
-    if (!this.model || this.model.vertices.length === 0) {
+    // Guard clause: Check for empty or uninitialized mesh
+    if (!this.model || !this.model.vertices || this.model.vertices.length === 0) {
+      console.error("[MapWindow3DRenderer] Cannot calculate grid on empty or uninitialized mesh.");
       this.modelBounds = null;
       return;
     }
@@ -204,7 +212,7 @@ export class MapWindow3DRenderer {
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
     
-    // Detect grid step size from vertices (O(V log V) algorithm)
+    // Detect grid step size from vertices (O(V log V) algorithm) with dynamic tolerance
     this.detectGridStepSize();
     
     // Calculate grid dimensions and coordinates (also sets block size)
@@ -213,22 +221,50 @@ export class MapWindow3DRenderer {
 
   /**
    * Plan 1: Autodetect Step Size using O(V log V) sorting algorithm.
-   * Avoids O(V^2) pairwise comparison. Uses tolerance clustering for float precision.
+   * Avoids O(V^2) pairwise comparison. Uses dynamic tolerance based on mesh diagonal.
    */
   private detectGridStepSize(): void {
-    if (!this.model || this.model.vertices.length === 0) {
+    // Guard clause: Check for empty or uninitialized mesh
+    if (!this.model || !this.model.vertices || this.model.vertices.length === 0) {
+      console.error("[MapWindow3DRenderer] Cannot detect grid step size on empty or uninitialized mesh.");
       this.gridSize = { x: 2.0, y: 2.0, z: 2.0 };
       return;
     }
 
     const vertices = this.model.vertices;
-    const tolerance = 0.15; // Tolerance for grouping similar distances (handles 1.999 vs 2.001)
+    
+    // Calculate mesh diagonal for dynamic tolerance (Fix Flaw #2 & #6)
+    // Tolerance scales with model size: 0.1% of diagonal
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const y = vertices[i + 1];
+      const z = vertices[i + 2];
+      
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    
+    const diagX = maxX - minX;
+    const diagY = maxY - minY;
+    const diagZ = maxZ - minZ;
+    const meshDiagonal = Math.sqrt(diagX * diagX + diagY * diagY + diagZ * diagZ);
+    const tolerance = meshDiagonal * 0.001; // Dynamic tolerance: 0.1% of diagonal
+    
+    console.log(`[MapWindow3DRenderer] Mesh diagonal: ${meshDiagonal.toFixed(3)}, Dynamic tolerance: ${tolerance.toFixed(4)}`);
 
-    // Helper: Extract unique sorted coordinates for an axis
+    // Helper: Extract unique sorted coordinates for an axis (no toFixed rounding)
     const getSortedUniqueCoords = (offset: number): number[] => {
       const coords = new Set<number>();
       for (let i = offset; i < vertices.length; i += 3) {
-        coords.add(parseFloat(vertices[i].toFixed(3))); // Quick clean
+        coords.add(vertices[i]); // No toFixed - use dynamic tolerance instead
       }
       return Array.from(coords).sort((a, b) => a - b);
     };
@@ -276,9 +312,12 @@ export class MapWindow3DRenderer {
    * Plan 1: Calculate Grid Dimensions and Populate Coordinate Targets
    * Uses AUTOMATIC detection from model vertices (O(V log V) algorithm).
    * Traversal order: Y -> Z -> X for predictable scanline movement.
+   * 
+   * FIX #1: Filters out grid cells with zero mesh vertices (eliminates phantom air tiles).
+   * FIX #3: Uses per-axis block sizing for anisotropic grids.
    */
   private calculateGridDimensions(): void {
-    if (!this.modelBounds) return;
+    if (!this.modelBounds || !this.model || this.model.vertices.length === 0) return;
 
     const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
     
@@ -288,10 +327,10 @@ export class MapWindow3DRenderer {
     const stepZ = this.gridSize.z;
 
     // --- MANUAL OFFSETS ONLY (size and position tweaks) ---
-    const sizeOffset = 0.9;       // 1.0 = exact fit, 0.9 = 90% size (gap)
-    const posX = 0.0;             // Manual X offset
-    const posY = 0.0;             // Manual Y offset
-    const posZ = 0.0;             // Manual Z offset
+    const visualSizeOffset = 0.9;   // 1.0 = exact fit, 0.9 = 90% size (visual gap only)
+    const posX = 0.0;               // Manual X offset
+    const posY = 0.0;               // Manual Y offset
+    const posZ = 0.0;               // Manual Z offset
     // -------------------------------------------------------
 
     // Calculate counts based on bounds and detected steps
@@ -301,45 +340,89 @@ export class MapWindow3DRenderer {
 
     this.gridDimensions = { nx, ny, nz };
 
-    // Dynamic Scaling: Set block size to smallest detected step * offset
-    const minStep = Math.min(stepX, stepY, stepZ);
-    const newBlockSize = minStep * sizeOffset;
+    // FIX #3: Anisotropic Unit Cell Sizing - Per-axis block dimensions
+    // Visual rendering uses 90% scale, but logical collision uses 100%
+    const visualBlockSizeX = stepX * visualSizeOffset;
+    const visualBlockSizeY = stepY * visualSizeOffset;
+    const visualBlockSizeZ = stepZ * visualSizeOffset;
     
-    // Only rebuild buffers if size changed significantly
-    if (this.glowingBlock && Math.abs(newBlockSize - this.glowingBlock.blockSize) > 0.01) {
-      this.glowingBlock.blockSize = newBlockSize;
-      this.createBlockBuffers(); 
-      console.log(`[Grid System] Block size: ${newBlockSize.toFixed(2)} (min step: ${minStep.toFixed(2)} * ${sizeOffset})`);
+    // Update glowing block with per-axis sizing
+    if (this.glowingBlock) {
+      this.glowingBlock.setBlockSizeVector(visualBlockSizeX, visualBlockSizeY, visualBlockSizeZ);
+      // Also update legacy blockSize for backward compatibility (use average)
+      this.glowingBlock.blockSize = (visualBlockSizeX + visualBlockSizeY + visualBlockSizeZ) / 3;
     }
+    
+    console.log(`[Grid System] Visual block sizes: [${visualBlockSizeX.toFixed(2)}, ${visualBlockSizeY.toFixed(2)}, ${visualBlockSizeZ.toFixed(2)}]`);
 
     // Generate Coordinate Targets with manual offsets
+    // FIX #1: Only include coordinates where mesh vertices actually exist
     this.gridCoordinates = [];
     
     const startX = minX + (stepX / 2);
     const startY = minY + (stepY / 2);
     const startZ = minZ + (stepZ / 2);
 
+    // Pre-compute cell half-extents for occupancy testing
+    const halfStepX = stepX / 2;
+    const halfStepY = stepY / 2;
+    const halfStepZ = stepZ / 2;
+
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
-          this.gridCoordinates.push({
-            x: startX + (x * stepX) + posX,
-            y: startY + (y * stepY) + posY,
-            z: startZ + (z * stepZ) + posZ
-          });
+          const cellCenterX = startX + (x * stepX) + posX;
+          const cellCenterY = startY + (y * stepY) + posY;
+          const cellCenterZ = startZ + (z * stepZ) + posZ;
+          
+          // FIX #1: Geometry Occupancy Check - Test if any vertices exist in this cell
+          const cellMinX = cellCenterX - halfStepX;
+          const cellMaxX = cellCenterX + halfStepX;
+          const cellMinY = cellCenterY - halfStepY;
+          const cellMaxY = cellCenterY + halfStepY;
+          const cellMinZ = cellCenterZ - halfStepZ;
+          const cellMaxZ = cellCenterZ + halfStepZ;
+          
+          // Quick axis-aligned bounding box test against all vertices
+          let hasVertices = false;
+          const verts = this.model.vertices;
+          for (let i = 0; i < verts.length; i += 3) {
+            const vx = verts[i];
+            const vy = verts[i + 1];
+            const vz = verts[i + 2];
+            
+            if (vx >= cellMinX && vx <= cellMaxX &&
+                vy >= cellMinY && vy <= cellMaxY &&
+                vz >= cellMinZ && vz <= cellMaxZ) {
+              hasVertices = true;
+              break;
+            }
+          }
+          
+          // Only add coordinate if cell contains actual mesh geometry
+          if (hasVertices) {
+            this.gridCoordinates.push({
+              x: cellCenterX,
+              y: cellCenterY,
+              z: cellCenterZ
+            });
+          }
         }
       }
     }
 
-    console.log(`[Grid System] Dimensions: ${nx}x${ny}x${nz}, Points: ${this.gridCoordinates.length}`);
+    const solidCells = this.gridCoordinates.length;
+    const totalCells = nx * ny * nz;
+    const filteredOut = totalCells - solidCells;
+    
+    console.log(`[Grid System] Dimensions: ${nx}x${ny}x${nz}, Total cells: ${totalCells}, Solid cells: ${solidCells}, Filtered air: ${filteredOut}`);
     
     // Reset animation to start
     this.currentGridIndex = 0;
     if (this.gridCoordinates.length > 0) {
       const firstPos = this.gridCoordinates[0];
-      if (this.glowingBlock && this.glowingBlock.mesh) {
+      if (this.glowingBlock) {
         this.glowingBlock.position = { ...firstPos };
-        this.glowingBlock.mesh.position.set(firstPos.x, firstPos.y, firstPos.z);
       }
     }
   }
@@ -390,22 +473,23 @@ export class MapWindow3DRenderer {
   private createBlockBuffers(): void {
     if (!this.gl) return;
 
-    // Use default size, but this will be overridden by calculateModelBounds() after model loads
-    const blockSize = this.glowingBlock ? this.glowingBlock.blockSize : 0.1;
-    const half = blockSize / 2;
+    // Use per-axis block sizes from glowingBlock, or default to uniform size
+    const halfX = this.glowingBlock ? this.glowingBlock.blockSizeVector.x / 2 : 0.1;
+    const halfY = this.glowingBlock ? this.glowingBlock.blockSizeVector.y / 2 : 0.1;
+    const halfZ = this.glowingBlock ? this.glowingBlock.blockSizeVector.z / 2 : 0.1;
 
-    // Create a cube mesh (8 vertices, 6 faces * 2 triangles * 3 vertices = 36 indices)
+    // Create a cube mesh with anisotropic dimensions (8 vertices, 36 indices)
     const vertices = new Float32Array([
       // Front face
-      -half, -half,  half,
-       half, -half,  half,
-       half,  half,  half,
-      -half,  half,  half,
+      -halfX, -halfY,  halfZ,
+       halfX, -halfY,  halfZ,
+       halfX,  halfY,  halfZ,
+      -halfX,  halfY,  halfZ,
       // Back face
-      -half, -half, -half,
-      -half,  half, -half,
-       half,  half, -half,
-       half, -half, -half,
+      -halfX, -halfY, -halfZ,
+      -halfX,  halfY, -halfZ,
+       halfX,  halfY, -halfZ,
+       halfX, -halfY, -halfZ,
     ]);
 
     const indices = new Uint16Array([
@@ -741,7 +825,10 @@ export class MapWindow3DRenderer {
    */
   private logBug(message: string): void {
     // Only log in development mode to avoid spam
-    if (process.env.NODE_ENV !== 'production') {
+    // Using globalThis for browser compatibility instead of Node.js process
+    const isDev = typeof (globalThis as any).process === 'undefined' || 
+                  (globalThis as any).process?.env?.NODE_ENV !== 'production';
+    if (isDev) {
       console.warn(`[3D Renderer] ${message}`);
     }
   }

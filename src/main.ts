@@ -365,7 +365,7 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Add keyboard controls for floor switching (T and G keys) and map toggle (M key)
+// Add keyboard controls for floor switching (T and G keys) and map toggle (M key), dungeon generation (G key when map visible)
 let floorSwitchCooldown = false;
 
 // Map Canvas Setup
@@ -405,6 +405,9 @@ async function generateNewDungeon(): Promise<void> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(result.blocks);
     
+    // Start the glowing block animation through all positions
+    map3DRenderer.toggleGridAnimation(true);
+    
     dungeonGenerated = true;
     console.log(`[Main] Dungeon generated and loaded: ${result.blocks.length} blocks, ${result.objContent.length} bytes OBJ`);
   } catch (err) {
@@ -435,6 +438,9 @@ async function loadSavedDungeon(mapId: string): Promise<boolean> {
     
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(savedData.blocks);
+    
+    // Start the glowing block animation through all positions
+    map3DRenderer.toggleGridAnimation(true);
     
     dungeonGenerated = true;
     console.log(`[Main] Loaded saved dungeon ${mapId}: ${savedData.blocks.length} blocks`);
@@ -476,8 +482,8 @@ function initMapCanvas() {
   // Initialize 3D renderer for the map window
   if (!map3DRenderer) {
     map3DRenderer = new MapWindow3DRenderer(mapCanvas);
-    // Load or generate dungeon when map is first opened
-    initOrLoadDungeon();
+    // Don't auto-load/generate - wait for user to press G key
+    console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
   } else {
     map3DRenderer.resize();
   }
@@ -502,11 +508,18 @@ window.addEventListener('keydown', (e) => {
     return; // Don't process other inputs when toggling map
   }
 
-  // Generate new dungeon map with N key - works only when map is visible
-  if ((e.key === 'n' || e.key === 'N') && mapVisible && map3DRenderer) {
+  // Generate/load dungeon map with G key - works only when map is visible
+  if ((e.key === 'g' || e.key === 'G') && mapVisible && map3DRenderer) {
     if (!gameRunning) return;
-    console.log('[Main] N key pressed - generating new dungeon map');
-    generateNewDungeon();
+    console.log('[Main] G key pressed - generating/loading dungeon map');
+    // Check if saved map exists, if not generate new one
+    const defaultMapId = getDefaultMapId();
+    loadSavedDungeon(defaultMapId).then(loaded => {
+      if (!loaded) {
+        // No saved map exists, generate new one
+        generateNewDungeon();
+      }
+    });
     return;
   }
 
@@ -536,7 +549,7 @@ window.addEventListener('keydown', (e) => {
     // Clear the 3D view
     if (map3DRenderer) {
       // Optionally reload empty or show message
-      console.log('[Main] Dungeon deleted. Press N to generate a new one.');
+      console.log('[Main] Dungeon deleted. Press G to generate a new one.');
     }
     return;
   }

@@ -204,86 +204,125 @@ export class MapWindow3DRenderer {
     this.modelBounds = { minX, maxX, minY, maxY, minZ, maxZ };
     console.log(`[MapWindow3DRenderer] Model bounds calculated: Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}], X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}]`);
     
-    // Detect grid step size from vertices
+    // Detect grid step size from vertices (O(V log V) algorithm)
     this.detectGridStepSize();
     
-    // Calculate grid dimensions and coordinates
+    // Calculate grid dimensions and coordinates (also sets block size)
     this.calculateGridDimensions();
-    
-    // Update glowing block size to match grid
-    if (this.glowingBlock) {
-      const minStep = Math.min(this.gridSize.x, this.gridSize.y, this.gridSize.z);
-      this.glowingBlock.blockSize = minStep * 0.9;
-      this.createBlockBuffers();
-      console.log(`[MapWindow3DRenderer] Grid detected: ${this.gridDimensions.nx}x${this.gridDimensions.ny}x${this.gridDimensions.nz}, blockSize=${this.glowingBlock.blockSize.toFixed(2)}`);
-    }
   }
 
   /**
-   * Detect the smallest repeating vertex distance along each axis
+   * Plan 1: Autodetect Step Size using O(V log V) sorting algorithm.
+   * Avoids O(V^2) pairwise comparison. Uses tolerance clustering for float precision.
    */
   private detectGridStepSize(): void {
-    if (!this.model || this.model.vertices.length === 0) return;
-
-    const verts = this.model.vertices;
-    const epsilon = 0.01;
-    
-    // Collect all unique differences along each axis
-    const xDiffs = new Set<number>();
-    const yDiffs = new Set<number>();
-    const zDiffs = new Set<number>();
-
-    for (let i = 0; i < verts.length; i += 3) {
-      for (let j = i + 3; j < verts.length; j += 3) {
-        const dx = Math.abs(verts[j] - verts[i]);
-        const dy = Math.abs(verts[j + 1] - verts[i + 1]);
-        const dz = Math.abs(verts[j + 2] - verts[i + 2]);
-        
-        if (dx > epsilon) xDiffs.add(Math.round(dx * 100) / 100);
-        if (dy > epsilon) yDiffs.add(Math.round(dy * 100) / 100);
-        if (dz > epsilon) zDiffs.add(Math.round(dz * 100) / 100);
-      }
+    if (!this.model || this.model.vertices.length === 0) {
+      this.gridSize = { x: 2.0, y: 2.0, z: 2.0 };
+      return;
     }
 
-    // Find the minimum non-zero difference (the grid step)
-    const xArray = Array.from(xDiffs).sort((a, b) => a - b);
-    const yArray = Array.from(yDiffs).sort((a, b) => a - b);
-    const zArray = Array.from(zDiffs).sort((a, b) => a - b);
+    const vertices = this.model.vertices;
+    const tolerance = 0.15; // Tolerance for grouping similar distances (handles 1.999 vs 2.001)
 
-    this.gridSize.x = xArray.length > 0 ? xArray[0] : 2.0;
-    this.gridSize.y = yArray.length > 0 ? yArray[0] : 2.0;
-    this.gridSize.z = zArray.length > 0 ? zArray[0] : 2.0;
+    // Helper: Extract unique sorted coordinates for an axis
+    const getSortedUniqueCoords = (offset: number): number[] => {
+      const coords = new Set<number>();
+      for (let i = offset; i < vertices.length; i += 3) {
+        coords.add(parseFloat(vertices[i].toFixed(3))); // Quick clean
+      }
+      return Array.from(coords).sort((a, b) => a - b);
+    };
 
-    console.log(`[MapWindow3DRenderer] Detected grid steps: Δx=${this.gridSize.x}, Δy=${this.gridSize.y}, Δz=${this.gridSize.z}`);
+    // Helper: Calculate median step size from sorted coordinates
+    const calculateMedianStep = (coords: number[]): number => {
+      if (coords.length < 2) return 0;
+      
+      const steps: number[] = [];
+      for (let i = 1; i < coords.length; i++) {
+        const diff = coords[i] - coords[i - 1];
+        if (diff > tolerance) {
+          steps.push(diff);
+        }
+      }
+
+      if (steps.length === 0) return 0;
+
+      // Sort steps to find median (robust against outliers)
+      steps.sort((a, b) => a - b);
+      const medianIndex = Math.floor(steps.length / 2);
+      return steps[medianIndex];
+    };
+
+    const xCoords = getSortedUniqueCoords(0);
+    const yCoords = getSortedUniqueCoords(1);
+    const zCoords = getSortedUniqueCoords(2);
+
+    let stepX = calculateMedianStep(xCoords);
+    let stepY = calculateMedianStep(yCoords);
+    let stepZ = calculateMedianStep(zCoords);
+
+    // Fallback only if detection completely fails (e.g., single point)
+    const defaultStep = 2.0;
+    this.gridSize = {
+      x: stepX > 0 ? stepX : defaultStep,
+      y: stepY > 0 ? stepY : defaultStep,
+      z: stepZ > 0 ? stepZ : defaultStep
+    };
+
+    console.log(`[MapWindow3DRenderer] Detected grid steps (O(V log V)): Δx=${this.gridSize.x.toFixed(2)}, Δy=${this.gridSize.y.toFixed(2)}, Δz=${this.gridSize.z.toFixed(2)}`);
   }
 
   /**
-   * Calculate grid dimensions and populate coordinate targets
+   * Plan 1: Calculate Grid Dimensions and Populate Coordinate Targets
+   * Uses detected steps to define Nx, Ny, Nz and generates center points.
+   * Traversal order: Y -> Z -> X for predictable scanline movement.
+   * Also sets the glowing block size dynamically.
    */
   private calculateGridDimensions(): void {
     if (!this.modelBounds) return;
 
     const { minX, maxX, minY, maxY, minZ, maxZ } = this.modelBounds;
     
-    this.gridDimensions.nx = Math.round((maxX - minX) / this.gridSize.x) + 1;
-    this.gridDimensions.ny = Math.round((maxY - minY) / this.gridSize.y) + 1;
-    this.gridDimensions.nz = Math.round((maxZ - minZ) / this.gridSize.z) + 1;
+    // Calculate counts based on bounds and steps, ensuring at least 1
+    const nx = Math.max(1, Math.round((maxX - minX) / this.gridSize.x) + 1);
+    const ny = Math.max(1, Math.round((maxY - minY) / this.gridSize.y) + 1);
+    const nz = Math.max(1, Math.round((maxZ - minZ) / this.gridSize.z) + 1);
 
-    // Generate all grid coordinates
+    this.gridDimensions = { nx, ny, nz };
+
+    // Dynamic Scaling: Set block size to 90% of the smallest detected step
+    const minStep = Math.min(this.gridSize.x, this.gridSize.y, this.gridSize.z);
+    const newBlockSize = minStep * 0.9;
+    
+    // Only rebuild buffers if size changed significantly to save performance
+    if (this.glowingBlock && Math.abs(newBlockSize - this.glowingBlock.blockSize) > 0.01) {
+      this.glowingBlock.blockSize = newBlockSize;
+      this.createBlockBuffers(); 
+      console.log(`[MapWindow3DRenderer] Block size set to: ${newBlockSize.toFixed(2)}`);
+    }
+
+    // Generate Coordinate Targets (Order: Y -> Z -> X for predictable scanline movement)
     this.gridCoordinates = [];
-    for (let x = 0; x < this.gridDimensions.nx; x++) {
-      for (let y = 0; y < this.gridDimensions.ny; y++) {
-        for (let z = 0; z < this.gridDimensions.nz; z++) {
+    
+    for (let y = 0; y < ny; y++) {
+      for (let z = 0; z < nz; z++) {
+        for (let x = 0; x < nx; x++) {
           this.gridCoordinates.push({
-            x: minX + x * this.gridSize.x,
-            y: minY + y * this.gridSize.y,
-            z: minZ + z * this.gridSize.z
+            x: minX + (x * this.gridSize.x),
+            y: minY + (y * this.gridSize.y),
+            z: minZ + (z * this.gridSize.z)
           });
         }
       }
     }
 
-    console.log(`[MapWindow3DRenderer] Grid dimensions: ${this.gridDimensions.nx}x${this.gridDimensions.ny}x${this.gridDimensions.nz} = ${this.gridCoordinates.length} positions`);
+    console.log(`[MapWindow3DRenderer] Grid dimensions: ${nx} x ${ny} x ${nz} (Total Points: ${this.gridCoordinates.length})`);
+    
+    // Reset animation to start
+    this.currentGridIndex = 0;
+    if (this.gridCoordinates.length > 0) {
+      this.updateGlowingBlockPosition(this.gridCoordinates[0]);
+    }
   }
 
   /**

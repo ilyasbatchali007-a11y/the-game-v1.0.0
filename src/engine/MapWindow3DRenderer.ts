@@ -409,20 +409,19 @@ export class MapWindow3DRenderer {
     
     console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE`);
     
-    // FIX: Override auto-detection with exact authored grid resolution (5x10x2 = 100 total cells)
-    // This prevents auto-detector from splitting model into 714 micro-voxels causing boundary bleed
-    const nx = 5; 
-    const ny = 10; 
-    const nz = 2; 
+    // Use auto-detected grid dimensions from detectGridStepSize()
+    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepNormX));
+    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepNormY));
+    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepNormZ));
 
     this.gridDimensions = { nx, ny, nz };
 
-    // Derive normalized step sizes directly from total bounds and block counts
+    // Derive normalized step sizes from bounds and detected grid counts
     const stepNormX = (normMaxX - normMinX) / nx;
     const stepNormY = (normMaxY - normMinY) / ny;
     const stepNormZ = (normMaxZ - normMinZ) / nz;
     
-    console.log(`[Grid System] LOCKED to ${nx}x${ny}x${nz} = ${nx*ny*nz} cells. Recalculated steps: [${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
+    console.log(`[Grid System] Auto-detected ${nx}x${ny}x${nz} = ${nx*ny*nz} cells. Steps: [${stepNormX.toFixed(4)}, ${stepNormY.toFixed(4)}, ${stepNormZ.toFixed(4)}]`);
 
     // Starting position for cell centers (half-step offset from min bound)
     const normStartX = normMinX + (stepNormX / 2);

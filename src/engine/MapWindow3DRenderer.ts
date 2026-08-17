@@ -303,53 +303,50 @@ export class MapWindow3DRenderer {
       return Array.from(coords).sort((a, b) => a - b);
     };
 
-    // Helper: Calculate DOMINANT step size using histogram mode (not median)
-    // This avoids over-segmentation by selecting the most common structural unit cell size
-    const calculateDominantStep = (coords: number[]): number => {
+    // Helper: Calculate DOMINANT step size using float-safe Euclidean GCD algorithm
+    // This handles boolean fusion seams and sliver triangles in CSG-modified meshes
+    const calculateDominantStep = (coords: number[], tolerance: number): number => {
       if (coords.length < 2) return 0;
       
-      // Build frequency histogram of step sizes
-      const stepCounts = new Map<number, number>();
-      const stepBuckets: number[] = [];
-      
+      // Build array of gaps between consecutive coordinates
+      const gaps: number[] = [];
       for (let i = 1; i < coords.length; i++) {
         const diff = coords[i] - coords[i - 1];
-        if (diff > tolerance) {
-          // Round to nearest meaningful unit for histogram binning (avoid micro-variations)
-          const bucketSize = Math.max(tolerance, diff * 0.05); // 5% bucket or tolerance, whichever larger
-          const bucket = Math.round(diff / bucketSize) * bucketSize;
-          
-          const existingCount = stepCounts.get(bucket) || 0;
-          stepCounts.set(bucket, existingCount + 1);
-          stepBuckets.push(bucket);
-        }
+        if (diff > tolerance) gaps.push(diff);
       }
-
-      if (stepCounts.size === 0) return 0;
-
-      // Find the mode (most frequent step size) - this is the dominant structural unit
-      let dominantStep = 0;
-      let maxCount = 0;
+      if (gaps.length === 0) return 0;
       
-      for (const [step, count] of stepCounts.entries()) {
-        if (count > maxCount) {
-          maxCount = count;
-          dominantStep = step;
+      // Sort gaps ascending to start with smallest meaningful unit
+      gaps.sort((a, b) => a - b);
+      
+      // Float-safe GCD approximation using Euclidean algorithm
+      const approxGCD = (a: number, b: number): number => {
+        while (b > tolerance) {
+          const r = a % b;
+          a = b;
+          b = r;
         }
+        return a;
+      };
+      
+      // Iteratively compute GCD across all gaps
+      let unit = gaps[0];
+      for (let i = 1; i < gaps.length; i++) {
+        unit = approxGCD(unit, gaps[i]);
+        if (unit <= tolerance) break;
       }
       
-      console.log(`[MapWindow3DRenderer] Step histogram: ${stepCounts.size} unique buckets, dominant=${dominantStep.toFixed(3)} (count=${maxCount})`);
-      
-      return dominantStep;
+      console.log(`[MapWindow3DRenderer] GCD step detection: ${gaps.length} gaps, dominant unit=${unit.toFixed(4)}`);
+      return unit;
     };
 
     const xCoords = getSortedUniqueCoords(0);
     const yCoords = getSortedUniqueCoords(1);
     const zCoords = getSortedUniqueCoords(2);
 
-    let stepX = calculateDominantStep(xCoords);
-    let stepY = calculateDominantStep(yCoords);
-    let stepZ = calculateDominantStep(zCoords);
+    let stepX = calculateDominantStep(xCoords, tolerance);
+    let stepY = calculateDominantStep(yCoords, tolerance);
+    let stepZ = calculateDominantStep(zCoords, tolerance);
 
     // If original bounds were used, steps are in world units - must scale down to normalized space
     if (originalBounds && scaleFactor) {
@@ -487,6 +484,12 @@ export class MapWindow3DRenderer {
 
     const solidCellsCount = solidSet.size;
     console.log(`[Grid] Solid cells detected: ${solidCellsCount} / ${nx * ny * nz}`);
+
+    // Validation warning for unexpected block counts
+    const EXPECTED_BLOCK_COUNT = 100;
+    if (solidCellsCount !== EXPECTED_BLOCK_COUNT) {
+      console.warn(`[MapWindow3DRenderer] Grid detection produced ${solidCellsCount} blocks, expected ${EXPECTED_BLOCK_COUNT}.`);
+    }
 
     // Generate Coordinate Targets - only include occupied cells
     this.gridCoordinates = [];
@@ -1079,9 +1082,10 @@ export class MapWindow3DRenderer {
     
     const gl = this.gl;
     
-    // Disable depth testing AND depth writing for true X-ray effect
-    gl.disable(gl.DEPTH_TEST);
-    gl.depthMask(false);
+    // Enable depth testing and depth writes for proper 3D cube rendering
+    // Temporarily disable face culling to ensure all faces of the cube are drawn
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
     gl.disable(gl.CULL_FACE);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect

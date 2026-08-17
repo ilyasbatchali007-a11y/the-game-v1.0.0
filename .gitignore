@@ -8,6 +8,7 @@ __pycache__/
 *.so
 *.a
 *.out
+*.class
 dist/
 build/
 target/
@@ -29,9 +30,7 @@ venv/
 # Editors
 .vscode/
 .idea/
-
-# System files
-.DS_Store
+*.DS_Store
 Thumbs.db
 
 # Coverage
@@ -39,13 +38,12 @@ coverage/
 htmlcov/
 .coverage
 
-# Cache directories
+# Python specific
 .mypy_cache/
 .pytest_cache/
+
+# Java/Gradle
 .gradle/
-.julia/
-zig*/
-julia-*/
 
 # Compressed files
 *.zip

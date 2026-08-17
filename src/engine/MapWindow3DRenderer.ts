@@ -452,9 +452,10 @@ export class MapWindow3DRenderer {
     // Use normalized vertices directly - these match what's rendered on screen
     const normVerts = this.model.vertices;
     
-    // Cell centroid filtering margin: reject vertices sitting on outer 30% boundary wall of a cell
+    // Cell centroid filtering margin: reject vertices sitting on outer boundary wall of a cell
+    // Set to 0.5 to disable filtering (accept all vertices within full cell bounds)
     // This prevents boundary vertices from double-triggering adjacent air cells
-    const margin = 0.35;
+    const margin = 0.5;
 
     for (let idx = 0; idx < normVerts.length; idx += 3) {
       const vx = normVerts[idx];

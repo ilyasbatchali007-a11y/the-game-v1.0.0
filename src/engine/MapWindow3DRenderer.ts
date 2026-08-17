@@ -410,9 +410,9 @@ export class MapWindow3DRenderer {
     console.log(`[Grid System] Computing occupancy in NORMALIZED SPACE`);
     
     // Use auto-detected grid dimensions from detectGridStepSize()
-    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepNormX));
-    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepNormY));
-    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepNormZ));
+    const nx = Math.max(1, Math.round((normMaxX - normMinX) / stepX));
+    const ny = Math.max(1, Math.round((normMaxY - normMinY) / stepY));
+    const nz = Math.max(1, Math.round((normMaxZ - normMinZ) / stepZ));
 
     this.gridDimensions = { nx, ny, nz };
 

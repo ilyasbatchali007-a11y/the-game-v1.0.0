@@ -13,6 +13,8 @@ import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
+import { generateDungeon } from './engine/DungeonGenerator';
+import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -372,6 +374,92 @@ const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
 let mapCtx: CanvasRenderingContext2D | null = null;
 let mapVisible = false;
 let map3DRenderer: MapWindow3DRenderer | null = null;
+let currentMapId: string | null = null;
+let dungeonGenerated = false;
+
+/**
+ * Generate new dungeon map with 100 cubes, save both mesh and block data
+ */
+async function generateNewDungeon(): Promise<void> {
+  if (!map3DRenderer) return;
+  
+  // Generate unique map ID for this session
+  currentMapId = getDefaultMapId();
+  setCurrentMapId(currentMapId);
+  
+  console.log(`[Main] Generating new dungeon with ID: ${currentMapId}`);
+  
+  // Generate dungeon (blocks + fused mesh)
+  const result = generateDungeon(currentMapId);
+  
+  // Save to persistent storage
+  await saveDungeon(result);
+  
+  // Load into 3D renderer
+  try {
+    // Parse OBJ content directly (no file load needed)
+    const { OBJLoader } = await import('./engine/OBJLoader');
+    const model = OBJLoader.parseOBJ(result.objContent);
+    map3DRenderer.loadModel(model);
+    
+    // Set block metadata for accurate grid coordinates
+    map3DRenderer.setMapBlocks(result.blocks);
+    
+    dungeonGenerated = true;
+    console.log(`[Main] Dungeon generated and loaded: ${result.blocks.length} blocks, ${result.objContent.length} bytes OBJ`);
+  } catch (err) {
+    console.error('[Main] Failed to load generated dungeon:', err);
+  }
+}
+
+/**
+ * Load existing saved dungeon by map ID
+ */
+async function loadSavedDungeon(mapId: string): Promise<boolean> {
+  if (!map3DRenderer) return false;
+  
+  const savedData = await loadDungeon(mapId);
+  if (!savedData) {
+    console.log(`[Main] No saved dungeon found for ID: ${mapId}`);
+    return false;
+  }
+  
+  currentMapId = mapId;
+  setCurrentMapId(mapId);
+  
+  try {
+    // Parse OBJ content directly
+    const { OBJLoader } = await import('./engine/OBJLoader');
+    const model = OBJLoader.parseOBJ(savedData.objContent);
+    map3DRenderer.loadModel(model);
+    
+    // Set block metadata for accurate grid coordinates
+    map3DRenderer.setMapBlocks(savedData.blocks);
+    
+    dungeonGenerated = true;
+    console.log(`[Main] Loaded saved dungeon ${mapId}: ${savedData.blocks.length} blocks`);
+    return true;
+  } catch (err) {
+    console.error('[Main] Failed to load saved dungeon:', err);
+    return false;
+  }
+}
+
+/**
+ * Initialize or load dungeon map - checks for saved map first, generates if not found
+ */
+async function initOrLoadDungeon(): Promise<void> {
+  if (!map3DRenderer) return;
+  
+  // Try to load existing saved map first
+  const defaultMapId = getDefaultMapId();
+  const loaded = await loadSavedDungeon(defaultMapId);
+  
+  if (!loaded) {
+    // No saved map exists, generate new one
+    await generateNewDungeon();
+  }
+}
 
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
@@ -388,14 +476,8 @@ function initMapCanvas() {
   // Initialize 3D renderer for the map window
   if (!map3DRenderer) {
     map3DRenderer = new MapWindow3DRenderer(mapCanvas);
-    // Load the dungeon 3D model from the public folder (copied from 3d-objects)
-    map3DRenderer.loadOBJ('/3d-objects/root_dungeon_single_mesh.obj')
-      .then(() => {
-        console.log('[Main] 3D dungeon model loaded into map window');
-      })
-      .catch((err) => {
-        console.error('[Main] Failed to load 3D model:', err);
-      });
+    // Load or generate dungeon when map is first opened
+    initOrLoadDungeon();
   } else {
     map3DRenderer.resize();
   }
@@ -418,6 +500,45 @@ window.addEventListener('keydown', (e) => {
     if (!gameRunning) return; // Only allow map toggle during gameplay
     toggleMap();
     return; // Don't process other inputs when toggling map
+  }
+
+  // Generate new dungeon map with N key - works only when map is visible
+  if ((e.key === 'n' || e.key === 'N') && mapVisible && map3DRenderer) {
+    if (!gameRunning) return;
+    console.log('[Main] N key pressed - generating new dungeon map');
+    generateNewDungeon();
+    return;
+  }
+
+  // Export dungeon files with X key - works only when map is visible
+  if ((e.key === 'x' || e.key === 'X') && mapVisible && currentMapId) {
+    if (!gameRunning) return;
+    console.log('[Main] X key pressed - exporting dungeon files');
+    loadDungeon(currentMapId).then(savedData => {
+      if (savedData) {
+        exportDungeonFiles({
+          mapId: savedData.mapId,
+          objContent: savedData.objContent,
+          blocks: savedData.blocks
+        });
+      }
+    });
+    return;
+  }
+
+  // Delete current dungeon with D key - works only when map is visible
+  if ((e.key === 'd' || e.key === 'D') && mapVisible && currentMapId) {
+    if (!gameRunning) return;
+    console.log('[Main] D key pressed - deleting current dungeon');
+    deleteDungeon(currentMapId);
+    dungeonGenerated = false;
+    currentMapId = null;
+    // Clear the 3D view
+    if (map3DRenderer) {
+      // Optionally reload empty or show message
+      console.log('[Main] Dungeon deleted. Press N to generate a new one.');
+    }
+    return;
   }
 
   if (!gameRunning) return;

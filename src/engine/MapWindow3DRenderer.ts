@@ -523,37 +523,8 @@ export class MapWindow3DRenderer {
         // Calculate model bounds for positioning the glowing block
         this.calculateModelBounds();
         
-        // Create vertex buffer
-        this.vertexBuffer = this.gl.createBuffer();
-        if (!this.vertexBuffer) {
-          this.logBug('[BUG] Failed to create vertex buffer');
-          return;
-        }
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.vertices, this.gl.STATIC_DRAW);
-        
-        // Check for buffer errors
-        if (this.gl.getError() !== this.gl.NO_ERROR) {
-          this.logBug('[BUG] Error setting vertex buffer data');
-        }
-        
-        // Create normal buffer
-        this.normalBuffer = this.gl.createBuffer();
-        if (!this.normalBuffer) {
-          this.logBug('[BUG] Failed to create normal buffer');
-          return;
-        }
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.normals, this.gl.STATIC_DRAW);
-        
-        // Create index buffer
-        this.indexBuffer = this.gl.createBuffer();
-        if (!this.indexBuffer) {
-          this.logBug('[BUG] Failed to create index buffer');
-          return;
-        }
-        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-        this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.model.indices, this.gl.STATIC_DRAW);
+        // Create buffers from loaded model
+        this.createBuffersFromModel();
         
         console.log(`[MapWindow3DRenderer] Buffers created: ${this.model.vertexCount} vertices`);
       }

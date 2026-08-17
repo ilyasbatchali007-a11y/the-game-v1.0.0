@@ -721,16 +721,26 @@ export class MapWindow3DRenderer {
    * Centralized bug logging method - all bug reports go through this
    */
   private logBug(message: string): void {
-    console.error(`[3D BUG] ${message}`);
+    // Only log in development mode to avoid spam
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[3D Renderer] ${message}`);
+    }
   }
 
   private logDebugInfo(): void {
     this.logFrameCount++;
     
+    // Only log every 60 frames to reduce console spam
+    if (this.logFrameCount % 60 !== 0) {
+      return;
+    }
+    
     // Calculate bounds if we have vertices
-    let bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    let bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
     if (this.model && this.model.vertices.length > 0) {
       const verts = this.model.vertices;
+      bounds.minX = bounds.minY = bounds.minZ = Infinity;
+      bounds.maxX = bounds.maxY = bounds.maxZ = -Infinity;
       for (let i = 0; i < verts.length; i += 3) {
         const x = verts[i];
         const y = verts[i + 1];
@@ -742,83 +752,6 @@ export class MapWindow3DRenderer {
         if (z < bounds.minZ) bounds.minZ = z;
         if (z > bounds.maxZ) bounds.maxZ = z;
       }
-    } else {
-      bounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
-    }
-
-    const stateChanged = 
-      Math.abs(this.zoom - this.lastLogState.zoom) > 0.01 ||
-      Math.abs(this.rotationX - this.lastLogState.rotX) > 0.01 ||
-      Math.abs(this.rotationY - this.lastLogState.rotY) > 0.01 ||
-      this.isDragging !== this.lastLogState.isDragging ||
-      this.canvas.width !== this.lastLogState.width ||
-      this.canvas.height !== this.lastLogState.height ||
-      (this.model && (this.model.vertices.length !== this.lastLogState.vertexCount || this.model.indices.length !== this.lastLogState.indexCount)) ||
-      JSON.stringify(bounds) !== JSON.stringify(this.lastLogState.bounds);
-
-    if (!stateChanged && this.logFrameCount % 60 !== 0) {
-      return; // Skip logging if nothing changed, unless it's been 60 frames
-    }
-
-    if (this.logFrameCount === 1 || stateChanged) {
-      console.groupCollapsed('=== 3D RENDER STATE ===');
-      console.log(`Frame: ${this.logFrameCount} | Zoom: ${this.zoom.toFixed(2)} | Rot(X:${this.rotationX.toFixed(2)}, Y:${this.rotationY.toFixed(2)}) | Dragging: ${this.isDragging}`);
-      console.log(`Canvas: ${this.canvas.width}x${this.canvas.height} | Aspect: ${(this.canvas.width / this.canvas.height).toFixed(2)}`);
-      
-      if (this.model) {
-        console.log(`Model: ${this.model.indices.length} indices, ${this.model.vertices.length / 3} vertices`);
-        console.log(`Vertex Bounds -> X:[${bounds.minX.toFixed(2)}, ${bounds.maxX.toFixed(2)}] Y:[${bounds.minY.toFixed(2)}, ${bounds.maxY.toFixed(2)}] Z:[${bounds.minZ.toFixed(2)}, ${bounds.maxZ.toFixed(2)}]`);
-        
-        // Check for extreme aspect ratios in bounds which indicate deformation
-        const spanX = bounds.maxX - bounds.minX;
-        const spanY = bounds.maxY - bounds.minY;
-        const spanZ = bounds.maxZ - bounds.minZ;
-        if (spanX > 0 && spanY > 0 && spanZ > 0) {
-          const ratioXY = spanX / spanY;
-          const ratioXZ = spanX / spanZ;
-          if (ratioXY > 10 || ratioXY < 0.1 || ratioXZ > 10 || ratioXZ < 0.1) {
-            console.warn(`⚠️ POTENTIAL DEFORMATION: Extreme axis ratio detected! X/Y: ${ratioXY.toFixed(2)}, X/Z: ${ratioXZ.toFixed(2)}`);
-          }
-        }
-      }
-
-      // Only log matrices on significant changes or first frame to avoid spam
-      if (this.logFrameCount === 1 || stateChanged) {
-        // Create pure projection matrix for debugging (separate from MVP)
-        const fov = 60 * (Math.PI / 180);
-        const aspect = this.canvas.width / this.canvas.height;
-        const near = 0.1;
-        const far = 100.0;
-        const f = 1.0 / Math.tan(fov / 2);
-        const nf = 1 / (near - far);
-        
-        const pureProj = new Float32Array([
-          f / aspect, 0, 0, 0,
-          0, f, 0, 0,
-          0, 0, (far + near) * nf, -1,
-          0, 0, (2 * far * near) * nf, 0
-        ]);
-        
-        console.log('Pure Projection Matrix (before MVP):');
-        for (let i = 0; i < 16; i += 4) {
-          const row = Array.from(pureProj).slice(i, i + 4).map(n => n.toFixed(4));
-          console.log(`  [ ${row[0]}, ${row[1]}, ${row[2]}, ${row[3]} ]`);
-        }
-        
-        // Calculate actual FOV from pure projection matrix element [5] which should be 'f'
-        const actualFovRad = 2 * Math.atan(1.0 / pureProj[5]);
-        const actualFovDeg = (actualFovRad * 180 / Math.PI).toFixed(1);
-        console.log(`Projection Params: FOV=${actualFovDeg}°, Aspect=${aspect.toFixed(2)}, Near=${near}, Far=${far}`);
-        
-        // Also show combined MVP for reference (without focus point for debug)
-        const mvpMatrix = this.createModelViewProjectionMatrix(this.rotationY, this.rotationX, aspect, this.zoom, { x: 0, y: 0, z: 0 });
-        console.log('Combined MVP Matrix (Model*View*Projection):');
-        for (let i = 0; i < 16; i += 4) {
-          const row = Array.from(mvpMatrix).slice(i, i + 4).map(n => n.toFixed(4));
-          console.log(`  [ ${row[0]}, ${row[1]}, ${row[2]}, ${row[3]} ]`);
-        }
-      }
-      console.groupEnd();
     }
 
     // Update last state

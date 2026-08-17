@@ -493,10 +493,11 @@ export class MapWindow3DRenderer {
     for (let y = 0; y < ny; y++) {
       for (let z = 0; z < nz; z++) {
         for (let x = 0; x < nx; x++) {
-          // Calculate cell center in WORLD SPACE (clean integer arithmetic)
-          const worldCellCenterX = worldStartX + (x * worldStepX) + posX;
-          const worldCellCenterY = worldStartY + (y * worldStepY) + posY;
-          const worldCellCenterZ = worldStartZ + (z * worldStepZ) + posZ;
+          // Calculate cell center in WORLD SPACE using originalBounds (no double-offset)
+          // FIX: Remove + posX/posY/posZ - worldStartX/Y/Z already includes originalBounds.minX/Y/Z
+          const worldCellCenterX = worldStartX + (x * worldStepX);
+          const worldCellCenterY = worldStartY + (y * worldStepY);
+          const worldCellCenterZ = worldStartZ + (z * worldStepZ);
           
           // FIX #1: Geometry Occupancy Check - Test if vertices exist in this cell
           // Uses 0.499 * stepSize bounding box to test full cell volume without boundary edge issues

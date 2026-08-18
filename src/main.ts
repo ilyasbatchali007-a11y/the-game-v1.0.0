@@ -332,45 +332,46 @@ function startGameLoop() {
           const maxX = mapWidth - 1;
           const maxY = mapHeight - 1;
 
+          let triggeredFloor: number | null = null;
+
           // Check Left Edge -> Trigger LEFT connection
           if (tileX === 0 && vx < -50) {
             const leftConn = connections.find(c => c.direction === 'LEFT');
             if (leftConn) {
               console.log(`[Docking] Left Wall -> Floor ${leftConn.targetFloorId}`);
-              (window as any).switchFloor(leftConn.targetFloorId);
-              accumulator = 0; // Reset to prevent double-trigger
-              break;
+              triggeredFloor = leftConn.targetFloorId;
             }
           }
           // Check Right Edge -> Trigger RIGHT connection
-          if (tileX === maxX && vx > 50) {
+          else if (tileX === maxX && vx > 50) {
             const rightConn = connections.find(c => c.direction === 'RIGHT');
             if (rightConn) {
               console.log(`[Docking] Right Wall -> Floor ${rightConn.targetFloorId}`);
-              (window as any).switchFloor(rightConn.targetFloorId);
-              accumulator = 0;
-              break;
+              triggeredFloor = rightConn.targetFloorId;
             }
           }
           // Check Top Edge -> Trigger TOP connection
-          if (tileY === 0 && vy < -50) {
+          else if (tileY === 0 && vy < -50) {
             const topConn = connections.find(c => c.direction === 'TOP');
             if (topConn) {
               console.log(`[Docking] Top Wall -> Floor ${topConn.targetFloorId}`);
-              (window as any).switchFloor(topConn.targetFloorId);
-              accumulator = 0;
-              break;
+              triggeredFloor = topConn.targetFloorId;
             }
           }
           // Check Bottom Edge -> Trigger BOTTOM connection
-          if (tileY === maxY && vy > 50) {
+          else if (tileY === maxY && vy > 50) {
             const bottomConn = connections.find(c => c.direction === 'BOTTOM');
             if (bottomConn) {
               console.log(`[Docking] Bottom Wall -> Floor ${bottomConn.targetFloorId}`);
-              (window as any).switchFloor(bottomConn.targetFloorId);
-              accumulator = 0;
-              break;
+              triggeredFloor = bottomConn.targetFloorId;
             }
+          }
+          
+          // Trigger floor switch if a docking zone was activated
+          if (triggeredFloor !== null) {
+            (window as any).switchFloor(triggeredFloor);
+            accumulator = 0; // Reset to prevent double-trigger
+            continue; // Skip remaining updates this frame, but allow collision to run next iteration
           }
         }
       }

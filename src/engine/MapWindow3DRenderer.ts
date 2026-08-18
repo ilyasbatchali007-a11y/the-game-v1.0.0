@@ -164,6 +164,11 @@ export class MapWindow3DRenderer {
   private lastGridMoveTime: number = 0;
   private readonly GRID_MOVE_INTERVAL: number = 1000; // ms between moves - slowed down for better visibility
   
+  // Flag to control automatic grid scanning animation
+  // When true (graph mode), glowing block only moves via switchFloor3D()
+  // When false (exploration mode), glowing block auto-scans all blocks
+  private useGraphNavigation: boolean = true;
+  
   // Floor tracking for graph-based navigation
   private currentFloorId: number = 0;
   private floorNodes: Map<number, FloorNode> = new Map();
@@ -832,8 +837,14 @@ export class MapWindow3DRenderer {
   /**
    * Animate the glowing block moving through all grid coordinates
    * Also reveals blocks as the glowing cube enters them (Fog of War)
+   * SKIPPED when useGraphNavigation is true (graph-based floor system)
    */
   private updateGlowingBlockAnimation(): void {
+    // Skip automatic scanning when in graph navigation mode
+    if (this.useGraphNavigation) {
+      return;
+    }
+    
     // Safety check: Ensure glowing block exists and grid coordinates are populated
     if (!this.glowingBlock || !this.gridCoordinates || this.gridCoordinates.length === 0) {
       return; // Silently skip if grid not ready yet

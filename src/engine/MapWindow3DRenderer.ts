@@ -159,6 +159,8 @@ export class MapWindow3DRenderer {
   private fogOfWar: FogOfWarSystem = new FogOfWarSystem();
   // Per-block visibility state (true = visible, false = hidden)
   private blockVisibility: boolean[] = [];
+  // Triangle index ranges per block for selective rendering
+  private blockTriangleRanges: { start: number; count: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -357,6 +359,14 @@ export class MapWindow3DRenderer {
     this.blockVisibility = new Array(blocks.length).fill(false);
     this.blockVisibility[0] = true; // Starting area always visible
     this.fogOfWar = new FogOfWarSystem(); // Reset fog of war
+    
+    // Store triangle ranges for fog of war rendering
+    if (this.model.blockTriangleRanges && this.model.blockTriangleRanges.length === blocks.length) {
+      this.blockTriangleRanges = this.model.blockTriangleRanges;
+      console.log(`[MapWindow3DRenderer] Block triangle ranges stored: ${this.blockTriangleRanges.length} blocks`);
+    } else {
+      console.warn(`[MapWindow3DRenderer] Block triangle ranges mismatch or missing. Expected ${blocks.length}, got ${this.model.blockTriangleRanges?.length || 0}`);
+    }
     
     console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
     console.log(`[MapWindow3DRenderer] Fog of War initialized: block 0 visible, ${blocks.length - 1} blocks hidden`);
@@ -945,8 +955,20 @@ export class MapWindow3DRenderer {
       this.logBug(`[BUG] Error setting uniforms: ${uniformError}`);
     }
     
-    // Draw the main 3D model
-    gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
+    // Draw the main 3D model with fog of war - only draw triangles for revealed blocks
+    if (this.blockTriangleRanges.length > 0) {
+      // Draw each revealed block's triangles separately
+      for (let i = 0; i < this.blockTriangleRanges.length; i++) {
+        if (this.blockVisibility[i]) {
+          const range = this.blockTriangleRanges[i];
+          gl.drawElements(gl.TRIANGLES, range.count, gl.UNSIGNED_SHORT, range.start * 2); // 2 bytes per index
+        }
+      }
+      console.log(`[FogOfWar Render] Drew ${this.fogOfWar.getRevealedCount()}/${this.blockTriangleRanges.length} blocks`);
+    } else {
+      // Fallback: draw entire model if no triangle ranges available
+      gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
+    }
     
     // Check for draw errors
     const drawError = gl.getError();

@@ -13,6 +13,8 @@ export interface OBJModel {
   scaleFactor?: number;
   // Raw un-normalized vertices in world space for direct occupancy testing (Option A fix)
   rawVertices?: Float32Array;
+  // Triangle index ranges per block for fog of war visibility control
+  blockTriangleRanges?: { start: number; count: number }[];
 }
 
 export class OBJLoader {

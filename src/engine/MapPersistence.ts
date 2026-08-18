@@ -11,6 +11,7 @@ export interface SavedMapData {
   blocks: MapBlock[];
   timestamp: number;
   version: string;
+  blockTriangleRanges?: { start: number; count: number }[];
 }
 
 const DATA_VERSION = '1.0.0';
@@ -28,7 +29,8 @@ export async function saveDungeon(result: DungeonGenerationResult): Promise<bool
     objContent: result.objContent,
     blocks: result.blocks,
     timestamp: Date.now(),
-    version: DATA_VERSION
+    version: DATA_VERSION,
+    blockTriangleRanges: result.blockTriangleRanges
   };
   
   try {

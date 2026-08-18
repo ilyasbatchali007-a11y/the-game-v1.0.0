@@ -25,6 +25,7 @@ export interface DungeonGenerationResult {
   blocks: MapBlock[];      // Pre-fusion block metadata in preserved order
   objContent: string;      // Fused OBJ mesh content
   mapId: string;           // Unique identifier for this dungeon
+  blockTriangleRanges?: { start: number; count: number }[]; // Triangle index ranges per block for fog of war
 }
 
 /**
@@ -282,13 +283,15 @@ function createCubeMesh(
  * For a proper production system, use a library like csg.js or three-bvh-csg
  * This implementation merges vertices and handles overlapping geometry
  */
-export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array } {
+export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array; blockTriangleRanges: { start: number; count: number }[] } {
   const allVertices: number[] = [];
   const allIndices: number[] = [];
+  const blockTriangleRanges: { start: number; count: number }[] = [];
   let vertexOffset = 0;
   
   // Merge all block meshes
-  for (const block of blocks) {
+  for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+    const block = blocks[blockIdx];
     const { vertices, indices } = createCubeMesh(
       block.position.x,
       block.position.y,
@@ -297,6 +300,12 @@ export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array
       block.size.y,
       block.size.z
     );
+    
+    // Record the triangle range for this block (each block has 12 triangles = 36 indices)
+    blockTriangleRanges.push({
+      start: allIndices.length,
+      count: indices.length
+    });
     
     // Add vertices
     allVertices.push(...vertices);
@@ -313,7 +322,8 @@ export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array
   
   return {
     vertices: new Float32Array(allVertices),
-    indices: new Uint16Array(allIndices)
+    indices: new Uint16Array(allIndices),
+    blockTriangleRanges
   };
 }
 
@@ -350,7 +360,7 @@ export function generateDungeon(mapId?: string, config: DungeonShapeConfig = DEF
   const blocks = generateDungeonBlocks(config);
   
   // Step 2: Fuse blocks into single mesh
-  const { vertices, indices } = fuseBlocksIntoMesh(blocks);
+  const { vertices, indices, blockTriangleRanges } = fuseBlocksIntoMesh(blocks);
   
   // Step 3: Convert to OBJ format
   const objContent = meshToOBJ(vertices, indices, id);
@@ -358,6 +368,7 @@ export function generateDungeon(mapId?: string, config: DungeonShapeConfig = DEF
   return {
     blocks,
     objContent,
-    mapId: id
+    mapId: id,
+    blockTriangleRanges
   };
 }

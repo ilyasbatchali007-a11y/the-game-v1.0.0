@@ -140,7 +140,7 @@ export class MapWindow3DRenderer {
   private normalBuffer: WebGLBuffer | null = null;
   private indexBuffer: WebGLBuffer | null = null;
   private rotationY: number = 0;
-  private rotationX: number = 0.3; // Slight tilt for better view
+  private rotationX: number = 0.3; // Slight tilt for better view - RESETS on floor switch for consistency
   private zoom: number = -1.80; // Camera distance
   private readonly STATIC_ZOOM: number = -1.80;
   private minZoom: number = -20.0; // Allow extreme close-up for debugging
@@ -413,6 +413,11 @@ export class MapWindow3DRenderer {
    */
   public switchFloor3D(floorId: number, connectionPoints?: ConnectionPoint[]): void {
     this.currentFloorId = floorId;
+    
+    // Reset camera rotation to default for consistent view on every floor switch
+    this.rotationY = 0;
+    this.rotationX = 0.3;
+    this.zoom = this.STATIC_ZOOM;
     
     // Create or update floor node if it doesn't exist
     if (!this.floorNodes.has(floorId)) {

@@ -178,7 +178,7 @@ export class MapWindow3DRenderer {
 
   private initGlowingBlock(): void {
     // Initialize with default size, will be updated after grid detection
-    this.glowingBlock = new GlowingBlock(2.0);
+    this.glowingBlock = new GlowingBlock(0.5);
     this.createBlockBuffers();
     // Glowing block is now visible by default in constructor
     
@@ -273,8 +273,12 @@ export class MapWindow3DRenderer {
     // Update glowing block size based on first block (if available)
     if (blocks.length > 0 && this.glowingBlock) {
       const firstBlock = blocks[0];
-      this.glowingBlock.setBlockSizeVector(firstBlock.size.x, firstBlock.size.y, firstBlock.size.z);
-      this.glowingBlock.blockSize = (firstBlock.size.x + firstBlock.size.y + firstBlock.size.z) / 3;
+      // Convert world-space size to normalized space using the same scale factor
+      const normSizeX = firstBlock.size.x * scale;
+      const normSizeY = firstBlock.size.y * scale;
+      const normSizeZ = firstBlock.size.z * scale;
+      this.glowingBlock.setBlockSizeVector(normSizeX, normSizeY, normSizeZ);
+      this.glowingBlock.blockSize = (normSizeX + normSizeY + normSizeZ) / 3;
       this.createBlockBuffers();
     }
     

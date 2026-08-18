@@ -448,6 +448,10 @@ export class MapWindow3DRenderer {
     if (node && this.glowingBlock) {
       this.glowingBlock.setPosition(node.position.x, node.position.y, node.position.z);
       console.log(`[MapWindow3DRenderer] Switched to Floor ${floorId} at position (${node.position.x}, ${node.position.y}, ${node.position.z})`);
+      
+      // Reset rotation to ensure consistent view of the new floor position
+      this.rotationX = 0.3;
+      this.rotationY = 0;
     }
   }
   

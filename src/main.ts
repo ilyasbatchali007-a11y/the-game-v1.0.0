@@ -552,23 +552,44 @@ window.addEventListener('keydown', (e) => {
     return; // Don't process other inputs when toggling map
   }
 
-  // G, X, D keys are now disabled - no-ops to prevent old behavior
-  // These keys no longer generate, export, or delete dungeons
-  // Note: G is still used for floor switching below (when map is not visible)
-  if ((e.key === 'x' || e.key === 'X')) {
-    // Disabled: X key no longer exports dungeon files
+  // Re-enabled G key for dungeon generation (Task 2 temporary re-enable)
+  if ((e.key === 'g' || e.key === 'G') && !mapVisible) {
+    // Only trigger generation when map is NOT visible (to avoid conflict with floor switching)
+    // Generate new dungeon with fixed config
+    generateNewDungeon();
     return;
   }
 
+  // Re-enabled X key for dungeon export (Task 2 temporary re-enable)
+  if ((e.key === 'x' || e.key === 'X')) {
+    // Export dungeon files if dungeon has been generated
+    if (currentMapId && dungeonGenerated) {
+      loadDungeon(currentMapId).then(savedData => {
+        if (savedData) {
+          const result = {
+            mapId: savedData.mapId,
+            objContent: savedData.objContent,
+            blocks: savedData.blocks
+          };
+          exportDungeonFiles(result);
+          console.log('[Main] Exported dungeon files via X key');
+        }
+      });
+    } else {
+      console.warn('[Main] No dungeon to export. Press G first to generate.');
+    }
+    return;
+  }
+
+  // D key disabled - no-op
   if ((e.key === 'd' || e.key === 'D')) {
     // Disabled: D key no longer deletes dungeon
     return;
   }
 
-  if (!gameRunning) return;
-
   // Floor switching with T (previous) and G (next) - also respawn player at center of new floor
-  if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {
+  // Note: G key for floor switching only works when map is not visible AND dungeon hasn't just been generated
+  if ((e.key === 'g' || e.key === 'G') && !floorSwitchCooldown && !mapVisible && !dungeonGenerated) {
     floorSwitchCooldown = true;
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
@@ -594,7 +615,8 @@ window.addEventListener('keydown', (e) => {
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   
-  if ((e.key === 'g' || e.key === 'G') && !floorSwitchCooldown) {
+  // G key for next floor - only when map is not visible AND dungeon hasn't been generated
+  if ((e.key === 'g' || e.key === 'G') && !floorSwitchCooldown && !mapVisible && !dungeonGenerated) {
     floorSwitchCooldown = true;
     const currentFloor = mapRenderer.getCurrentFloorId();
     const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;

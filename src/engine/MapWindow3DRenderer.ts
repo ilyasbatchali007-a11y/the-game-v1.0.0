@@ -904,7 +904,7 @@ export class MapWindow3DRenderer {
     }
     
     // Clear canvas (depth test already enabled in init)
-    gl.clearColor(1.0, 1.0, 0.0, 1.0); // Yellow background
+    gl.clearColor(0.0, 0.0, 0.0, 1.0); // Black background
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     // Check for clear errors
@@ -963,7 +963,7 @@ export class MapWindow3DRenderer {
     
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
-    gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon
+    gl.uniform4f(colorLocation, 0.5, 0.5, 0.5, 1.0); // Grey color for dungeon mesh
     gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3); // Light from above-right
     gl.uniform1i(useLightingLocation, 1); // Enable lighting for main model
     

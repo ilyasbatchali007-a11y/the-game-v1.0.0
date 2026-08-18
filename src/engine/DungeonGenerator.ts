@@ -1,7 +1,25 @@
 // SRC/engine/DungeonGenerator.ts
-// Generates a 100-block dungeon layout, captures pre-fusion block metadata, and fuses into single mesh
+// Generates a 100-block dungeon layout using multi-vine branching algorithm, captures pre-fusion block metadata, and fuses into single mesh
 
 import { MapBlock } from './MapWindow3DRenderer';
+
+export interface DungeonShapeConfig {
+  shape: 'multiVine';
+  vineCount: number;      // 2–6
+  branchChance: number;   // 0–1
+  turnStrength: number;   // 0–1
+  seed: number;
+  totalBlocks: number;    // 100
+}
+
+export const DEFAULT_DUNGEON_CONFIG: DungeonShapeConfig = {
+  shape: 'multiVine',
+  vineCount: 4,
+  branchChance: 0.03,
+  turnStrength: 0.60,
+  seed: 9531,
+  totalBlocks: 100,
+};
 
 export interface DungeonGenerationResult {
   blocks: MapBlock[];      // Pre-fusion block metadata in preserved order
@@ -10,37 +28,203 @@ export interface DungeonGenerationResult {
 }
 
 /**
- * Generate a 10x10 grid of cubes (100 total) forming a dungeon floor
- * Each cube is 10 units in size, positioned in world space
- * Returns blocks in row-by-row, floor-by-floor traversal order
+ * Seeded PRNG (mulberry32) - deterministic random number generator
+ * Same seed always produces the same sequence of random numbers
  */
-export function generateDungeonBlocks(): MapBlock[] {
-  const blocks: MapBlock[] = [];
-  const gridSize = 10;  // 10x10 = 100 blocks
-  const blockSize = 10; // Each cube is 10x10x10 units
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0;
+  return function() {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Generate a multi-vine branching dungeon layout
+ * Starts from a core block, then grows multiple vines with random walks and branching
+ * Returns exactly totalBlocks MapBlock entries in generation order (core first, then vines)
+ */
+export function generateDungeonBlocks(config: DungeonShapeConfig = DEFAULT_DUNGEON_CONFIG): MapBlock[] {
+  const rng = mulberry32(config.seed);
+  const totalBlocks = config.totalBlocks;
+  const blockSize = 10;
   
-  // Generate in deterministic row-by-row order (preserved traversal order)
-  for (let z = 0; z < gridSize; z++) {
-    for (let x = 0; x < gridSize; x++) {
-      const block: MapBlock = {
-        id: `block_${z}_${x}`,
-        position: {
-          x: x * blockSize + blockSize / 2,  // Center of block
-          y: blockSize / 2,                   // Sitting on ground plane
-          z: z * blockSize + blockSize / 2
-        },
-        size: {
-          x: blockSize,
-          y: blockSize,
-          z: blockSize
-        },
-        type: 'dungeon_floor'
-      };
-      blocks.push(block);
+  // Track occupied grid cells to prevent overlaps
+  const occupied = new Set<string>();
+  const blocks: MapBlock[] = [];
+  
+  // Helper to create a block at grid position
+  function createBlock(gx: number, gy: number, gz: number): MapBlock | null {
+    const key = `${gx},${gy},${gz}`;
+    if (occupied.has(key)) return null;
+    
+    occupied.add(key);
+    const block: MapBlock = {
+      id: `block_${blocks.length}`,
+      position: {
+        x: gx * blockSize + blockSize / 2,
+        y: gy * blockSize + blockSize / 2,
+        z: gz * blockSize + blockSize / 2
+      },
+      size: { x: blockSize, y: blockSize, z: blockSize },
+      type: 'dungeon_vine'
+    };
+    blocks.push(block);
+    return block;
+  }
+  
+  // Start with core block at origin
+  createBlock(0, 0, 0);
+  
+  // Define 6 axis directions
+  const directions = [
+    { x: 1, y: 0, z: 0 },   // +x
+    { x: -1, y: 0, z: 0 },  // -x
+    { x: 0, y: 1, z: 0 },   // +y
+    { x: 0, y: -1, z: 0 },  // -y
+    { x: 0, y: 0, z: 1 },   // +z
+    { x: 0, y: 0, z: -1 }   // -z
+  ];
+  
+  // Shuffle directions using seeded RNG
+  function shuffleArray<T>(arr: T[]): T[] {
+    const result = [...arr];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+  
+  // Select vineCount distinct starting directions
+  const shuffledDirs = shuffleArray(directions);
+  const startDirections = shuffledDirs.slice(0, Math.min(config.vineCount, 6));
+  
+  // Calculate budget per vine (excluding core which is already placed)
+  const remainingBlocks = totalBlocks - 1;
+  const baseBudgetPerVine = Math.floor(remainingBlocks / startDirections.length);
+  let blocksPlaced = 1; // Core is already placed
+  
+  // Vine growth state
+  interface VineSegment {
+    gx: number;
+    gy: number;
+    gz: number;
+    dir: { x: number; y: number; z: number };
+    budget: number;
+  }
+  
+  // Queue of active vine segments to grow
+  const vineQueue: VineSegment[] = [];
+  
+  // Initialize starting vines
+  for (const dir of startDirections) {
+    vineQueue.push({
+      gx: 0,
+      gy: 0,
+      gz: 0,
+      dir,
+      budget: baseBudgetPerVine
+    });
+  }
+  
+  // Grow vines using random walk
+  while (vineQueue.length > 0 && blocksPlaced < totalBlocks) {
+    const segment = vineQueue.shift()!;
+    
+    if (segment.budget <= 0) continue;
+    
+    let { gx, gy, gz, dir, budget } = segment;
+    let stepsTaken = 0;
+    const maxSteps = budget;
+    
+    while (stepsTaken < maxSteps && blocksPlaced < totalBlocks) {
+      // Try to place block in current direction
+      let nx = gx + dir.x;
+      let ny = gy + dir.y;
+      let nz = gz + dir.z;
+      
+      // Check if position is occupied, try fallback directions if so
+      let placed = false;
+      const testDirs = [dir, ...shuffleArray([...directions])];
+      
+      for (const testDir of testDirs) {
+        nx = gx + testDir.x;
+        ny = gy + testDir.y;
+        nz = gz + testDir.z;
+        
+        const key = `${nx},${ny},${nz}`;
+        if (!occupied.has(key)) {
+          // Place block
+          if (createBlock(nx, ny, nz)) {
+            blocksPlaced++;
+            placed = true;
+            gx = nx;
+            gy = ny;
+            gz = nz;
+            
+            // Chance to spawn a branch tendril
+            if (rng() < config.branchChance && blocksPlaced < totalBlocks) {
+              // Pick a random direction different from current
+              const availableDirs = directions.filter(d => 
+                !(d.x === dir.x && d.y === dir.y && d.z === dir.z)
+              );
+              if (availableDirs.length > 0) {
+                const branchDir = availableDirs[Math.floor(rng() * availableDirs.length)];
+                const remainingBudget = Math.max(1, Math.floor((maxSteps - stepsTaken) * 0.5));
+                vineQueue.push({
+                  gx, gy, gz,
+                  dir: branchDir,
+                  budget: remainingBudget
+                });
+              }
+            }
+            
+            break;
+          }
+        }
+      }
+      
+      if (!placed) {
+        // Couldn't place, try to change direction
+        if (rng() < config.turnStrength) {
+          const newDirs = directions.filter(d => 
+            !(d.x === dir.x && d.y === dir.y && d.z === dir.z)
+          );
+          if (newDirs.length > 0) {
+            dir = newDirs[Math.floor(rng() * newDirs.length)];
+          }
+        }
+        // If still can't place after several attempts, stop this vine segment
+        if (!placed) {
+          break;
+        }
+      } else {
+        // Successfully placed, chance to turn
+        if (rng() < config.turnStrength) {
+          const newDirs = directions.filter(d => 
+            !(d.x === dir.x && d.y === dir.y && d.z === dir.z)
+          );
+          if (newDirs.length > 0) {
+            dir = newDirs[Math.floor(rng() * newDirs.length)];
+          }
+        }
+      }
+      
+      stepsTaken++;
     }
   }
   
-  console.log(`[DungeonGenerator] Generated ${blocks.length} blocks in ${gridSize}x${gridSize} grid`);
+  // Ensure exactly totalBlocks by truncating if we somehow exceeded
+  while (blocks.length > totalBlocks) {
+    const removed = blocks.pop()!;
+    const key = `${Math.round((removed.position.x - 5) / 10)},${Math.round((removed.position.y - 5) / 10)},${Math.round((removed.position.z - 5) / 10)}`;
+    occupied.delete(key);
+  }
+  
+  console.log(`[DungeonGenerator] Generated ${blocks.length} blocks using multi-vine algorithm (seed: ${config.seed}, vines: ${config.vineCount})`);
   return blocks;
 }
 
@@ -159,11 +343,11 @@ export function meshToOBJ(vertices: Float32Array, indices: Uint16Array, mapId: s
 /**
  * Generate complete dungeon with both mesh and block metadata
  */
-export function generateDungeon(mapId?: string): DungeonGenerationResult {
+export function generateDungeon(mapId?: string, config: DungeonShapeConfig = DEFAULT_DUNGEON_CONFIG): DungeonGenerationResult {
   const id = mapId || `dungeon_${Date.now()}`;
   
-  // Step 1: Generate blocks in preserved order
-  const blocks = generateDungeonBlocks();
+  // Step 1: Generate blocks in preserved order using multi-vine algorithm
+  const blocks = generateDungeonBlocks(config);
   
   // Step 2: Fuse blocks into single mesh
   const { vertices, indices } = fuseBlocksIntoMesh(blocks);

@@ -22,13 +22,15 @@ export class GlowingBlock {
   blockSizeVector: { x: number, y: number, z: number }; // Per-axis sizing for anisotropic grids
   color: [number, number, number, number];
   visible: boolean;
+  isStartingBlock: boolean; // Always visible if true
 
   constructor(blockSize: number = 0.1) {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
     this.blockSizeVector = { x: blockSize, y: blockSize, z: blockSize };
     this.color = [0.0, 1.0, 0.0, 1.0]; // Green with full alpha for glowing effect
-    this.visible = true; // Always visible by default
+    this.visible = false; // Hidden by default, only visible when player is inside or is starting block
+    this.isStartingBlock = true; // First block is always visible
   }
 
   setPosition(x: number, y: number, z: number): void {
@@ -98,6 +100,9 @@ export class MapWindow3DRenderer {
   private currentGridIndex: number = 0;
   private lastGridMoveTime: number = 0;
   private readonly GRID_MOVE_INTERVAL: number = 1000; // ms between moves - slowed down for better visibility
+  
+  // Player position tracking for visibility check
+  private playerWorldPosition: { x: number, y: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -180,11 +185,12 @@ export class MapWindow3DRenderer {
     // Initialize with default size, will be updated after grid detection
     this.glowingBlock = new GlowingBlock(0.5);
     this.createBlockBuffers();
-    // Glowing block is now visible by default in constructor
+    // Starting block is visible by default
     
     // Set initial position
     if (this.glowingBlock) {
       this.glowingBlock.setPosition(0, 0, 0);
+      this.glowingBlock.visible = true; // First block always visible
     }
   }
 
@@ -289,9 +295,67 @@ export class MapWindow3DRenderer {
     if (this.gridCoordinates.length > 0 && this.glowingBlock) {
       const firstPos = this.gridCoordinates[0];
       this.glowingBlock.position = { ...firstPos };
+      this.glowingBlock.visible = true; // First block always visible
     }
     
     console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
+  }
+
+  /**
+   * Update player world position and check visibility for glowing block
+   */
+  public updatePlayerPosition(worldX: number, worldY: number): void {
+    this.playerWorldPosition = { x: worldX, y: worldY };
+    
+    // Check if player is inside any block and update glowing block visibility
+    this.updateGlowingBlockVisibility();
+  }
+
+  /**
+   * Check if player is inside a block and update glowing block visibility accordingly
+   */
+  private updateGlowingBlockVisibility(): void {
+    if (!this.playerWorldPosition || !this.glowingBlock || this.gridCoordinates.length === 0) return;
+    
+    const playerX = this.playerWorldPosition.x;
+    const playerY = this.playerWorldPosition.y;
+    
+    // Find which block the player is currently in
+    let playerInBlockIndex = -1;
+    
+    // We need to reverse the normalization to get world-space block positions
+    if (this.model && this.model.originalBounds && this.model.scaleFactor) {
+      const originalBounds = this.model.originalBounds;
+      const scale = this.model.scaleFactor;
+      const centerX = (originalBounds.minX + originalBounds.maxX) / 2;
+      const centerY = (originalBounds.minY + originalBounds.maxY) / 2;
+      
+      for (let i = 0; i < this.gridCoordinates.length; i++) {
+        const normPos = this.gridCoordinates[i];
+        // Reverse normalization: worldCoord = (normCoord / scale) + center
+        const worldBlockX = (normPos.x / scale) + centerX;
+        const worldBlockY = (normPos.y / scale) + centerY;
+        
+        // Check if player is within this block's bounds (block size is 10x10)
+        const halfBlockSize = 5;
+        if (Math.abs(playerX - worldBlockX) < halfBlockSize && 
+            Math.abs(playerY - worldBlockY) < halfBlockSize) {
+          playerInBlockIndex = i;
+          break;
+        }
+      }
+    }
+    
+    // Update glowing block visibility and position
+    if (playerInBlockIndex >= 0) {
+      // Player is inside a block - show the glowing block at this position
+      this.glowingBlock.position = { ...this.gridCoordinates[playerInBlockIndex] };
+      this.glowingBlock.visible = true;
+      this.glowingBlock.isStartingBlock = (playerInBlockIndex === 0);
+    } else if (this.glowingBlock && !this.glowingBlock.isStartingBlock) {
+      // Player is not in any block - hide glowing block unless it's the starting block
+      this.glowingBlock.visible = false;
+    }
   }
 
   /**
@@ -317,6 +381,7 @@ export class MapWindow3DRenderer {
       this.lastGridMoveTime = Date.now();
       console.log('[MapWindow3DRenderer] Grid animation started');
     } else {
+      // Disable auto-animation when player control is enabled
       console.log('[MapWindow3DRenderer] Grid animation stopped');
     }
   }
@@ -335,6 +400,14 @@ export class MapWindow3DRenderer {
     } else {
       this.currentGridIndex = 0;
     }
+  }
+
+  /**
+   * Disable automatic grid animation and enable player-controlled visibility
+   */
+  public enablePlayerControl(): void {
+    this.toggleGridAnimation(false);
+    console.log('[MapWindow3DRenderer] Player control enabled - glowing block follows player position');
   }
 
   private createBlockBuffers(): void {

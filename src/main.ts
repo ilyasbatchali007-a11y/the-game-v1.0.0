@@ -412,8 +412,8 @@ async function generateNewDungeon(): Promise<void> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(result.blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Enable player-controlled visibility instead of auto-animation
+    map3DRenderer.enablePlayerControl();
     
     dungeonGenerated = true;
     console.log(`[Main] Dungeon generated and loaded: ${result.blocks.length} blocks, ${result.objContent.length} bytes OBJ`);
@@ -446,8 +446,8 @@ async function loadSavedDungeon(mapId: string): Promise<boolean> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(savedData.blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Enable player-controlled visibility instead of auto-animation
+    map3DRenderer.enablePlayerControl();
     
     dungeonGenerated = true;
     console.log(`[Main] Loaded saved dungeon ${mapId}: ${savedData.blocks.length} blocks`);

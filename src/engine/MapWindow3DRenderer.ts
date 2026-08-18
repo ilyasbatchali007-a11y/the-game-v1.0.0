@@ -158,16 +158,23 @@ export class MapWindow3DRenderer {
       void main() {
         // Check if this fragment's block is visited
         bool isVisible = false;
+        
+        // If no blocks visited yet, show nothing (fog of war)
+        if (u_visitedCount == 0) {
+          discard;
+        }
+        
         for (int i = 0; i < 100; i++) {
           if (i >= u_visitedCount) break;
-          if (u_visitedBlocks[i].x == v_blockId) {
+          // Use approximate equality for floating point comparison
+          if (abs(u_visitedBlocks[i].x - v_blockId) < 0.5) {
             isVisible = true;
             break;
           }
         }
         
         // Discard fragments from unvisited blocks (make transparent)
-        if (!isVisible && u_visitedCount > 0) {
+        if (!isVisible) {
           discard;
         }
         

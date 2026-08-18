@@ -80,6 +80,9 @@ export const FLOORS: FloorConfig[] = [
   ...Array.from({ length: 99 }, (_, i) => createStandardFloor(i + 1)),
 ];
 
+// Export ARENA_FLOOR for backward compatibility (Floor 0)
+export const ARENA_FLOOR: FloorConfig = FLOORS[0];
+
 // Get floor by ID (0-99)
 export function getFloorById(id: number): FloorConfig {
   if (id < 0 || id >= FLOORS.length) {

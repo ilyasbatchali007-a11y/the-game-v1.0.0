@@ -16,6 +16,62 @@ export interface MapBlock {
   type?: string;
 }
 
+/**
+ * Fog of War system for 3D map visibility
+ * Tracks which blocks of the dungeon mesh are currently visible
+ */
+export class FogOfWarSystem {
+  // Set of revealed block indices (preserved generation order from JSON)
+  private revealedBlocks: Set<number> = new Set();
+  // Starting block index that's always visible (glowing cube starting area)
+  private startingBlockIndex: number = 0;
+  
+  constructor() {
+    // Always reveal the starting block
+    this.revealBlock(this.startingBlockIndex);
+  }
+  
+  /**
+   * Reveal a specific block by its index in the generation order
+   */
+  revealBlock(blockIndex: number): void {
+    if (!this.revealedBlocks.has(blockIndex)) {
+      this.revealedBlocks.add(blockIndex);
+      console.log(`[FogOfWar] Block ${blockIndex} revealed`);
+    }
+  }
+  
+  /**
+   * Check if a block is currently visible
+   */
+  isBlockRevealed(blockIndex: number): boolean {
+    return this.revealedBlocks.has(blockIndex);
+  }
+  
+  /**
+   * Get all revealed block indices
+   */
+  getRevealedBlocks(): number[] {
+    return Array.from(this.revealedBlocks);
+  }
+  
+  /**
+   * Get the count of revealed blocks
+   */
+  getRevealedCount(): number {
+    return this.revealedBlocks.size;
+  }
+  
+  /**
+   * Reset fog of war (only starting block remains visible)
+   */
+  reset(): void {
+    this.revealedBlocks.clear();
+    this.revealBlock(this.startingBlockIndex);
+    console.log('[FogOfWar] Reset to starting area only');
+  }
+}
+
 export class GlowingBlock {
   position: BlockPosition;
   blockSize: number;
@@ -98,6 +154,11 @@ export class MapWindow3DRenderer {
   private currentGridIndex: number = 0;
   private lastGridMoveTime: number = 0;
   private readonly GRID_MOVE_INTERVAL: number = 1000; // ms between moves - slowed down for better visibility
+  
+  // Fog of War system for mesh visibility control
+  private fogOfWar: FogOfWarSystem = new FogOfWarSystem();
+  // Per-block visibility state (true = visible, false = hidden)
+  private blockVisibility: boolean[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -291,7 +352,14 @@ export class MapWindow3DRenderer {
       this.glowingBlock.position = { ...firstPos };
     }
     
+    // Initialize Fog of War block visibility array
+    // All blocks start hidden except the starting block (index 0) which is always visible
+    this.blockVisibility = new Array(blocks.length).fill(false);
+    this.blockVisibility[0] = true; // Starting area always visible
+    this.fogOfWar = new FogOfWarSystem(); // Reset fog of war
+    
     console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
+    console.log(`[MapWindow3DRenderer] Fog of War initialized: block 0 visible, ${blocks.length - 1} blocks hidden`);
   }
 
   /**
@@ -665,6 +733,7 @@ export class MapWindow3DRenderer {
 
   /**
    * Animate the glowing block moving through all grid coordinates
+   * Also reveals blocks as the glowing cube enters them (Fog of War)
    */
   private updateGlowingBlockAnimation(): void {
     // Safety check: Ensure glowing block exists and grid coordinates are populated
@@ -681,6 +750,10 @@ export class MapWindow3DRenderer {
     if (this.currentGridIndex < this.gridCoordinates.length) {
       const pos = this.gridCoordinates[this.currentGridIndex];
       this.glowingBlock.setPosition(pos.x, pos.y, pos.z);
+      
+      // Reveal the block at current position (Fog of War)
+      this.revealBlock(this.currentGridIndex);
+      
       this.currentGridIndex++;
       
       // Only log every 10 steps to reduce console spam
@@ -692,6 +765,35 @@ export class MapWindow3DRenderer {
       this.currentGridIndex = 0;
       console.log('[MapWindow3DRenderer] Grid scan complete, restarting...');
     }
+  }
+
+  /**
+   * Reveal a specific block by index (called when player enters that grid cell)
+   * Once revealed, the block stays visible permanently
+   */
+  private revealBlock(blockIndex: number): void {
+    if (blockIndex < 0 || blockIndex >= this.blockVisibility.length) return;
+    
+    if (!this.blockVisibility[blockIndex]) {
+      this.blockVisibility[blockIndex] = true;
+      this.fogOfWar.revealBlock(blockIndex);
+      console.log(`[FogOfWar] Block ${blockIndex} revealed (${this.fogOfWar.getRevealedCount()}/${this.blockVisibility.length} total)`);
+    }
+  }
+
+  /**
+   * Check if a block is currently visible
+   */
+  public isBlockVisible(blockIndex: number): boolean {
+    if (blockIndex < 0 || blockIndex >= this.blockVisibility.length) return false;
+    return this.blockVisibility[blockIndex];
+  }
+
+  /**
+   * Get count of revealed blocks
+   */
+  public getRevealedBlockCount(): number {
+    return this.fogOfWar.getRevealedCount();
   }
 
   private lastLogState = {

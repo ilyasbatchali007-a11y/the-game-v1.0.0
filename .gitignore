@@ -3,6 +3,28 @@
 dist/
 build/
 
+# 3D object cache/previews (if generated)
+*.obj.bak
+*.json.bak
+
 # Dependencies
 node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
 ```

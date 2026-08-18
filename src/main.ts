@@ -489,8 +489,8 @@ function initMapCanvas() {
   // Initialize 3D renderer for the map window
   if (!map3DRenderer) {
     map3DRenderer = new MapWindow3DRenderer(mapCanvas);
-    // Don't auto-load/generate - wait for user to press G key
-    console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
+    // Auto-load dungeon from fixed files on initialization
+    console.log('[Main] Map canvas initialized. Loading dungeon from files...');
   } else {
     map3DRenderer.resize();
   }
@@ -502,9 +502,46 @@ function toggleMap() {
     mapContainer.classList.add('visible');
     // Initialize canvas immediately with fixed dimensions
     initMapCanvas();
-    // Future: Call renderMap() here when map logic is ready
+    // Load dungeon from fixed files and start animation automatically
+    loadDungeonFromFiles();
   } else {
     mapContainer.classList.remove('visible');
+  }
+}
+
+/**
+ * Load dungeon model and block data from fixed files in /3d-objects/
+ */
+async function loadDungeonFromFiles(): Promise<void> {
+  if (!map3DRenderer) return;
+  
+  // Vite serves public folder at root, so paths are relative to domain root
+  const objUrl = '/3d-objects/dungeon.obj';
+  const jsonUrl = '/3d-objects/dungeon_blocks.json';
+  
+  console.log(`[Main] Loading dungeon from ${objUrl} and ${jsonUrl}`);
+  
+  try {
+    // Load OBJ model via URL
+    const { OBJLoader } = await import('./engine/OBJLoader');
+    const model = await OBJLoader.loadFromURL(objUrl);
+    map3DRenderer.loadModel(model);
+    
+    // Fetch block metadata JSON
+    const response = await fetch(jsonUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dungeon blocks JSON: ${response.statusText}`);
+    }
+    const blocks = await response.json();
+    map3DRenderer.setMapBlocks(blocks);
+    
+    // Start the glowing block animation through all positions
+    map3DRenderer.toggleGridAnimation(true);
+    
+    dungeonGenerated = true;
+    console.log(`[Main] Dungeon loaded from files: ${blocks.length} blocks`);
+  } catch (err) {
+    console.error('[Main] Failed to load dungeon from files:', err);
   }
 }
 window.addEventListener('keydown', (e) => {
@@ -515,49 +552,20 @@ window.addEventListener('keydown', (e) => {
     return; // Don't process other inputs when toggling map
   }
 
-  // Generate/load dungeon map with G key - works only when map is visible
+  // G, X, D keys are now disabled - no-ops to prevent old behavior
+  // These keys no longer generate, export, or delete dungeons
   if ((e.key === 'g' || e.key === 'G') && mapVisible && map3DRenderer) {
-    if (!gameRunning) return;
-    console.log('[Main] G key pressed - generating/loading dungeon map');
-    // Check if saved map exists, if not generate new one
-    const defaultMapId = getDefaultMapId();
-    loadSavedDungeon(defaultMapId).then(loaded => {
-      if (!loaded) {
-        // No saved map exists, generate new one
-        generateNewDungeon();
-      }
-    });
+    // Disabled: G key no longer generates/loads dungeon
     return;
   }
 
-  // Export dungeon files with X key - works only when map is visible
   if ((e.key === 'x' || e.key === 'X') && mapVisible && currentMapId) {
-    if (!gameRunning) return;
-    console.log('[Main] X key pressed - exporting dungeon files');
-    loadDungeon(currentMapId).then(savedData => {
-      if (savedData) {
-        exportDungeonFiles({
-          mapId: savedData.mapId,
-          objContent: savedData.objContent,
-          blocks: savedData.blocks
-        });
-      }
-    });
+    // Disabled: X key no longer exports dungeon files
     return;
   }
 
-  // Delete current dungeon with D key - works only when map is visible
   if ((e.key === 'd' || e.key === 'D') && mapVisible && currentMapId) {
-    if (!gameRunning) return;
-    console.log('[Main] D key pressed - deleting current dungeon');
-    deleteDungeon(currentMapId);
-    dungeonGenerated = false;
-    currentMapId = null;
-    // Clear the 3D view
-    if (map3DRenderer) {
-      // Optionally reload empty or show message
-      console.log('[Main] Dungeon deleted. Press G to generate a new one.');
-    }
+    // Disabled: D key no longer deletes dungeon
     return;
   }
 

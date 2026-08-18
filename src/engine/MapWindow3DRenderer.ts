@@ -147,7 +147,7 @@ export class MapWindow3DRenderer {
     `;
 
     const fsSource = `
-      precision mediump float;
+      precision highp float;
       varying vec3 v_normal;
       varying float v_blockId;
       uniform vec3 u_lightDir;
@@ -159,23 +159,27 @@ export class MapWindow3DRenderer {
         // Check if this fragment's block is visited
         bool isVisible = false;
         
-        // If no blocks visited yet, show nothing (fog of war)
+        // If no blocks visited yet, show only block 0 (starting area)
         if (u_visitedCount == 0) {
-          discard;
-        }
-        
-        for (int i = 0; i < 100; i++) {
-          if (i >= u_visitedCount) break;
-          // Use approximate equality for floating point comparison
-          if (abs(u_visitedBlocks[i].x - v_blockId) < 0.5) {
-            isVisible = true;
-            break;
+          // Default to showing block 0 if nothing is visited
+          if (abs(v_blockId - 0.0) > 0.5) {
+            discard;
           }
-        }
-        
-        // Discard fragments from unvisited blocks (make transparent)
-        if (!isVisible) {
-          discard;
+          isVisible = true;
+        } else {
+          for (int i = 0; i < 100; i++) {
+            if (i >= u_visitedCount) break;
+            // Use approximate equality for floating point comparison
+            if (abs(u_visitedBlocks[i].x - v_blockId) < 0.5) {
+              isVisible = true;
+              break;
+            }
+          }
+          
+          // Discard fragments from unvisited blocks (make transparent)
+          if (!isVisible) {
+            discard;
+          }
         }
         
         if (u_useLighting) {

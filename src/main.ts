@@ -601,6 +601,8 @@ function initMapCanvas() {
   // Initialize 3D renderer for the map window
   if (!map3DRenderer) {
     map3DRenderer = new MapWindow3DRenderer(mapCanvas);
+    // Expose globally for cross-module sync
+    (window as any).map3DRenderer = map3DRenderer;
     // Initialize with Floor 0 as starting point
     const connectionPoints = mapRenderer.getConnectionPoints();
     map3DRenderer.switchFloor3D(0, connectionPoints);

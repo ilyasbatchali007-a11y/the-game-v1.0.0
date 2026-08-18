@@ -53,6 +53,14 @@ export class MapRenderer {
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     console.log(`[MapRenderer] Connections: ${this.floorConfig.connectionPoints.length}`, this.floorConfig.connectionPoints);
+
+    // --- CRITICAL SYNC: Force 3D Map Update Immediately ---
+    // Access via global reference from main.ts if needed, or direct call
+    const map3D = (window as any).map3DRenderer;
+    if (map3D) {
+        map3D.switchFloor3D(floorId);
+    }
+
     return true;
   }
 

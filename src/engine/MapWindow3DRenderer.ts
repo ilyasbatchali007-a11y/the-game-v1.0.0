@@ -447,11 +447,14 @@ export class MapWindow3DRenderer {
     const node = this.floorNodes.get(floorId);
     if (node && this.glowingBlock) {
       this.glowingBlock.setPosition(node.position.x, node.position.y, node.position.z);
+      this.glowingBlock.visible = true; // Ensure it's visible
+      
       console.log(`[MapWindow3DRenderer] Switched to Floor ${floorId} at position (${node.position.x}, ${node.position.y}, ${node.position.z})`);
       
       // Reset rotation to ensure consistent view of the new floor position
-      this.rotationX = 0.3;
-      this.rotationY = 0;
+      this.rotationX = 0.3; // Slight downward tilt
+      this.rotationY = 0;   // Straight on
+      this.zoom = -1.80;    // Reset zoom to see the node clearly
     }
   }
   

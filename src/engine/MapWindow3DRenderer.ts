@@ -164,6 +164,10 @@ export class MapWindow3DRenderer {
   private lastGridMoveTime: number = 0;
   private readonly GRID_MOVE_INTERVAL: number = 1000; // ms between moves - slowed down for better visibility
   
+  // Floor tracking for graph-based navigation
+  private currentFloorId: number = 0;
+  private floorNodes: Map<number, FloorNode> = new Map();
+  
   // Fog of War system for mesh visibility control
   private fogOfWar: FogOfWarSystem = new FogOfWarSystem();
   // Per-block visibility state (true = visible, false = hidden)
@@ -297,9 +301,11 @@ export class MapWindow3DRenderer {
    * Set map blocks from pre-fusion metadata. Replaces mesh-based grid detection.
    * Converts each block's world-space position to normalized mesh space and populates gridCoordinates.
    * @param blocks - Array of MapBlock objects in generation order (preserved traversal order)
+   * @param floorId - Optional floor ID for graph-based navigation (defaults to currentFloorId)
    */
-  public setMapBlocks(blocks: MapBlock[]): void {
-    console.log('[SETUP: PRE-FUSION BLOCK METADATA] setMapBlocks() — replaces old mesh-based grid detection. See MapWindow3DRenderer.ts.');
+  public setMapBlocks(blocks: MapBlock[], floorId?: number): void {
+    const targetFloorId = floorId !== undefined ? floorId : this.currentFloorId;
+    console.log(`[SETUP: PRE-FUSION BLOCK METADATA] setMapBlocks() for Floor ${targetFloorId} — replaces old mesh-based grid detection. See MapWindow3DRenderer.ts.`);
     
     if (!this.model || !this.model.originalBounds || !this.model.scaleFactor) {
       console.error('[MapWindow3DRenderer] Cannot set map blocks: model or bounds not initialized');
@@ -320,7 +326,7 @@ export class MapWindow3DRenderer {
     const targetSize = 1.6;
     const scale = maxDim > 0 ? targetSize / maxDim : 1.0;
     
-    console.log(`[MapWindow3DRenderer] Converting ${blocks.length} blocks from world-space to normalized space`);
+    console.log(`[MapWindow3DRenderer] Converting ${blocks.length} blocks from world-space to normalized space for Floor ${targetFloorId}`);
     console.log(`[MapWindow3DRenderer] Original bounds: X[${originalBounds.minX.toFixed(1)}, ${originalBounds.maxX.toFixed(1)}], Y[${originalBounds.minY.toFixed(1)}, ${originalBounds.maxY.toFixed(1)}], Z[${originalBounds.minZ.toFixed(1)}, ${originalBounds.maxZ.toFixed(1)}]`);
     console.log(`[MapWindow3DRenderer] Center: (${centerX.toFixed(2)}, ${centerY.toFixed(2)}, ${centerZ.toFixed(2)}), Scale: ${scale.toFixed(4)}`);
     
@@ -390,8 +396,63 @@ export class MapWindow3DRenderer {
       }
     }
     
-    console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
+    console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order for Floor ${targetFloorId}`);
     console.log(`[MapWindow3DRenderer] Fog of War initialized: block 0 visible, ${blocks.length - 1} blocks hidden`);
+  }
+  
+  /**
+   * Switch to a different floor in the 3D map visualization
+   * Updates the glowing block position to the new floor's node position
+   * @param floorId - The floor ID to switch to
+   * @param connectionPoints - Optional connection points for the floor
+   */
+  public switchFloor3D(floorId: number, connectionPoints?: ConnectionPoint[]): void {
+    this.currentFloorId = floorId;
+    
+    // Create or update floor node if it doesn't exist
+    if (!this.floorNodes.has(floorId)) {
+      // Calculate position in vertical tower layout
+      // Floor 0 at top (y=0), each subsequent floor below
+      const floorSpacing = 2.5; // Space between floors in 3D view
+      const yPos = -floorId * floorSpacing;
+      
+      this.floorNodes.set(floorId, {
+        floorId,
+        position: { x: 0, y: yPos, z: 0 },
+        connections: connectionPoints || [],
+        revealed: floorId === 0 // Only floor 0 starts revealed
+      });
+    }
+    
+    // Update connections if provided
+    if (connectionPoints) {
+      const node = this.floorNodes.get(floorId);
+      if (node) {
+        node.connections = connectionPoints;
+        node.revealed = true;
+      }
+    }
+    
+    // Move glowing block to this floor's position
+    const node = this.floorNodes.get(floorId);
+    if (node && this.glowingBlock) {
+      this.glowingBlock.setPosition(node.position.x, node.position.y, node.position.z);
+      console.log(`[MapWindow3DRenderer] Switched to Floor ${floorId} at position (${node.position.x}, ${node.position.y}, ${node.position.z})`);
+    }
+  }
+  
+  /**
+   * Get the current floor ID in the 3D map
+   */
+  public getCurrentFloor3D(): number {
+    return this.currentFloorId;
+  }
+  
+  /**
+   * Get all floor nodes for rendering the 3D map graph
+   */
+  public getFloorNodes(): Map<number, FloorNode> {
+    return this.floorNodes;
   }
 
   /**

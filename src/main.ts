@@ -20,7 +20,13 @@ const mapRenderer = new MapRenderer();
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {
-  return mapRenderer.switchFloor(floorId);
+  const result = mapRenderer.switchFloor(floorId);
+  // Update 3D map glowing cube position
+  if (map3DRenderer && result) {
+    const connectionPoints = mapRenderer.getConnectionPoints();
+    map3DRenderer.switchFloor3D(floorId, connectionPoints);
+  }
+  return result;
 };
 
 (window as any).getCurrentFloor = () => {
@@ -533,6 +539,9 @@ function initMapCanvas() {
   // Initialize 3D renderer for the map window
   if (!map3DRenderer) {
     map3DRenderer = new MapWindow3DRenderer(mapCanvas);
+    // Initialize with Floor 0 as starting point
+    const connectionPoints = mapRenderer.getConnectionPoints();
+    map3DRenderer.switchFloor3D(0, connectionPoints);
     // Don't auto-load/generate - wait for user to press G key
     console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
   } else {
@@ -607,6 +616,12 @@ window.addEventListener('keydown', (e) => {
       renderer.updateMapDataTexture();
     }
     
+    // Update 3D map glowing cube position
+    if (map3DRenderer) {
+      const connectionPoints = mapRenderer.getConnectionPoints();
+      map3DRenderer.switchFloor3D(newFloor, connectionPoints);
+    }
+    
     // Teleport player to center of new floor and update camera
     if (world) {
       world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
@@ -631,6 +646,12 @@ window.addEventListener('keydown', (e) => {
     // Update renderer's map data texture after floor switch
     if (renderer) {
       renderer.updateMapDataTexture();
+    }
+    
+    // Update 3D map glowing cube position
+    if (map3DRenderer) {
+      const connectionPoints = mapRenderer.getConnectionPoints();
+      map3DRenderer.switchFloor3D(newFloor, connectionPoints);
     }
     
     // Teleport player to center of new floor and update camera

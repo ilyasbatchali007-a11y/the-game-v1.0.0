@@ -314,8 +314,69 @@ function startGameLoop() {
     // Fixed timestep updates
     while (accumulator >= FIXED_DT) {
       movementSystem!.update(world, inputState, FIXED_DT);
-      collisionSystem!.update(world as any, FIXED_DT, PLAYER_ID);
+      
+      // --- NEW: Graph-Based Docking System (Edge Detection) ---
+      const player = { x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] };
+      const vx = world.vx[PLAYER_ID];
+      const vy = world.vy[PLAYER_ID];
+      
+      const currentFloorId = mapRenderer.getCurrentFloorId();
+      if (currentFloorId !== null && currentFloorId !== undefined && mapRenderer) {
+        const connections = mapRenderer.getConnectionPoints();
+        const mapWidth = 32; // All floors 1-99 are 32x32
+        const mapHeight = 32;
+        
+        if (connections && mapWidth && mapHeight) {
+          const tileX = Math.floor((player.x + TILE_SIZE / 2) / TILE_SIZE);
+          const tileY = Math.floor((player.y + TILE_SIZE / 2) / TILE_SIZE);
+          const maxX = mapWidth - 1;
+          const maxY = mapHeight - 1;
 
+          // Check Left Edge -> Trigger LEFT connection
+          if (tileX === 0 && vx < -50) {
+            const leftConn = connections.find(c => c.direction === 'LEFT');
+            if (leftConn) {
+              console.log(`[Docking] Left Wall -> Floor ${leftConn.targetFloorId}`);
+              (window as any).switchFloor(leftConn.targetFloorId);
+              accumulator = 0; // Reset to prevent double-trigger
+              break;
+            }
+          }
+          // Check Right Edge -> Trigger RIGHT connection
+          if (tileX === maxX && vx > 50) {
+            const rightConn = connections.find(c => c.direction === 'RIGHT');
+            if (rightConn) {
+              console.log(`[Docking] Right Wall -> Floor ${rightConn.targetFloorId}`);
+              (window as any).switchFloor(rightConn.targetFloorId);
+              accumulator = 0;
+              break;
+            }
+          }
+          // Check Top Edge -> Trigger TOP connection
+          if (tileY === 0 && vy < -50) {
+            const topConn = connections.find(c => c.direction === 'TOP');
+            if (topConn) {
+              console.log(`[Docking] Top Wall -> Floor ${topConn.targetFloorId}`);
+              (window as any).switchFloor(topConn.targetFloorId);
+              accumulator = 0;
+              break;
+            }
+          }
+          // Check Bottom Edge -> Trigger BOTTOM connection
+          if (tileY === maxY && vy > 50) {
+            const bottomConn = connections.find(c => c.direction === 'BOTTOM');
+            if (bottomConn) {
+              console.log(`[Docking] Bottom Wall -> Floor ${bottomConn.targetFloorId}`);
+              (window as any).switchFloor(bottomConn.targetFloorId);
+              accumulator = 0;
+              break;
+            }
+          }
+        }
+      }
+      // --- End Docking System ---
+      
+      collisionSystem!.update(world as any, FIXED_DT, PLAYER_ID);
       accumulator -= FIXED_DT;
     }
 

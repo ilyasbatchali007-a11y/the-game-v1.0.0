@@ -2,7 +2,8 @@
 // Generates a 100-block dungeon layout using multi-vine branching algorithm, captures pre-fusion block metadata, and fuses into single mesh
 
 import { MapBlock } from './MapWindow3DRenderer';
-import CSG from 'csg';
+import * as CSGModule from 'csg';
+const CSG = (CSGModule as any).default || CSGModule;
 
 export interface DungeonShapeConfig {
   shape: 'multiVine';
@@ -284,12 +285,12 @@ function createCubeMesh(
  * a genuinely fused mesh with lower vertex count than raw concatenation.
  */
 export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array } {
-  let csgSolid: CSG | null = null;
+  let csgSolid: any = null;
   
   // Perform CSG union of all blocks
   for (const block of blocks) {
     // Create a CSG cube for this block - CSG.cube uses center and radius (half-size)
-    const blockCSG = CSG.cube({
+    const blockCSG = (CSG as any).cube({
       center: [block.position.x, block.position.y, block.position.z],
       radius: [block.size.x / 2, block.size.y / 2, block.size.z / 2]
     });

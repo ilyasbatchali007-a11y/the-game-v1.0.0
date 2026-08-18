@@ -2,6 +2,7 @@
 // Generates a 100-block dungeon layout using multi-vine branching algorithm, captures pre-fusion block metadata, and fuses into single mesh
 
 import { MapBlock } from './MapWindow3DRenderer';
+import CSG from 'csg';
 
 export interface DungeonShapeConfig {
   shape: 'multiVine';
@@ -278,42 +279,64 @@ function createCubeMesh(
 }
 
 /**
- * Simple CSG union implementation for merging cube meshes
- * For a proper production system, use a library like csg.js or three-bvh-csg
- * This implementation merges vertices and handles overlapping geometry
+ * Fuse blocks into a single mesh using real CSG boolean union operations
+ * This removes internal faces between touching/adjacent blocks and produces
+ * a genuinely fused mesh with lower vertex count than raw concatenation.
  */
 export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array } {
-  const allVertices: number[] = [];
-  const allIndices: number[] = [];
-  let vertexOffset = 0;
+  let csgSolid: CSG | null = null;
   
-  // Merge all block meshes
+  // Perform CSG union of all blocks
   for (const block of blocks) {
-    const { vertices, indices } = createCubeMesh(
-      block.position.x,
-      block.position.y,
-      block.position.z,
-      block.size.x,
-      block.size.y,
-      block.size.z
-    );
+    // Create a CSG cube for this block - CSG.cube uses center and radius (half-size)
+    const blockCSG = CSG.cube({
+      center: [block.position.x, block.position.y, block.position.z],
+      radius: [block.size.x / 2, block.size.y / 2, block.size.z / 2]
+    });
     
-    // Add vertices
-    allVertices.push(...vertices);
-    
-    // Add indices with offset
-    for (const idx of indices) {
-      allIndices.push(idx + vertexOffset);
+    if (csgSolid === null) {
+      csgSolid = blockCSG;
+    } else {
+      csgSolid = csgSolid.union(blockCSG);
     }
-    
-    vertexOffset += vertices.length / 3;
   }
   
-  console.log(`[DungeonGenerator] Fused ${blocks.length} blocks into mesh with ${allVertices.length / 3} vertices and ${allIndices.length} indices`);
+  if (!csgSolid) {
+    console.warn('[DungeonGenerator] No blocks to fuse');
+    return {
+      vertices: new Float32Array(0),
+      indices: new Uint16Array(0)
+    };
+  }
+  
+  // Convert CSG result to vertices and indices
+  const polygons = csgSolid.toPolygons();
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  let vertexIndex = 0;
+  
+  for (const polygon of polygons) {
+    const verts = polygon.vertices;
+    const startIndex = vertexIndex;
+    
+    // Add all vertices of this polygon
+    for (const vert of verts) {
+      vertices.push(vert.pos.x, vert.pos.y, vert.pos.z);
+      vertexIndex++;
+    }
+    
+    // Triangulate the polygon (fan triangulation from first vertex)
+    // Polygon vertices are guaranteed to be convex and coplanar
+    for (let i = 1; i < verts.length - 1; i++) {
+      indices.push(startIndex, startIndex + i, startIndex + i + 1);
+    }
+  }
+  
+  console.log(`[DungeonGenerator] Fused ${blocks.length} blocks into mesh with ${vertices.length / 3} vertices and ${indices.length / 3} faces using CSG union`);
   
   return {
-    vertices: new Float32Array(allVertices),
-    indices: new Uint16Array(allIndices)
+    vertices: new Float32Array(vertices),
+    indices: new Uint16Array(indices)
   };
 }
 

@@ -345,12 +345,18 @@ export class MapWindow3DRenderer {
     const halfBlockSize = 5; // Each block is 10x10, so half is 5
     
     console.log(`[MapWindow3DRenderer] Calculating block IDs for ${rawVerts.length / 3} vertices across ${blocks.length} blocks`);
+    console.log(`[MapWindow3DRenderer] Using center (${centerX}, ${centerY}, ${centerZ}) and scale ${scale}`);
     
     // For each vertex, determine which block it belongs to
     for (let i = 0; i < rawVerts.length; i += 3) {
-      const worldX = rawVerts[i];
-      const worldY = rawVerts[i + 1];
-      const worldZ = rawVerts[i + 2];
+      const normX = rawVerts[i];
+      const normY = rawVerts[i + 1];
+      const normZ = rawVerts[i + 2];
+      
+      // Convert normalized vertex back to world space for comparison with block centers
+      const worldX = (normX / scale) + centerX;
+      const worldY = (normY / scale) + centerY;
+      const worldZ = (normZ / scale) + centerZ;
       
       let assignedBlockId = -1;
       

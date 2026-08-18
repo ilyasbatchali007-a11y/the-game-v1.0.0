@@ -554,17 +554,13 @@ window.addEventListener('keydown', (e) => {
 
   // G, X, D keys are now disabled - no-ops to prevent old behavior
   // These keys no longer generate, export, or delete dungeons
-  if ((e.key === 'g' || e.key === 'G') && mapVisible && map3DRenderer) {
-    // Disabled: G key no longer generates/loads dungeon
-    return;
-  }
-
-  if ((e.key === 'x' || e.key === 'X') && mapVisible && currentMapId) {
+  // Note: G is still used for floor switching below (when map is not visible)
+  if ((e.key === 'x' || e.key === 'X')) {
     // Disabled: X key no longer exports dungeon files
     return;
   }
 
-  if ((e.key === 'd' || e.key === 'D') && mapVisible && currentMapId) {
+  if ((e.key === 'd' || e.key === 'D')) {
     // Disabled: D key no longer deletes dungeon
     return;
   }

@@ -12,7 +12,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/three": "^0.185.4",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "three": "^0.185.1",
+    "three-bvh-csg": "^0.0.18"
   }
 }

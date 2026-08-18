@@ -2,6 +2,8 @@
 // Generates a 100-block dungeon layout using multi-vine branching algorithm, captures pre-fusion block metadata, and fuses into single mesh
 
 import { MapBlock } from './MapWindow3DRenderer';
+import * as THREE from 'three';
+import { Brush, Evaluator, ADDITION } from 'three-bvh-csg';
 
 export interface DungeonShapeConfig {
   shape: 'multiVine';
@@ -278,42 +280,85 @@ function createCubeMesh(
 }
 
 /**
- * Simple CSG union implementation for merging cube meshes
- * For a proper production system, use a library like csg.js or three-bvh-csg
- * This implementation merges vertices and handles overlapping geometry
+ * Fuse blocks into a single mesh using real CSG boolean union.
+ * Removes internal faces between adjacent solid blocks - only outer surface faces remain.
+ * Uses three-bvh-csg for fast, accurate CSG operations.
  */
 export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array } {
-  const allVertices: number[] = [];
-  const allIndices: number[] = [];
-  let vertexOffset = 0;
+  // Create a Brush (CSG mesh) for each block
+  const brushes: Brush[] = [];
   
-  // Merge all block meshes
   for (const block of blocks) {
-    const { vertices, indices } = createCubeMesh(
-      block.position.x,
-      block.position.y,
-      block.position.z,
-      block.size.x,
-      block.size.y,
-      block.size.z
-    );
-    
-    // Add vertices
-    allVertices.push(...vertices);
-    
-    // Add indices with offset
-    for (const idx of indices) {
-      allIndices.push(idx + vertexOffset);
-    }
-    
-    vertexOffset += vertices.length / 3;
+    // Create a box geometry for this block
+    const geometry = new THREE.BoxGeometry(block.size.x, block.size.y, block.size.z);
+    const brush = new Brush();
+    brush.geometry = geometry;
+    // Position the brush at the block's world-space center
+    brush.position.set(block.position.x, block.position.y, block.position.z);
+    brush.updateMatrixWorld();
+    brushes.push(brush);
   }
   
-  console.log(`[DungeonGenerator] Fused ${blocks.length} blocks into mesh with ${allVertices.length / 3} vertices and ${allIndices.length} indices`);
+  // Perform CSG union of all brushes using ADDITION (which is UNION)
+  const evaluator = new Evaluator();
+  let result: Brush;
+  
+  if (brushes.length === 0) {
+    // Return empty mesh if no blocks
+    console.log(`[DungeonGenerator] Fused 0 blocks into mesh with 0 vertices and 0 indices`);
+    return {
+      vertices: new Float32Array(0),
+      indices: new Uint16Array(0)
+    };
+  } else if (brushes.length === 1) {
+    // Single block - just use it directly
+    result = brushes[0];
+  } else {
+    // Union all brushes together
+    result = brushes[0];
+    for (let i = 1; i < brushes.length; i++) {
+      result = evaluator.evaluate(result, brushes[i], ADDITION);
+    }
+  }
+  
+  // Extract geometry from the result
+  const mergedGeometry = result.geometry;
+  mergedGeometry.computeVertexNormals();
+  
+  const positionAttribute = mergedGeometry.attributes.position;
+  const vertexCount = positionAttribute.count;
+  
+  // Get vertices
+  const vertices = new Float32Array(vertexCount * 3);
+  for (let i = 0; i < vertexCount; i++) {
+    vertices[i * 3] = positionAttribute.getX(i);
+    vertices[i * 3 + 1] = positionAttribute.getY(i);
+    vertices[i * 3 + 2] = positionAttribute.getZ(i);
+  }
+  
+  // Get indices
+  const indexAttribute = mergedGeometry.index;
+  let indices: Uint16Array;
+  
+  if (indexAttribute) {
+    const indexCount = indexAttribute.count;
+    indices = new Uint16Array(indexCount);
+    for (let i = 0; i < indexCount; i++) {
+      indices[i] = indexAttribute.getX(i);
+    }
+  } else {
+    // Non-indexed geometry - generate sequential indices
+    indices = new Uint16Array(vertexCount);
+    for (let i = 0; i < vertexCount; i++) {
+      indices[i] = i;
+    }
+  }
+  
+  console.log(`[DungeonGenerator] Fused ${blocks.length} blocks into mesh with ${vertexCount} vertices and ${indices.length} indices (CSG union - internal faces removed)`);
   
   return {
-    vertices: new Float32Array(allVertices),
-    indices: new Uint16Array(allIndices)
+    vertices,
+    indices
   };
 }
 

@@ -27,7 +27,7 @@ export class GlowingBlock {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
     this.blockSizeVector = { x: blockSize, y: blockSize, z: blockSize };
-    this.color = [1.0, 1.0, 0.0, 1.0]; // Bright Yellow with full alpha for glowing effect
+    this.color = [0.0, 1.0, 0.0, 1.0]; // Green with full alpha for glowing effect
     this.visible = true; // Always visible by default
   }
 
@@ -768,7 +768,7 @@ export class MapWindow3DRenderer {
     }
     
     // Clear canvas (depth test already enabled in init)
-    gl.clearColor(0.1, 0.1, 0.12, 1.0);
+    gl.clearColor(1.0, 1.0, 0.0, 1.0); // Yellow background
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     // Check for clear errors

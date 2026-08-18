@@ -516,9 +516,13 @@ async function loadExistingDungeonFromFile(): Promise<void> {
     map3DRenderer.enablePlayerControl();
     
     // Update player position to show initial glowing block location
-    if (world) {
-      const playerWorldX = world.x[PLAYER_ID];
-      const playerWorldY = world.y[PLAYER_ID];
+    // Offset player to first block's position since dungeon uses local coordinates
+    if (world && blocks.length > 0) {
+      const firstBlock = blocks[0];
+      const playerWorldX = firstBlock.position.x;
+      const playerWorldY = firstBlock.position.y;
+      world.x[PLAYER_ID] = playerWorldX;
+      world.y[PLAYER_ID] = playerWorldY;
       map3DRenderer.updatePlayerPosition(playerWorldX, playerWorldY);
     }
     

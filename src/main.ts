@@ -315,6 +315,11 @@ function startGameLoop() {
 
     // Sync camera target with the latest player position
     camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+    
+    // Update 3D map renderer with player position for glowing block visibility
+    if (map3DRenderer && mapVisible) {
+      map3DRenderer.updatePlayerPosition(world.x[PLAYER_ID], world.y[PLAYER_ID]);
+    }
 
     // Update camera and check if it moved
     const cameraMoved = camera.update(dt);
@@ -507,8 +512,15 @@ async function loadExistingDungeonFromFile(): Promise<void> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Enable player-controlled visibility instead of auto-animation
+    map3DRenderer.enablePlayerControl();
+    
+    // Update player position to show initial glowing block location
+    if (world) {
+      const playerWorldX = world.x[PLAYER_ID];
+      const playerWorldY = world.y[PLAYER_ID];
+      map3DRenderer.updatePlayerPosition(playerWorldX, playerWorldY);
+    }
     
     dungeonGenerated = true;
     currentMapId = 'dungeon_1787048292379';

@@ -274,9 +274,11 @@ export class MapWindow3DRenderer {
     if (blocks.length > 0 && this.glowingBlock) {
       const firstBlock = blocks[0];
       // Convert world-space size to normalized space using the same scale factor
-      const normSizeX = firstBlock.size.x * scale;
-      const normSizeY = firstBlock.size.y * scale;
-      const normSizeZ = firstBlock.size.z * scale;
+      // Make it 90% of the original size to avoid z-fighting/rendering glitches
+      const scaleFactor = 0.9;
+      const normSizeX = firstBlock.size.x * scale * scaleFactor;
+      const normSizeY = firstBlock.size.y * scale * scaleFactor;
+      const normSizeZ = firstBlock.size.z * scale * scaleFactor;
       this.glowingBlock.setBlockSizeVector(normSizeX, normSizeY, normSizeZ);
       this.glowingBlock.blockSize = (normSizeX + normSizeY + normSizeZ) / 3;
       this.createBlockBuffers();

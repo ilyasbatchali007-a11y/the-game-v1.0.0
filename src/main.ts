@@ -474,6 +474,50 @@ async function initOrLoadDungeon(): Promise<void> {
   }
 }
 
+/**
+ * Load existing dungeon from the blocks.json file in src/3d-objects folder
+ */
+async function loadExistingDungeonFromFile(): Promise<void> {
+  if (!map3DRenderer) return;
+  
+  try {
+    // Load the blocks JSON file directly from the project folder
+    const response = await fetch('src/3d-objects/dungeon_1787048292379_dungeon.blocks.json');
+    if (!response.ok) {
+      console.log('[Main] No blocks.json file found in src/3d-objects folder');
+      return;
+    }
+    
+    const blocks = await response.json();
+    
+    // Also load the OBJ file
+    const objResponse = await fetch('src/3d-objects/dungeon_1787048292379_dungeon.obj');
+    if (!objResponse.ok) {
+      console.log('[Main] No .obj file found in src/3d-objects folder');
+      return;
+    }
+    
+    const objContent = await objResponse.text();
+    
+    // Parse OBJ content
+    const { OBJLoader } = await import('./engine/OBJLoader');
+    const model = OBJLoader.parseOBJ(objContent);
+    map3DRenderer.loadModel(model);
+    
+    // Set block metadata for accurate grid coordinates
+    map3DRenderer.setMapBlocks(blocks);
+    
+    // Start the glowing block animation through all positions
+    map3DRenderer.toggleGridAnimation(true);
+    
+    dungeonGenerated = true;
+    currentMapId = 'dungeon_1787048292379';
+    console.log(`[Main] Loaded dungeon from file: ${blocks.length} blocks`);
+  } catch (err) {
+    console.error('[Main] Failed to load dungeon from file:', err);
+  }
+}
+
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
   
@@ -502,7 +546,8 @@ function toggleMap() {
     mapContainer.classList.add('visible');
     // Initialize canvas immediately with fixed dimensions
     initMapCanvas();
-    // Future: Call renderMap() here when map logic is ready
+    // Load existing dungeon from file when map is opened
+    loadExistingDungeonFromFile();
   } else {
     mapContainer.classList.remove('visible');
   }
@@ -515,20 +560,7 @@ window.addEventListener('keydown', (e) => {
     return; // Don't process other inputs when toggling map
   }
 
-  // Generate/load dungeon map with G key - works only when map is visible
-  if ((e.key === 'g' || e.key === 'G') && mapVisible && map3DRenderer) {
-    if (!gameRunning) return;
-    console.log('[Main] G key pressed - generating/loading dungeon map');
-    // Check if saved map exists, if not generate new one
-    const defaultMapId = getDefaultMapId();
-    loadSavedDungeon(defaultMapId).then(loaded => {
-      if (!loaded) {
-        // No saved map exists, generate new one
-        generateNewDungeon();
-      }
-    });
-    return;
-  }
+  // G key is now disabled for dungeon generation - only M key loads the existing model
 
   // Export dungeon files with X key - works only when map is visible
   if ((e.key === 'x' || e.key === 'X') && mapVisible && currentMapId) {

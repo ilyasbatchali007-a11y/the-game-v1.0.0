@@ -27,8 +27,8 @@ export class GlowingBlock {
     this.position = { x: 0, y: 0, z: 0 };
     this.blockSize = blockSize;
     this.blockSizeVector = { x: blockSize, y: blockSize, z: blockSize };
-    this.color = [0.0, 1.0, 0.0, 0.9]; // Bright Green with high alpha for visibility
-    this.visible = false;
+    this.color = [1.0, 1.0, 0.0, 1.0]; // Bright Yellow with full alpha for glowing effect
+    this.visible = true; // Always visible by default
   }
 
   setPosition(x: number, y: number, z: number): void {
@@ -59,6 +59,10 @@ export class GlowingBlock {
 
   hide(): void {
     this.visible = false;
+  }
+  
+  isVisible(): boolean {
+    return this.visible;
   }
 }
 
@@ -93,7 +97,7 @@ export class MapWindow3DRenderer {
   private gridCoordinates: BlockPosition[] = [];
   private currentGridIndex: number = 0;
   private lastGridMoveTime: number = 0;
-  private readonly GRID_MOVE_INTERVAL: number = 500; // ms between moves
+  private readonly GRID_MOVE_INTERVAL: number = 1000; // ms between moves - slowed down for better visibility
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -176,8 +180,7 @@ export class MapWindow3DRenderer {
     // Initialize with default size, will be updated after grid detection
     this.glowingBlock = new GlowingBlock(2.0);
     this.createBlockBuffers();
-    // Show the block by default so it's visible
-    this.glowingBlock.show();
+    // Glowing block is now visible by default in constructor
     
     // Set initial position
     if (this.glowingBlock) {
@@ -610,7 +613,8 @@ export class MapWindow3DRenderer {
   }
 
   public showGlowingBlock(): void {
-    if (this.glowingBlock) {
+    // Glowing block is always visible now by default
+    if (this.glowingBlock && !this.glowingBlock.isVisible()) {
       this.glowingBlock.show();
       console.log('[MapWindow3DRenderer] Glowing block shown');
     }

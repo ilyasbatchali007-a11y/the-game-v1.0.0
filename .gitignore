@@ -1,8 +1,52 @@
 ```
-# Build artifacts
-dist/
-build/
-
 # Dependencies
 node_modules/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build results
+dist/
+build/
+*.egg-info/
+
+# Testing
+.coverage
+htmlcov/
+.nyc_output/
+coverage/
+.pytest_cache/
+.mypy_cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 ```

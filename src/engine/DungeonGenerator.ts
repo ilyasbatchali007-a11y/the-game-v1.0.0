@@ -279,34 +279,98 @@ function createCubeMesh(
 
 /**
  * Simple CSG union implementation for merging cube meshes
- * For a proper production system, use a library like csg.js or three-bvh-csg
- * This implementation merges vertices and handles overlapping geometry
+ * Only includes faces that are exposed to empty space (not touching another block)
+ * For each block, checks all 6 neighbor positions independently
  */
 export function fuseBlocksIntoMesh(blocks: MapBlock[]): { vertices: Float32Array; indices: Uint16Array } {
+  const blockSize = 10;
+  
+  // Build a Set of all occupied grid positions using canonical "x,y,z" keys
+  const occupiedPositions = new Set<string>();
+  for (const block of blocks) {
+    const gx = Math.round((block.position.x - blockSize / 2) / blockSize);
+    const gy = Math.round((block.position.y - blockSize / 2) / blockSize);
+    const gz = Math.round((block.position.z - blockSize / 2) / blockSize);
+    occupiedPositions.add(`${gx},${gy},${gz}`);
+  }
+  
   const allVertices: number[] = [];
   const allIndices: number[] = [];
   let vertexOffset = 0;
   
-  // Merge all block meshes
+  // Direction vectors for each face: [dx, dy, dz]
+  // Order matches the face indices in createCubeMesh below
+  const faceDirections = [
+    { dx: 1, dy: 0, dz: 0 },   // +X face (Right)
+    { dx: -1, dy: 0, dz: 0 },  // -X face (Left)
+    { dx: 0, dy: 1, dz: 0 },   // +Y face (Top)
+    { dx: 0, dy: -1, dz: 0 },  // -Y face (Bottom)
+    { dx: 0, dy: 0, dz: 1 },   // +Z face (Front)
+    { dx: 0, dy: 0, dz: -1 },  // -Z face (Back)
+  ];
+  
+  // Merge all block meshes, but only include exposed faces
   for (const block of blocks) {
-    const { vertices, indices } = createCubeMesh(
-      block.position.x,
-      block.position.y,
-      block.position.z,
-      block.size.x,
-      block.size.y,
-      block.size.z
-    );
+    const gx = Math.round((block.position.x - blockSize / 2) / blockSize);
+    const gy = Math.round((block.position.y - blockSize / 2) / blockSize);
+    const gz = Math.round((block.position.z - blockSize / 2) / blockSize);
     
-    // Add vertices
-    allVertices.push(...vertices);
+    const centerX = block.position.x;
+    const centerY = block.position.y;
+    const centerZ = block.position.z;
+    const hx = block.size.x / 2;
+    const hy = block.size.y / 2;
+    const hz = block.size.z / 2;
     
-    // Add indices with offset
-    for (const idx of indices) {
-      allIndices.push(idx + vertexOffset);
+    // Check which faces are exposed (no neighbor in that direction)
+    const exposedFaces: boolean[] = [];
+    for (const dir of faceDirections) {
+      const neighborKey = `${gx + dir.dx},${gy + dir.dy},${gz + dir.dz}`;
+      exposedFaces.push(!occupiedPositions.has(neighborKey));
     }
     
-    vertexOffset += vertices.length / 3;
+    // Create cube vertices (same as before, centered at block position)
+    const vertices = [
+      // Front face (+Z)
+      centerX - hx, centerY - hy, centerZ + hz,  // 0
+      centerX + hx, centerY - hy, centerZ + hz,  // 1
+      centerX + hx, centerY + hy, centerZ + hz,  // 2
+      centerX - hx, centerY + hy, centerZ + hz,  // 3
+      // Back face (-Z)
+      centerX - hx, centerY - hy, centerZ - hz,  // 4
+      centerX - hx, centerY + hy, centerZ - hz,  // 5
+      centerX + hx, centerY + hy, centerZ - hz,  // 6
+      centerX + hx, centerY - hy, centerZ - hz,  // 7
+    ];
+    
+    // Face definitions: each entry is [vertexIndices, faceDirectionIndex]
+    // Vertex indices are 0-7 as defined above
+    // faceDirectionIndex maps to exposedFaces array
+    const faceDefinitions = [
+      { verts: [1, 7, 6, 2], faceIdx: 0 },  // Right face (+X)
+      { verts: [0, 5, 4, 3], faceIdx: 1 },  // Left face (-X)
+      { verts: [3, 2, 6, 5], faceIdx: 2 },  // Top face (+Y)
+      { verts: [0, 7, 1, 4], faceIdx: 3 },  // Bottom face (-Y)
+      { verts: [0, 1, 2, 3], faceIdx: 4 },  // Front face (+Z)
+      { verts: [4, 5, 6, 7], faceIdx: 5 },  // Back face (-Z)
+    ];
+    
+    // Add only exposed faces
+    for (const face of faceDefinitions) {
+      if (!exposedFaces[face.faceIdx]) continue;
+      
+      // Each face is 2 triangles (6 indices)
+      const [v0, v1, v2, v3] = face.verts;
+      const faceIndices = [
+        v0 + vertexOffset, v1 + vertexOffset, v2 + vertexOffset,
+        v0 + vertexOffset, v2 + vertexOffset, v3 + vertexOffset
+      ];
+      allIndices.push(...faceIndices);
+    }
+    
+    // Add vertices for this block
+    allVertices.push(...vertices);
+    vertexOffset += 8;
   }
   
   console.log(`[DungeonGenerator] Fused ${blocks.length} blocks into mesh with ${allVertices.length / 3} vertices and ${allIndices.length} indices`);

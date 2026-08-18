@@ -103,6 +103,10 @@ export class MapWindow3DRenderer {
   
   // Player position tracking for visibility check
   private playerWorldPosition: { x: number, y: number } | null = null;
+  
+  // Visited blocks set for shader-based visibility (Method 1)
+  private visitedBlockIds: Set<number> = new Set();
+  private blockIdBuffer: WebGLBuffer | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -130,22 +134,43 @@ export class MapWindow3DRenderer {
     const vsSource = `
       attribute vec3 a_position;
       attribute vec3 a_normal;
+      attribute float a_blockId;
       uniform mat4 u_matrix;
       uniform mat4 u_normalMatrix;
       varying vec3 v_normal;
+      varying float v_blockId;
       void main() {
         gl_Position = u_matrix * vec4(a_position, 1.0);
         v_normal = (u_normalMatrix * vec4(a_normal, 0.0)).xyz;
+        v_blockId = a_blockId;
       }
     `;
 
     const fsSource = `
       precision mediump float;
       varying vec3 v_normal;
+      varying float v_blockId;
       uniform vec3 u_lightDir;
       uniform vec4 u_color;
       uniform bool u_useLighting;
+      uniform vec2 u_visitedBlocks[100];
+      uniform int u_visitedCount;
       void main() {
+        // Check if this fragment's block is visited
+        bool isVisible = false;
+        for (int i = 0; i < 100; i++) {
+          if (i >= u_visitedCount) break;
+          if (u_visitedBlocks[i].x == v_blockId) {
+            isVisible = true;
+            break;
+          }
+        }
+        
+        // Discard fragments from unvisited blocks (make transparent)
+        if (!isVisible && u_visitedCount > 0) {
+          discard;
+        }
+        
         if (u_useLighting) {
           vec3 normal = normalize(v_normal);
           float light = max(dot(normal, u_lightDir), 0.2);
@@ -299,6 +324,63 @@ export class MapWindow3DRenderer {
     }
     
     console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
+    
+    // Calculate block IDs for each vertex based on which block's area it falls into
+    this.calculateVertexBlockIds(blocks, centerX, centerY, centerZ, scale);
+    
+    // Initialize visited blocks with the starting block (index 0)
+    this.visitedBlockIds.clear();
+    this.visitedBlockIds.add(0);
+  }
+
+  /**
+   * Calculate block ID for each vertex by determining which block's area it falls into
+   * Uses raw vertices and transforms them to check against block centers
+   */
+  private calculateVertexBlockIds(blocks: MapBlock[], centerX: number, centerY: number, centerZ: number, scale: number): void {
+    if (!this.model || !this.model.rawVertices || !this.model.blockIds) return;
+    
+    const rawVerts = this.model.rawVertices;
+    const blockIds = this.model.blockIds;
+    const halfBlockSize = 5; // Each block is 10x10, so half is 5
+    
+    console.log(`[MapWindow3DRenderer] Calculating block IDs for ${rawVerts.length / 3} vertices across ${blocks.length} blocks`);
+    
+    // For each vertex, determine which block it belongs to
+    for (let i = 0; i < rawVerts.length; i += 3) {
+      const worldX = rawVerts[i];
+      const worldY = rawVerts[i + 1];
+      const worldZ = rawVerts[i + 2];
+      
+      let assignedBlockId = -1;
+      
+      // Find the closest block center
+      let minDistance = Infinity;
+      for (let b = 0; b < blocks.length; b++) {
+        const blockPos = blocks[b].position;
+        const dx = worldX - blockPos.x;
+        const dy = worldY - blockPos.y;
+        const dz = worldZ - blockPos.z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          assignedBlockId = b;
+        }
+      }
+      
+      // Store block ID (use -1 for unassigned/outside all blocks)
+      const vertexIndex = i / 3;
+      blockIds[vertexIndex] = assignedBlockId >= 0 ? assignedBlockId : -1;
+    }
+    
+    console.log(`[MapWindow3DRenderer] Block IDs assigned. First 10: [${blockIds.slice(0, 10).join(', ')}]`);
+    
+    // Re-upload block ID buffer if already created
+    if (this.gl && this.blockIdBuffer && this.model.blockIds) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.blockIdBuffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.blockIds, this.gl.STATIC_DRAW);
+    }
   }
 
   /**
@@ -352,6 +434,9 @@ export class MapWindow3DRenderer {
       this.glowingBlock.position = { ...this.gridCoordinates[playerInBlockIndex] };
       this.glowingBlock.visible = true;
       this.glowingBlock.isStartingBlock = (playerInBlockIndex === 0);
+      
+      // Add this block to visited set for shader-based visibility
+      this.visitedBlockIds.add(playerInBlockIndex);
     } else if (this.glowingBlock && !this.glowingBlock.isStartingBlock) {
       // Player is not in any block - hide glowing block unless it's the starting block
       this.glowingBlock.visible = false;
@@ -640,6 +725,13 @@ export class MapWindow3DRenderer {
     this.indexBuffer = this.gl.createBuffer();
     this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
     this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.model.indices, this.gl.STATIC_DRAW);
+    
+    // Create block ID buffer for shader-based visibility
+    if (this.model.blockIds && this.model.blockIds.length > 0) {
+      this.blockIdBuffer = this.gl.createBuffer();
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.blockIdBuffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.blockIds, this.gl.STATIC_DRAW);
+    }
   }
 
   public async loadOBJ(url: string): Promise<void> {
@@ -862,11 +954,14 @@ export class MapWindow3DRenderer {
     // Get attribute and uniform locations
     const positionLocation = gl.getAttribLocation(this.program, 'a_position');
     const normalLocation = gl.getAttribLocation(this.program, 'a_normal');
+    const blockIdLocation = gl.getAttribLocation(this.program, 'a_blockId');
     const matrixLocation = gl.getUniformLocation(this.program, 'u_matrix');
     const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
     const colorLocation = gl.getUniformLocation(this.program, 'u_color');
     const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
     const useLightingLocation = gl.getUniformLocation(this.program, 'u_useLighting');
+    const visitedBlocksLocation = gl.getUniformLocation(this.program, 'u_visitedBlocks');
+    const visitedCountLocation = gl.getUniformLocation(this.program, 'u_visitedCount');
     
     // Check for location errors
     if (positionLocation < 0 || normalLocation < 0) {
@@ -884,6 +979,13 @@ export class MapWindow3DRenderer {
     gl.enableVertexAttribArray(normalLocation);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
     gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
+    
+    // Enable block ID attribute if buffer exists
+    if (this.blockIdBuffer && blockIdLocation >= 0) {
+      gl.enableVertexAttribArray(blockIdLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.blockIdBuffer);
+      gl.vertexAttribPointer(blockIdLocation, 1, gl.FLOAT, false, 0, 0);
+    }
     
     // Bind index buffer
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
@@ -909,6 +1011,18 @@ export class MapWindow3DRenderer {
     gl.uniform4f(colorLocation, 0.9, 0.75, 0.5, 1.0); // Golden brown color for dungeon
     gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3); // Light from above-right
     gl.uniform1i(useLightingLocation, 1); // Enable lighting for main model
+    
+    // Set visited blocks uniform for shader-based visibility
+    if (visitedBlocksLocation && visitedCountLocation) {
+      const visitedArray = new Float32Array(200); // 100 vec2 values
+      let idx = 0;
+      for (const blockId of this.visitedBlockIds) {
+        visitedArray[idx++] = blockId;
+        visitedArray[idx++] = 0; // padding
+      }
+      gl.uniform2fv(visitedBlocksLocation, visitedArray);
+      gl.uniform1i(visitedCountLocation, this.visitedBlockIds.size);
+    }
     
     // Check for uniform errors
     const uniformError = gl.getError();

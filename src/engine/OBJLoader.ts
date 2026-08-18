@@ -13,6 +13,8 @@ export interface OBJModel {
   scaleFactor?: number;
   // Raw un-normalized vertices in world space for direct occupancy testing (Option A fix)
   rawVertices?: Float32Array;
+  // Block ID per vertex for shader-based visibility (Method 1)
+  blockIds?: Float32Array;
 }
 
 export class OBJLoader {
@@ -149,7 +151,8 @@ export class OBJLoader {
       vertexCount: Math.floor(positions.length / 3),
       originalBounds,
       scaleFactor,
-      rawVertices: new Float32Array(positions) // Store raw un-normalized vertices for direct world-space occupancy testing
+      rawVertices: new Float32Array(positions), // Store raw un-normalized vertices for direct world-space occupancy testing
+      blockIds: new Float32Array(Math.floor(positions.length / 3)) // Placeholder - will be filled by MapWindow3DRenderer
     };
   }
   

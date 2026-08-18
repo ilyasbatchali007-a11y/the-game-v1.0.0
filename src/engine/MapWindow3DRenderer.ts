@@ -382,10 +382,14 @@ export class MapWindow3DRenderer {
     
     console.log(`[MapWindow3DRenderer] Block IDs assigned. First 10: [${blockIds.slice(0, 10).join(', ')}]`);
     
-    // Re-upload block ID buffer if already created
-    if (this.gl && this.blockIdBuffer && this.model.blockIds) {
+    // Always re-upload block ID buffer after calculation
+    if (this.gl && this.model.blockIds) {
+      if (!this.blockIdBuffer) {
+        this.blockIdBuffer = this.gl.createBuffer();
+      }
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.blockIdBuffer);
       this.gl.bufferData(this.gl.ARRAY_BUFFER, this.model.blockIds, this.gl.STATIC_DRAW);
+      console.log('[MapWindow3DRenderer] Block ID buffer uploaded to GPU');
     }
   }
 

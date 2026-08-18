@@ -418,8 +418,8 @@ async function generateNewDungeon(): Promise<void> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(result.blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Graph-based navigation: glowing cube stays at floor node (no auto-animation)
+    // Animation only happens when switchFloor3D() is called
     
     dungeonGenerated = true;
     console.log(`[Main] Dungeon generated and loaded: ${result.blocks.length} blocks, ${result.objContent.length} bytes OBJ`);
@@ -452,8 +452,8 @@ async function loadSavedDungeon(mapId: string): Promise<boolean> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(savedData.blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Graph-based navigation: glowing cube stays at floor node (no auto-animation)
+    // Animation only happens when switchFloor3D() is called
     
     dungeonGenerated = true;
     console.log(`[Main] Loaded saved dungeon ${mapId}: ${savedData.blocks.length} blocks`);
@@ -513,8 +513,8 @@ async function loadExistingDungeonFromFile(): Promise<void> {
     // Set block metadata for accurate grid coordinates
     map3DRenderer.setMapBlocks(blocks);
     
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
+    // Graph-based navigation: glowing cube stays at floor node (no auto-animation)
+    // Animation only happens when switchFloor3D() is called
     
     dungeonGenerated = true;
     currentMapId = 'dungeon_1787048292379';

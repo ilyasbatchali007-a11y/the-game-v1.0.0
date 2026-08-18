@@ -1,7 +1,9 @@
 // SRC/engine/MapWindow3DRenderer.ts
 // Renders 3D models in the map window canvas using WebGL
+// NEW: Supports graph-based floor navigation with docking system
 
 import { OBJLoader, OBJModel } from './OBJLoader';
+import { Direction, ConnectionPoint } from '../config/FloorMap';
 
 export interface BlockPosition {
   x: number;
@@ -14,6 +16,13 @@ export interface MapBlock {
   position: { x: number; y: number; z: number }; // world-space center
   size: { x: number; y: number; z: number };
   type?: string;
+}
+
+export interface FloorNode {
+  floorId: number;
+  position: { x: number; y: number; z: number }; // 3D map position
+  connections: ConnectionPoint[];
+  revealed: boolean;
 }
 
 /**

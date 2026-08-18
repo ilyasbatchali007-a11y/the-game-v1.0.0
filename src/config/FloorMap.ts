@@ -14,6 +14,23 @@ export interface FloorConfig {
   staticTileRangeEnd: number;
   variationTileRangeStart: number;
   variationTileRangeEnd: number;
+  // NEW: Docking System - Connection points for graph navigation
+  connectionPoints: ConnectionPoint[];
+}
+
+export enum Direction {
+  LEFT = 'LEFT',
+  RIGHT = 'RIGHT',
+  TOP = 'TOP',
+  BOTTOM = 'BOTTOM',
+  UP = 'UP',
+  DOWN = 'DOWN',
+}
+
+export interface ConnectionPoint {
+  direction: Direction;
+  targetFloorId: number;
+  type: 'HORIZONTAL' | 'VERTICAL';
 }
 
 // Generate green chessboard texture at module initialization
@@ -55,12 +72,65 @@ function createStandardFloor(id: number): FloorConfig {
     staticTileRangeEnd: 99,
     variationTileRangeStart: 100,
     variationTileRangeEnd: 1023,
+    connectionPoints: [], // Will be populated by graph generator
   };
+}
+
+// Generate graph connections for all floors
+function generateFloorGraph(totalFloors: number): void {
+  for (let i = 0; i < totalFloors; i++) {
+    const current = FLOORS[i];
+    const assignedDirections = new Set<Direction>();
+
+    // A. Backbone Connection (Ensure linear progression 0->1->2...)
+    if (i < totalFloors - 1) {
+      // Connect DOWN to next floor
+      current.connectionPoints.push({ 
+        direction: Direction.DOWN, 
+        targetFloorId: i + 1, 
+        type: 'VERTICAL' 
+      });
+      assignedDirections.add(Direction.DOWN);
+      
+      // Connect UP from next floor back to current
+      FLOORS[i + 1].connectionPoints.push({ 
+        direction: Direction.UP, 
+        targetFloorId: i, 
+        type: 'VERTICAL' 
+      });
+    }
+
+    // B. Random Horizontal Shortcuts (The "6 Types" Logic)
+    // Add 1-2 random edge connections for variety (skip floor 0 start)
+    if (i > 0) {
+      const possibleDirs = [Direction.LEFT, Direction.RIGHT, Direction.TOP, Direction.BOTTOM];
+      const availableDirs = possibleDirs.filter(d => !assignedDirections.has(d));
+      
+      const numConnections = Math.floor(Math.random() * 2) + 1; 
+      
+      for (let j = 0; j < numConnections && availableDirs.length > 0; j++) {
+        const randIndex = Math.floor(Math.random() * availableDirs.length);
+        const dir = availableDirs.splice(randIndex, 1)[0];
+        
+        // Find a random target floor (not immediate neighbor)
+        let targetId = Math.floor(Math.random() * totalFloors);
+        if (targetId === i || targetId === i - 1 || targetId === i + 1) {
+          targetId = (i + 5) % totalFloors;
+        }
+        
+        current.connectionPoints.push({ 
+          direction: dir, 
+          targetFloorId: targetId, 
+          type: 'HORIZONTAL' 
+        });
+      }
+    }
+  }
 }
 
 // Generate 100 floor configurations - all uniform 32x32 tiles for testing
 export const FLOORS: FloorConfig[] = [
-  // Floor 0 - Original Arena (kept as is for reference, can be changed later)
+  // Floor 0 - Original Arena (kept as is for reference)
   {
     id: 0,
     width: 10240.0,
@@ -75,10 +145,14 @@ export const FLOORS: FloorConfig[] = [
     staticTileRangeEnd: 99,
     variationTileRangeStart: 100,
     variationTileRangeEnd: 1023,
+    connectionPoints: [], // Will be populated by graph generator
   },
   // Floors 1-99: All uniform 32x32 tiles (2048x2048 units) for consistent testing
   ...Array.from({ length: 99 }, (_, i) => createStandardFloor(i + 1)),
 ];
+
+// Initialize graph connections after creating all floors
+generateFloorGraph(FLOORS.length);
 
 // Export ARENA_FLOOR for backward compatibility (Floor 0)
 export const ARENA_FLOOR: FloorConfig = FLOORS[0];

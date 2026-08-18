@@ -1,10 +1,10 @@
 // SRC/render/MapRenderer.ts
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
-// Supports 20 independent floors with customized sizes that can be switched at runtime
+// Supports 100 independent floors with docking system for graph navigation
 // Uses green chessboard pattern texture for all floors
 
-import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
+import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount, Direction, ConnectionPoint } from '../config/FloorMap';
 import { generateTestMap } from '../config/MapData';
 
 export interface IFloorRenderData {
@@ -17,6 +17,7 @@ export interface IFloorRenderData {
   repeatZ: number;
   floorId: number;  // Current floor ID for reference
   useAtlas: boolean;  // Whether to use atlas texture or chessboard pattern
+  connectionPoints: ConnectionPoint[];  // NEW: Docking connections for this floor
 }
 
 export class MapRenderer {
@@ -28,8 +29,8 @@ export class MapRenderer {
   }
 
   /**
-   * Switch to a different floor by ID (0-19)
-   * @param floorId - The floor ID to switch to (0-19)
+   * Switch to a different floor by ID (0-99)
+   * @param floorId - The floor ID to switch to (0-99)
    * @returns true if successful, false if invalid floor ID
    */
   public switchFloor(floorId: number): boolean {
@@ -51,6 +52,7 @@ export class MapRenderer {
     });
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
+    console.log(`[MapRenderer] Connections: ${this.floorConfig.connectionPoints.length}`, this.floorConfig.connectionPoints);
     return true;
   }
 
@@ -79,6 +81,21 @@ export class MapRenderer {
   }
 
   /**
+   * Get connection points for current floor (for docking system)
+   */
+  public getConnectionPoints(): ConnectionPoint[] {
+    return this.floorConfig.connectionPoints;
+  }
+
+  /**
+   * Find which floor a connection leads to based on direction
+   */
+  public getTargetFloorForDirection(direction: Direction): number | null {
+    const connection = this.floorConfig.connectionPoints.find(cp => cp.direction === direction);
+    return connection ? connection.targetFloorId : null;
+  }
+
+  /**
    * Returns a single floor rectangle covering the entire visible area
    * This replaces the tile-by-tile rendering with one seamless quad
    */
@@ -99,7 +116,8 @@ export class MapRenderer {
       repeatX: this.floorConfig.repeatX,
       repeatZ: this.floorConfig.repeatZ,
       floorId: this.currentFloorId,
-      useAtlas: this.floorConfig.useAtlas
+      useAtlas: this.floorConfig.useAtlas,
+      connectionPoints: this.floorConfig.connectionPoints
     };
   }
 

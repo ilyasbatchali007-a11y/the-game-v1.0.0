@@ -869,10 +869,9 @@ export class MapWindow3DRenderer {
     
     const gl = this.gl;
     
-    // Enable depth testing and depth writes for proper 3D cube rendering
-    // Temporarily disable face culling to ensure all faces of the cube are drawn
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthMask(true);
+    // Disable depth testing for true X-ray effect - cube visible through everything
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
     gl.disable(gl.CULL_FACE);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
@@ -922,7 +921,7 @@ export class MapWindow3DRenderer {
     // Draw block (18 triangles = 36 indices for a cube)
     gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
     
-    // Restore state
+    // Restore state - re-enable depth testing for other objects
     gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);
     gl.enable(gl.CULL_FACE);

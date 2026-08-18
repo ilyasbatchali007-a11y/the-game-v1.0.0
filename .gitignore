@@ -1,12 +1,1 @@
-```
-# Dependencies
-node_modules/
-
-# Build artifacts
-dist/
-build/
-*.js
-
-# Vite specific
-.vite/
-```
+(src/engine/MapWindow3DRenderer.ts)

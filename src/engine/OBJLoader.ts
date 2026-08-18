@@ -15,6 +15,8 @@ export interface OBJModel {
   rawVertices?: Float32Array;
   // Triangle index ranges per block for fog of war visibility control
   blockTriangleRanges?: { start: number; count: number }[];
+  // Optional block count for calculating triangle ranges when loading from OBJ without metadata
+  blockCount?: number;
 }
 
 export class OBJLoader {
@@ -143,6 +145,22 @@ export class OBJLoader {
     // Normalize the model: center it and scale to fit within unit cube
     const { normalized: normalizedPositions, bounds: originalBounds, scaleFactor } = this.normalizePositions(positions);
     
+    // Calculate block triangle ranges assuming each block has 12 triangles (36 indices)
+    // This is used when loading OBJ files without pre-computed metadata
+    const faceCount = Math.floor(indices.length / 3);
+    const blockCount = Math.floor(faceCount / 12); // Each cube has 12 triangles
+    const blockTriangleRanges: { start: number; count: number }[] = [];
+    
+    if (blockCount > 0) {
+      const indicesPerBlock = 36; // 12 triangles * 3 indices
+      for (let i = 0; i < blockCount; i++) {
+        blockTriangleRanges.push({
+          start: i * indicesPerBlock,
+          count: indicesPerBlock
+        });
+      }
+    }
+    
     return {
       vertices: new Float32Array(normalizedPositions),
       normals: new Float32Array(normals),
@@ -151,7 +169,9 @@ export class OBJLoader {
       vertexCount: Math.floor(positions.length / 3),
       originalBounds,
       scaleFactor,
-      rawVertices: new Float32Array(positions) // Store raw un-normalized vertices for direct world-space occupancy testing
+      rawVertices: new Float32Array(positions), // Store raw un-normalized vertices for direct world-space occupancy testing
+      blockTriangleRanges,
+      blockCount
     };
   }
   

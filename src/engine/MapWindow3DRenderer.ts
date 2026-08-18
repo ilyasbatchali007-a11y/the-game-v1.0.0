@@ -364,8 +364,21 @@ export class MapWindow3DRenderer {
     if (this.model.blockTriangleRanges && this.model.blockTriangleRanges.length === blocks.length) {
       this.blockTriangleRanges = this.model.blockTriangleRanges;
       console.log(`[MapWindow3DRenderer] Block triangle ranges stored: ${this.blockTriangleRanges.length} blocks`);
+    } else if (this.model.blockTriangleRanges && this.model.blockTriangleRanges.length > 0) {
+      // Use available ranges even if count doesn't match exactly
+      this.blockTriangleRanges = this.model.blockTriangleRanges.slice(0, blocks.length);
+      console.warn(`[MapWindow3DRenderer] Block triangle ranges truncated/extended. Model has ${this.model.blockTriangleRanges.length}, blocks array has ${blocks.length}`);
     } else {
-      console.warn(`[MapWindow3DRenderer] Block triangle ranges mismatch or missing. Expected ${blocks.length}, got ${this.model.blockTriangleRanges?.length || 0}`);
+      // Calculate default ranges assuming uniform 36 indices per block (12 triangles)
+      console.warn(`[MapWindow3DRenderer] No block triangle ranges in model, calculating defaults for ${blocks.length} blocks`);
+      const indicesPerBlock = 36;
+      this.blockTriangleRanges = [];
+      for (let i = 0; i < blocks.length; i++) {
+        this.blockTriangleRanges.push({
+          start: i * indicesPerBlock,
+          count: indicesPerBlock
+        });
+      }
     }
     
     console.log(`[MapWindow3DRenderer] Grid coordinates populated with ${this.gridCoordinates.length} blocks in preserved order`);
@@ -408,8 +421,13 @@ export class MapWindow3DRenderer {
     if (this.currentGridIndex < this.gridCoordinates.length) {
       const pos = this.gridCoordinates[this.currentGridIndex];
       this.glowingBlock.setPosition(pos.x, pos.y, pos.z);
+      
+      // Reveal the block at current index (fog of war)
+      this.fogOfWar.revealBlock(this.currentGridIndex);
+      this.blockVisibility[this.currentGridIndex] = true;
+      
       this.currentGridIndex++;
-      console.log(`[MapWindow3DRenderer] Manual grid step ${this.currentGridIndex}/${this.gridCoordinates.length}`);
+      console.log(`[MapWindow3DRenderer] Manual grid step ${this.currentGridIndex}/${this.gridCoordinates.length}, revealed block ${this.currentGridIndex - 1}`);
     } else {
       this.currentGridIndex = 0;
     }

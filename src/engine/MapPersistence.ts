@@ -20,8 +20,9 @@ const MAP_LIST_KEY = 'dungeon_map_list';
 /**
  * Save a generated dungeon to persistent storage
  * Stores both the OBJ mesh and block metadata together under the same map ID
+ * @returns true if save succeeded, false if it failed (e.g. storage full)
  */
-export async function saveDungeon(result: DungeonGenerationResult): Promise<void> {
+export async function saveDungeon(result: DungeonGenerationResult): Promise<boolean> {
   const savedData: SavedMapData = {
     mapId: result.mapId,
     objContent: result.objContent,
@@ -43,9 +44,15 @@ export async function saveDungeon(result: DungeonGenerationResult): Promise<void
     }
     
     console.log(`[MapPersistence] Saved dungeon ${result.mapId} (${result.objContent.length} bytes OBJ, ${result.blocks.length} blocks)`);
+    return true;
   } catch (error) {
-    console.error('[MapPersistence] Failed to save dungeon:', error);
-    throw new Error('Failed to save dungeon map');
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.error('[MapPersistence] Browser storage is full - cannot save dungeon');
+      throw new Error('Failed to save dungeon: browser storage is full. Try deleting an old map first.');
+    } else {
+      console.error('[MapPersistence] Failed to save dungeon:', error);
+      throw new Error('Failed to save dungeon map due to an unexpected error.');
+    }
   }
 }
 

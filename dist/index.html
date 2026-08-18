@@ -276,8 +276,8 @@
         position: fixed;
         top: 20px;
         right: 20px;
-        width: 200px;
-        height: 200px;
+        width: 400px;
+        height: 400px;
         background-color: #000000 !important;
         border: 2px solid #ffffff;
         z-index: 9999 !important;
@@ -289,13 +289,33 @@
       }
 
       #map-canvas {
-        width: 200px;
-        height: 200px;
+        width: 400px;
+        height: 400px;
         display: block;
         background-color: #000000;
       }
+      
+      /* Map controls help text */
+      #map-controls-help {
+        position: fixed;
+        top: 430px;
+        right: 20px;
+        background-color: rgba(0, 0, 0, 0.8);
+        border: 1px solid #ffffff;
+        padding: 10px;
+        color: #ffffff;
+        font-family: monospace;
+        font-size: 12px;
+        z-index: 9999 !important;
+        display: none;
+      }
+      
+      #map-container.visible + #map-controls-help,
+      #map-controls-help.visible {
+        display: block !important;
+      }
     </style>
-    <script type="module" crossorigin src="/assets/index-PydKvEZO.js"></script>
+    <script type="module" crossorigin src="/assets/index-DylMOqhf.js"></script>
   </head>
   <body>
     <div id="game-container">
@@ -304,6 +324,15 @@
       <!-- Map Window -->
       <div id="map-container">
         <canvas id="map-canvas"></canvas>
+      </div>
+      
+      <!-- Map Controls Help -->
+      <div id="map-controls-help">
+        <strong>Map Controls:</strong><br>
+        M - Toggle map<br>
+        G - Generate new dungeon<br>
+        X - Export OBJ + JSON<br>
+        D - Delete current map
       </div>
       
       <!-- Start Menu -->

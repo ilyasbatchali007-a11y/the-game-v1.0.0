@@ -393,7 +393,14 @@ async function generateNewDungeon(): Promise<void> {
   const result = generateDungeon(currentMapId);
   
   // Save to persistent storage
-  await saveDungeon(result);
+  try {
+    await saveDungeon(result);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+    alert(errorMsg);
+    console.error('[Main] Dungeon generation aborted due to save failure:', error);
+    return; // Do not proceed to load the model if save failed
+  }
   
   // Load into 3D renderer
   try {

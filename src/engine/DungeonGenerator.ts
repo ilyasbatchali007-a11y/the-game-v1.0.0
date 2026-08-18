@@ -337,18 +337,19 @@ function createCubeMeshWithExposedFaces(
   
   // Face definitions: [vertex indices for triangle 1, vertex indices for triangle 2]
   // Order: right(+x), left(-x), top(+y), bottom(-y), front(+z), back(-z)
+  // Vertices must be counter-clockwise when viewed from outside the cube
   const faceDefinitions = [
-    // Right face (+x): vertices 1,2,6,7
-    [1, 2, 6, 1, 6, 7],
-    // Left face (-x): vertices 0,5,4,3
+    // Right face (+x): vertices 7,6,2,1 (counter-clockwise when viewed from +x)
+    [7, 6, 2, 7, 2, 1],
+    // Left face (-x): vertices 0,5,4,3 (counter-clockwise when viewed from -x)
     [0, 5, 4, 0, 3, 5],
-    // Top face (+y): vertices 3,2,6,5
+    // Top face (+y): vertices 3,2,6,5 (counter-clockwise when viewed from +y)
     [3, 2, 6, 3, 6, 5],
-    // Bottom face (-y): vertices 0,7,1,4
+    // Bottom face (-y): vertices 0,7,1,4 (counter-clockwise when viewed from -y)
     [0, 7, 1, 0, 4, 7],
-    // Front face (+z): vertices 0,1,2,3
+    // Front face (+z): vertices 0,1,2,3 (counter-clockwise when viewed from +z)
     [0, 1, 2, 0, 2, 3],
-    // Back face (-z): vertices 4,5,6,7
+    // Back face (-z): vertices 4,5,6,7 (counter-clockwise when viewed from -z)
     [4, 5, 6, 4, 6, 7],
   ];
   

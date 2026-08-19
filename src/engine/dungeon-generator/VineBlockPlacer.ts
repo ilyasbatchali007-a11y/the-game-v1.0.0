@@ -1,7 +1,7 @@
 // SRC/engine/dungeon-generator/VineBlockPlacer.ts
 // Handles block placement with collision detection for vine-based dungeon generation
 
-import { MapBlock } from '../MapWindow3DRenderer';
+import { MapBlock } from '../types/MapBlockTypes';
 
 /**
  * Manages grid cell occupation and block creation for dungeon generation

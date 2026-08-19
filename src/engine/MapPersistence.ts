@@ -2,7 +2,7 @@
 // Handles saving and loading of dungeon maps (OBJ + block metadata)
 // Uses browser localStorage with IndexedDB fallback for larger data
 
-import { MapBlock } from './MapWindow3DRenderer';
+import { MapBlock } from './types/MapBlockTypes';
 import { DungeonGenerationResult } from './DungeonGenerator';
 
 export interface SavedMapData {

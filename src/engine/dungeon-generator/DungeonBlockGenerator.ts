@@ -1,7 +1,7 @@
 // SRC/engine/dungeon-generator/DungeonBlockGenerator.ts
 // Orchestrates the generation of dungeon blocks using multi-vine algorithm
 
-import { MapBlock } from '../MapWindow3DRenderer';
+import { MapBlock } from '../types/MapBlockTypes';
 import { DungeonShapeConfig, DEFAULT_DUNGEON_CONFIG } from './DungeonTypes';
 import { createDungeonRNG } from './DungeonRNG';
 import { VineBlockPlacer } from './VineBlockPlacer';

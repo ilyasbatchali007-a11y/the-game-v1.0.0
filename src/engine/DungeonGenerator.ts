@@ -2,7 +2,7 @@
 // Generates a 100-block dungeon layout using multi-vine branching algorithm, captures pre-fusion block metadata, and fuses into single mesh
 // This file now acts as a thin orchestrator that delegates to specialized modules
 
-import { MapBlock } from './MapWindow3DRenderer';
+import { MapBlock } from './types/MapBlockTypes';
 import { DungeonShapeConfig, DEFAULT_DUNGEON_CONFIG, DungeonGenerationResult } from './dungeon-generator/DungeonTypes';
 import { generateDungeonBlocks } from './dungeon-generator/DungeonBlockGenerator';
 import { fuseBlocksIntoMesh } from './dungeon-generator/DungeonMeshFuser';

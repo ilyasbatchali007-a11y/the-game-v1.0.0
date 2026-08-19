@@ -7,7 +7,7 @@ import { World } from '../../ecs/World';
 import { Camera } from '../../engine/Camera';
 import { GLInstancedRenderer } from '../../render/GLInstancedRenderer';
 import { MapRenderer } from '../../render/MapRenderer';
-import { MapWindow3DRenderer } from '../../engine/MapWindow3DRenderer';
+import { MapRenderer3D } from '../../engine/map-renderer/MapRenderer3D';
 import { getFloorCount } from '../../config/FloorMap';
 import { getCurrentWorldWidth, getCurrentWorldHeight } from '../../config/MapData';
 import { loadDungeon, exportDungeonFiles, deleteDungeon } from '../../engine/MapPersistence';
@@ -17,7 +17,7 @@ export interface DungeonMapState {
   mapVisible: boolean;
   dungeonGenerated: boolean;
   currentMapId: string | null;
-  map3DRenderer: MapWindow3DRenderer | null;
+  map3DRenderer: MapRenderer3D | null;
 }
 
 let dungeonMapState: DungeonMapState = {
@@ -41,7 +41,7 @@ export function setDungeonMapState(state: Partial<DungeonMapState>): void {
 export function initMapCanvas(
   mapCanvas: HTMLCanvasElement | null,
   mapContainer: HTMLElement | null
-): MapWindow3DRenderer | null {
+): MapRenderer3D | null {
   if (!mapCanvas || !mapContainer) return null;
   
   // Get actual container dimensions (works even if just made visible)
@@ -55,7 +55,7 @@ export function initMapCanvas(
   
   // Initialize 3D renderer for the map window
   if (!dungeonMapState.map3DRenderer) {
-    const renderer = new MapWindow3DRenderer(mapCanvas);
+    const renderer = new MapRenderer3D(mapCanvas);
     dungeonMapState.map3DRenderer = renderer;
     console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
     return renderer;

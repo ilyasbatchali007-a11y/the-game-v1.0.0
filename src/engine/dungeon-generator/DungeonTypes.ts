@@ -1,7 +1,7 @@
 // SRC/engine/dungeon-generator/DungeonTypes.ts
 // Type definitions for dungeon generation configuration and results
 
-import { MapBlock } from '../MapWindow3DRenderer';
+import { MapBlock } from '../types/MapBlockTypes';
 
 export interface DungeonShapeConfig {
   shape: 'multiVine';

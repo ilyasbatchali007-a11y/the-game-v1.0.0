@@ -1,7 +1,7 @@
 // SRC/engine/dungeon-generator/DungeonMeshFuser.ts
 // Merges multiple cube meshes into a single fused mesh with triangle range tracking
 
-import { MapBlock } from '../MapWindow3DRenderer';
+import { MapBlock } from '../types/MapBlockTypes';
 import { createCubeMesh } from './CubeMeshBuilder';
 
 /**

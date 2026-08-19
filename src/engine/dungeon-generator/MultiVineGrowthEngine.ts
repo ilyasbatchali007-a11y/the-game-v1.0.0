@@ -1,7 +1,7 @@
 // SRC/engine/dungeon-generator/MultiVineGrowthEngine.ts
 // Implements the multi-vine branching algorithm for dungeon layout generation
 
-import { MapBlock } from '../MapWindow3DRenderer';
+import { MapBlock } from '../types/MapBlockTypes';
 import { DungeonShapeConfig } from './DungeonTypes';
 import { VineBlockPlacer } from './VineBlockPlacer';
 import { shuffleArrayWithRNG } from './DungeonRNG';

@@ -3,7 +3,7 @@
  * Handles loading from files, generating new dungeons, and persisting to storage
  */
 
-import { MapWindow3DRenderer } from '../../engine/MapWindow3DRenderer';
+import { MapRenderer3D } from '../../engine/map-renderer/MapRenderer3D';
 import { generateDungeon } from '../../engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId } from '../../engine/MapPersistence';
 import { getDungeonMapState, setDungeonMapState } from '../input-handlers/KeyboardInputHandler';
@@ -111,7 +111,7 @@ export async function initOrLoadDungeon(): Promise<void> {
  * Load existing dungeon from the blocks.json file in src/3d-objects folder
  */
 export async function loadExistingDungeonFromFile(
-  map3DRenderer: MapWindow3DRenderer | null
+  map3DRenderer: MapRenderer3D | null
 ): Promise<void> {
   if (!map3DRenderer) return;
   

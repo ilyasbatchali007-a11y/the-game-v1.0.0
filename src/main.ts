@@ -1,14 +1,14 @@
 /**
  * Main entry point - Game orchestration and UI event binding
  * Delegates responsibilities to specialized modules:
- * - Engine initialization: engine-init/WebGLEngineInitializer
- * - Game loop: game-loop/GameLoopOrchestrator
- * - Input handling: input-handlers/KeyboardInputHandler
- * - Menu UI: menu-ui/MenuUIHandlers, menu-ui/SaveSlotUIRenderer
- * - Dungeon map: dungeon-map/DungeonMapLoader
+ * - Engine initialization: main/engine-init/WebGLEngineInitializer
+ * - Game loop: main/game-loop/GameLoopOrchestrator
+ * - Input handling: main/input-handlers/KeyboardInputHandler
+ * - Menu UI: main/menu-ui/MenuUIHandlers, main/menu-ui/SaveSlotUIRenderer
+ * - Dungeon map: main/dungeon-map/DungeonMapLoader
  */
 
-import { initEngine, EngineComponents } from './engine-init/WebGLEngineInitializer';
+import { initEngine, EngineComponents } from './main/engine-init/WebGLEngineInitializer';
 import { 
   startGameLoop, 
   setGameRunning, 
@@ -16,8 +16,8 @@ import {
   getInputState,
   getFloorSwitchCooldown,
   setFloorSwitchCooldown
-} from './game-loop/GameLoopOrchestrator';
-import { initNewGame } from './game-loop/NewGameInitializer';
+} from './main/game-loop/GameLoopOrchestrator';
+import { initNewGame } from './main/game-loop/NewGameInitializer';
 import {
   handleKeyDownEvent,
   handleKeyUpEvent,
@@ -25,20 +25,20 @@ import {
   getDungeonMapState,
   setDungeonMapState,
   DungeonMapState
-} from './input-handlers/KeyboardInputHandler';
-import { handleWindowResize } from './input-handlers/WindowResizeHandler';
+} from './main/input-handlers/KeyboardInputHandler';
+import { handleWindowResize } from './main/input-handlers/WindowResizeHandler';
 import {
   showSaveSlots,
   hideSaveSlots,
   hideStartMenu,
   MenuUIElements
-} from './menu-ui/MenuUIHandlers';
+} from './main/menu-ui/MenuUIHandlers';
 import {
   renderSlots,
   handleSavedSlotClick,
   handleEmptySlotClick,
   SlotClickHandlers
-} from './menu-ui/SaveSlotUIRenderer';
+} from './main/menu-ui/SaveSlotUIRenderer';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 
 // Game State

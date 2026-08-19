@@ -1,14 +1,17 @@
 // SRC/engine/map-renderer/MapRenderer3D.ts
-// Main orchestrator for 3D dungeon map rendering - coordinates all subsystems
+// Thin orchestrator for 3D dungeon map rendering - coordinates all subsystems
 
 import { WebGLShaderManager, MapRendererShaders } from '../WebGLShaderManager';
-import { createMVPMatrix, createNormalMatrix, multiplyMatrices, hasExtremeValues } from '../MatrixMathUtils';
 import { MapInputController } from './MapInputController';
 import { XRayMarkerManager } from './XRayMarkerManager';
 import { BlockVisibilityTracker } from './BlockVisibilityTracker';
 import { BlockVertexBufferManager } from './BlockVertexBufferManager';
 import { GridAnimationController } from './GridAnimationController';
 import { MapModelManager } from './MapModelManager';
+import { BlockTriangleRangeManager } from './BlockTriangleRangeManager';
+import { RenderStateStack } from './RenderStateStack';
+import { BlockDrawer } from './BlockDrawer';
+import { MapMatrixCalculator } from './MapMatrixCalculator';
 import { MapBlock } from '../types/MapBlockTypes';
 import { RENDER_CONSTANTS } from './MapRendererTypes';
 import { OBJModel } from '../OBJLoader';
@@ -17,9 +20,6 @@ export class MapRenderer3D {
   private gl: WebGLRenderingContext | null = null;
   private canvas: HTMLCanvasElement;
   private program: WebGLProgram | null = null;
-  private rotationY: number = 0;
-  private rotationX: number = RENDER_CONSTANTS.DEFAULT_ROTATION_X;
-  private zoom: number = RENDER_CONSTANTS.DEFAULT_ZOOM;
   private isRunning: boolean = false;
   private animationFrameId: number = 0;
   private shaderManager: WebGLShaderManager | null = null;
@@ -29,6 +29,9 @@ export class MapRenderer3D {
   private gridAnimationController: GridAnimationController | null = null;
   private modelManager: MapModelManager | null = null;
   private visibilityTracker: BlockVisibilityTracker | null = null;
+  private triangleRangeManager: BlockTriangleRangeManager | null = null;
+  private renderStateStack: RenderStateStack | null = null;
+  private blockDrawer: BlockDrawer | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -63,6 +66,9 @@ export class MapRenderer3D {
     this.blockBufferManager = new BlockVertexBufferManager(gl);
     this.modelManager = new MapModelManager(gl);
     this.gridAnimationController = new GridAnimationController();
+    this.triangleRangeManager = new BlockTriangleRangeManager();
+    this.renderStateStack = new RenderStateStack(gl);
+    this.blockDrawer = new BlockDrawer(gl);
 
     this.initXRayMarker();
     this.isRunning = true;
@@ -74,9 +80,11 @@ export class MapRenderer3D {
   }
 
   public setMapBlocks(blocks: MapBlock[]): void {
-    if (!this.modelManager) return;
+    if (!this.modelManager || !this.triangleRangeManager) return;
 
+    const model = this.modelManager.getModel();
     this.modelManager.setMapBlocks(blocks);
+    this.triangleRangeManager.initializeFromModel(model, blocks);
 
     const gridCoordinates = this.modelManager.getGridCoordinates();
     if (gridCoordinates.length > 0 && this.xRayMarkerManager) {
@@ -207,19 +215,13 @@ export class MapRenderer3D {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.modelManager.getNormalBuffer());
     gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.modelManager.getIndexBuffer());
-
     const aspect = this.canvas.width / this.canvas.height;
     const rotationY = this.inputController?.getRotationY() ?? 0;
     const rotationX = this.inputController?.getRotationX() ?? RENDER_CONSTANTS.DEFAULT_ROTATION_X;
     const zoom = this.inputController?.getZoom() ?? RENDER_CONSTANTS.DEFAULT_ZOOM;
 
-    const matrix = createMVPMatrix(rotationY, rotationX, aspect, zoom, focusPoint);
-    const normalMatrix = createNormalMatrix(rotationY, rotationX);
-
-    if (hasExtremeValues(matrix)) {
-      console.error('[MapRenderer3D] MVP Matrix contains invalid values!');
-    }
+    const matrix = MapMatrixCalculator.calculateMVPMatrix(rotationY, rotationX, aspect, zoom, focusPoint);
+    const normalMatrix = MapMatrixCalculator.calculateNormalMatrix(rotationY, rotationX);
 
     gl.uniformMatrix4fv(matrixLocation, false, matrix);
     gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
@@ -227,17 +229,18 @@ export class MapRenderer3D {
     gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3);
     gl.uniform1i(useLightingLocation, 1);
 
-    // Draw visible blocks
-    const triangleRanges = this.modelManager.getBlockTriangleRanges();
+    // Draw visible blocks using dedicated drawer
+    const triangleRanges = this.triangleRangeManager!.getRanges();
+    const indexBuffer = this.modelManager.getIndexBuffer();
+    
     if (triangleRanges.length > 0 && this.visibilityTracker) {
-      for (let i = 0; i < triangleRanges.length; i++) {
-        if (this.visibilityTracker.isBlockVisible(i)) {
-          const range = triangleRanges[i];
-          gl.drawElements(gl.TRIANGLES, range.count, gl.UNSIGNED_SHORT, range.start * 2);
-        }
-      }
+      this.blockDrawer!.drawVisibleBlocks(
+        indexBuffer,
+        triangleRanges,
+        this.visibilityTracker.getAllVisibility()
+      );
     } else {
-      gl.drawElements(gl.TRIANGLES, model.indices.length, gl.UNSIGNED_SHORT, 0);
+      this.blockDrawer!.drawFullModel(indexBuffer, model.indices.length);
     }
 
     this.renderXRayMarker(matrixLocation, useLightingLocation);
@@ -249,34 +252,31 @@ export class MapRenderer3D {
     const xRayPos = this.xRayMarkerManager.getPosition();
     if (!xRayPos) return;
 
-    this.blockBufferManager?.bindBuffers();
-    if (!this.blockBufferManager?.getIndexBuffer()) return;
+    const indexBuffer = this.blockBufferManager?.getIndexBuffer();
+    if (!indexBuffer) return;
 
-    const gl = this.gl;
-    gl.disable(gl.DEPTH_TEST);
-    gl.depthMask(false);
-    gl.disable(gl.CULL_FACE);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    this.renderStateStack?.push();
+    this.renderStateStack?.configureForXRay();
 
     const aspect = this.canvas.width / this.canvas.height;
     const rotationY = this.inputController?.getRotationY() ?? 0;
     const rotationX = this.inputController?.getRotationX() ?? RENDER_CONSTANTS.DEFAULT_ROTATION_X;
     const zoom = this.inputController?.getZoom() ?? RENDER_CONSTANTS.DEFAULT_ZOOM;
 
-    const baseMatrix = createMVPMatrix(rotationY, rotationX, aspect, zoom, xRayPos);
-    const translation = multiplyMatrices(baseMatrix, new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      xRayPos.x, xRayPos.y, xRayPos.z, 1
-    ]));
+    const baseMatrix = MapMatrixCalculator.calculateMVPMatrix(rotationY, rotationX, aspect, zoom, xRayPos);
+    if (!baseMatrix) return;
 
+    const translation = MapMatrixCalculator.multiplyMatrices(
+      baseMatrix,
+      MapMatrixCalculator.createTranslationMatrix(xRayPos.x, xRayPos.y, xRayPos.z)
+    );
+
+    const gl = this.gl;
     const positionLocation = gl.getAttribLocation(this.program, 'a_position');
     gl.enableVertexAttribArray(positionLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.blockBufferManager.getPositionBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.blockBufferManager!.getPositionBuffer());
     gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.blockBufferManager.getIndexBuffer());
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 
     gl.uniformMatrix4fv(matrixLocation, false, translation);
     gl.uniform1i(useLightingLocation, 0);
@@ -285,13 +285,10 @@ export class MapRenderer3D {
     const [r, g, b, a] = this.xRayMarkerManager.getColor();
     gl.uniform4f(colorLocation, r, g, b, a);
 
-    gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+    this.blockDrawer!.drawTriangles(indexBuffer, 36, 0);
 
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthMask(true);
-    gl.enable(gl.CULL_FACE);
-    gl.disable(gl.BLEND);
-    gl.uniform1i(useLightingLocation, 1);
+    this.renderStateStack?.restoreFromXRay();
+    this.renderStateStack?.pop();
   }
 
   public destroy(): void {

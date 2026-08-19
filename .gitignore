@@ -1,37 +1,49 @@
-```
+```gitignore
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
 # Dependencies
 node_modules/
-
-# Build outputs
-dist/
-build/
-target/
-
-# Temporary files
-*.tmp
-*.log
-*.swp
-
-# Environment variables
+venv/
+.venv/
 .env
 .env.local
 *.env.*
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Build directories
+dist/
+build/
+target/
+.gradle/
 
-# IDE files
+# Type checking cache
+.mypy_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+
+# Editors and IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# OS files
+# System files
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
 
 # Compressed files
 *.zip
@@ -56,21 +68,4 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# TypeScript/JavaScript build artifacts
-*.js.map
-*.tsbuildinfo
-
-# Compiled binaries
-*.exe
-*.dll
-*.so
-*.a
-*.out
-*.class
 ```

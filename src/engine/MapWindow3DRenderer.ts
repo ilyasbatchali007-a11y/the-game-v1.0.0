@@ -11,7 +11,7 @@ import { calculateModelBounds } from './ModelBoundsCalculator';
 import { createMVPMatrix, createNormalMatrix, multiplyMatrices, hasExtremeValues } from './MatrixMathUtils';
 import { MapInputHandler, MapCameraState } from './MapInputHandler';
 
-export { BlockPosition, MapBlock };
+export type { BlockPosition, MapBlock };
 
 /**
  * Main orchestrator for 3D dungeon map rendering
@@ -62,7 +62,7 @@ export class MapWindow3DRenderer {
     gl.depthFunc(gl.LEQUAL);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-    this.inputHandler = new MapInputHandler(canvas);
+    this.inputHandler = new MapInputHandler(this.canvas);
     this.inputHandler.setOnChangeCallback((state) => {
       this.rotationX = state.rotationX;
       this.rotationY = state.rotationY;
@@ -325,5 +325,38 @@ export class MapWindow3DRenderer {
     this.isRunning = false;
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
     this.inputHandler?.destroy();
+  }
+
+  /**
+   * Public method to toggle grid animation on/off
+   */
+  public toggleGridAnimation(enabled: boolean): void {
+    if (enabled) {
+      this.currentGridIndex = 0;
+      this.lastGridMoveTime = Date.now();
+      console.log('[MapWindow3DRenderer] Grid animation started');
+    } else {
+      console.log('[MapWindow3DRenderer] Grid animation stopped');
+    }
+  }
+
+  /**
+   * Public method to manually move to next grid position
+   */
+  public moveToNextGridPosition(): void {
+    if (!this.xRayMarker || this.gridCoordinates.length === 0) return;
+
+    if (this.currentGridIndex < this.gridCoordinates.length) {
+      const pos = this.gridCoordinates[this.currentGridIndex];
+      this.xRayMarker.setPosition(pos.x, pos.y, pos.z);
+
+      // Reveal the block at current index (fog of war)
+      this.revealBlock(this.currentGridIndex);
+
+      this.currentGridIndex++;
+      console.log(`[MapWindow3DRenderer] Manual grid step ${this.currentGridIndex}/${this.gridCoordinates.length}, revealed block ${this.currentGridIndex - 1}`);
+    } else {
+      this.currentGridIndex = 0;
+    }
   }
 }

@@ -14,7 +14,7 @@ import { createCubeGeometryBuffers } from './entity-renderer/CubeGeometryManager
 import { createFloorGeometryBuffers } from './floor-renderer/FloorGeometryManager';
 import { createMapDataTexture, updateMapDataTexture } from './map-texture-manager/MapDataTextureManager';
 import { createDefaultIsometricView, setIsometricView } from './isometric-view/IsometricViewManager';
-import { packFloorInstanceData, renderFloorQuads } from './floor-renderer/FloorQuadRenderer';
+import { packFloorInstanceData, renderFloorQuads, createFloorRendererState } from './floor-renderer/FloorQuadRenderer';
 import { createCubeRendererState, packPlayerInstanceData } from './entity-renderer/PlayerCubeRenderer';
 
 export class GLInstancedRenderer {

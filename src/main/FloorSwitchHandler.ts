@@ -1,4 +1,6 @@
 import { getFloorCount, getCurrentWorldWidth, getCurrentWorldHeight } from '../config/MapData';
+import { PLAYER_ID } from '../config/Constants';
+import { TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from '../config/MapData';
 
 export interface FloorSwitchState {
   floorSwitchCooldown: boolean;
@@ -16,8 +18,6 @@ export function handleFloorSwitch(
   renderer: any
 ): void {
   if (state.floorSwitchCooldown) return;
-
-  const { PLAYER_ID } = require('../config/Constants');
 
   if (e.key === 't' || e.key === 'T') {
     state.floorSwitchCooldown = true;
@@ -84,9 +84,6 @@ export function handlePortalInteraction(
   renderer: any
 ): void {
   if (state.floorSwitchCooldown || !world) return;
-
-  const { PLAYER_ID, TILE_SIZE } = require('../config/Constants');
-  const { getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } = require('../config/MapData');
 
   // Get player's current tile position
   const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);

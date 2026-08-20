@@ -19,11 +19,11 @@ export class KeyboardInputHandler {
     private camera: Camera | null,
     private renderer: GLInstancedRenderer | null,
     private dungeonVisualizer: DungeonMapVisualizer | null,
+    private floorSwitchManager: FloorSwitchManager,
     private onQuickSave: (slotId: number) => void,
     private currentSlotId: number | null
   ) {
     this.inputTracker = new InputStateTracker();
-    this.floorSwitchManager = new FloorSwitchManager();
   }
 
   /**
@@ -67,7 +67,7 @@ export class KeyboardInputHandler {
       return;
     }
 
-    if (!gameRunning) return;
+    if (!isGameRunning()) return;
 
     // Floor switching with T (previous) and G (next)
     if ((e.key === 't' || e.key === 'T') && this.world && this.camera) {

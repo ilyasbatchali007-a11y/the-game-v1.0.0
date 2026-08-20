@@ -13,7 +13,8 @@ import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
 import { DungeonMapVisualizer } from './main/DungeonMapVisualizer';
 import { SaveSlotUIRenderer } from './main/SaveSlotUIRenderer';
-import { KeyboardInputHandler } from './main/KeyboardInputHandler';
+import { KeyboardInputHandler, setGameRunning } from './main/KeyboardInputHandler';
+import { FloorSwitchManager } from './main/FloorSwitchManager';
 
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
@@ -47,6 +48,7 @@ let currentSlotId: number | null = null;
 let dungeonVisualizer: DungeonMapVisualizer | null = null;
 let saveSlotUI: SaveSlotUIRenderer | null = null;
 let keyboardInputHandler: KeyboardInputHandler | null = null;
+let floorSwitchManager: FloorSwitchManager | null = null;
 
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
@@ -150,6 +152,7 @@ canvas.height = window.innerHeight;
 
 function startGame() {
   gameRunning = true;
+  setGameRunning(true);
   startMenu.classList.add('hidden');
   
   // Reset input state
@@ -160,6 +163,7 @@ function startGame() {
 
 function stopGame() {
   gameRunning = false;
+  setGameRunning(false);
   startMenu.classList.remove('hidden');
   renderSlots(); // Re-render slots to update their state
 }
@@ -345,12 +349,18 @@ function toggleMap() {
 window.addEventListener('keydown', (e) => {
   // Initialize keyboard handler on first key press if not already done
   if (!keyboardInputHandler && world) {
+    // Initialize floor switch manager
+    if (!floorSwitchManager) {
+      floorSwitchManager = new FloorSwitchManager();
+    }
+    
     keyboardInputHandler = new KeyboardInputHandler(
       mapRenderer,
       world,
       camera,
       renderer,
       dungeonVisualizer,
+      floorSwitchManager,
       (slotId: number) => {
         SaveSlotManager.saveToSlot(world!, slotId, `Save ${slotId + 1}`);
         console.log(`[UI] Saved to slot ${slotId}!`);
@@ -389,21 +399,18 @@ window.addEventListener('keydown', (e) => {
   if (!gameRunning) return;
 
   // Floor switching with T (previous) and G (next)
-  if ((e.key === 't' || e.key === 'T') && world && camera) {
-    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+  if ((e.key === 't' || e.key === 'T') && world && camera && floorSwitchManager) {
     floorSwitchManager.switchToPreviousFloor(mapRenderer, world, camera, renderer);
     return;
   }
 
-  if ((e.key === 'g' || e.key === 'G') && world && camera) {
-    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+  if ((e.key === 'g' || e.key === 'G') && world && camera && floorSwitchManager) {
     floorSwitchManager.switchToNextFloor(mapRenderer, world, camera, renderer);
     return;
   }
 
   // Portal interaction with E key
-  if ((e.key === 'e' || e.key === 'E') && world && camera) {
-    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+  if ((e.key === 'e' || e.key === 'E') && world && camera && floorSwitchManager) {
     floorSwitchManager.handlePortalInteraction(mapRenderer, world, camera, renderer);
   }
 

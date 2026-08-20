@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
+import { MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA, mapData } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -14,7 +14,6 @@ import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
-import { generateTestMap, getCurrentWorldWidth, getCurrentWorldHeight, mapData } from './config/MapData';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
 import { initializeGameEngine, type EngineContext } from './main/GameEngineInitializer';
 import { UIManager } from './main/UIManager/UIManager';
@@ -98,7 +97,8 @@ function initNewGame() {
   // Reset world and start new game
   if (world) {
     world = new World();
-    generateDungeon(); // Use the same generator as startup
+    const result = generateDungeon();
+    mapData.blocks = result.blocks;
     if (renderer) renderer.updateMapDataTexture();
     
     // Respawn player at center of new map

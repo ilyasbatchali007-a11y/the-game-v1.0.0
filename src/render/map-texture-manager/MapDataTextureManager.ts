@@ -2,7 +2,7 @@
  * Creates and manages WebGL texture for map tile data
  * Encodes tile IDs and static flags into RGBA texture for GPU access
  */
-import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../../config/MapData';
 
 export interface MapDataTextureInfo {
   texture: WebGLTexture;

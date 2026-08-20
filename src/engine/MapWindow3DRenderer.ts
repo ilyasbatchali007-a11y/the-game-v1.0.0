@@ -1,21 +1,25 @@
 // SRC/engine/MapWindow3DRenderer.ts
-// Main orchestrator for 3D map rendering - coordinates all subsystems
+// Thin orchestrator for 3D map rendering - coordinates all subsystems
 
 import { OBJLoader, OBJModel } from './OBJLoader';
 import { FogOfWarTracker } from './FogOfWarTracker';
 import { XRayMarker } from './XRayMarker';
-import { BlockPosition, MapBlock, BlockTriangleRange, ModelBounds } from './types/MapBlockTypes';
+import { BlockPosition, MapBlock } from './types/MapBlockTypes';
 import { WebGLShaderManager, MapRendererShaders } from './WebGLShaderManager';
-import { createCubeVertices, createCubeIndices } from './CubeBufferFactory';
 import { calculateModelBounds } from './ModelBoundsCalculator';
-import { createMVPMatrix, createNormalMatrix, multiplyMatrices, hasExtremeValues } from './MatrixMathUtils';
 import { MapInputHandler, MapCameraState } from './MapInputHandler';
+import { MatrixCalculator } from './map-window-renderer/MatrixCalculator';
+import { BlockVisibilityManager } from './map-window-renderer/BlockVisibilityManager';
+import { GridAnimationController } from './map-window-renderer/GridAnimationController';
+import { XRayRenderer } from './map-window-renderer/XRayRenderer';
+import { MainModelRenderer } from './map-window-renderer/MainModelRenderer';
+import { BlockTriangleRange } from './map-window-renderer/MapWindowTypes';
 
 export type { BlockPosition, MapBlock };
 
 /**
- * Main orchestrator for 3D dungeon map rendering
- * Coordinates shader management, input handling, fog of war, and X-ray visualization
+ * Thin orchestrator for 3D dungeon map rendering
+ * Delegates all work to specialized subsystems
  */
 export class MapWindow3DRenderer {
   private gl: WebGLRenderingContext | null = null;
@@ -28,21 +32,19 @@ export class MapWindow3DRenderer {
   private rotationY: number = 0;
   private rotationX: number = 0.3;
   private zoom: number = -1.80;
-  private readonly minZoom: number = -20.0;
-  private readonly maxZoom: number = 5.0;
   private isRunning: boolean = false;
   private animationFrameId: number = 0;
   private shaderManager: WebGLShaderManager | null = null;
   private inputHandler: MapInputHandler | null = null;
   private xRayMarker: XRayMarker | null = null;
-  private blockVertexBuffers: { position: WebGLBuffer | null, index: WebGLBuffer | null } | null = null;
-  private modelBounds: ModelBounds | null = null;
-  private gridCoordinates: BlockPosition[] = [];
-  private currentGridIndex: number = 0;
-  private lastGridMoveTime: number = 0;
-  private readonly GRID_MOVE_INTERVAL: number = 1000;
+  private modelBounds: any | null = null;
   private fogOfWar: FogOfWarTracker | null = null;
-  private blockVisibility: boolean[] = [];
+  
+  // Delegated subsystems
+  private visibilityManager: BlockVisibilityManager | null = null;
+  private gridAnimator: GridAnimationController | null = null;
+  private xRayRenderer: XRayRenderer | null = null;
+  private modelRenderer: MainModelRenderer | null = null;
   private blockTriangleRanges: BlockTriangleRange[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
@@ -69,14 +71,16 @@ export class MapWindow3DRenderer {
       this.zoom = state.zoom;
       this.render();
     });
-    this.initXRayMarker();
+    this.initSubsystems(gl);
     this.isRunning = true;
     this.animate();
   }
 
-  private initXRayMarker(): void {
+  private initSubsystems(gl: WebGLRenderingContext): void {
     this.xRayMarker = new XRayMarker(0.5);
-    this.createBlockBuffers();
+    this.xRayRenderer = new XRayRenderer(gl);
+    this.modelRenderer = new MainModelRenderer(gl);
+    this.gridAnimator = new GridAnimationController();
     this.xRayMarker.setPosition(0, 0, 0);
   }
 
@@ -103,23 +107,29 @@ export class MapWindow3DRenderer {
     const centerX = (originalBounds.minX + originalBounds.maxX) / 2;
     const centerY = (originalBounds.minY + originalBounds.maxY) / 2;
     const centerZ = (originalBounds.minZ + originalBounds.maxZ) / 2;
-    console.log(`[MapWindow3DRenderer] Converting ${blocks.length} blocks to normalized space`);
-    this.gridCoordinates = blocks.map(block => ({
+    
+    const gridCoordinates = blocks.map(block => ({
       x: (block.position.x - centerX) * scale,
       y: (block.position.y - centerY) * scale,
       z: (block.position.z - centerZ) * scale
     }));
+    
     if (blocks.length > 0 && this.xRayMarker) {
       const sf = 0.9;
       this.xRayMarker.setBlockSizeVector(blocks[0].size.x * scale * sf, blocks[0].size.y * scale * sf, blocks[0].size.z * scale * sf);
       this.xRayMarker.blockSize = (this.xRayMarker.blockSizeVector.x + this.xRayMarker.blockSizeVector.y + this.xRayMarker.blockSizeVector.z) / 3;
-      this.createBlockBuffers();
+      this.xRayRenderer?.createBlockBuffers(this.xRayMarker);
     }
-    this.currentGridIndex = 0;
-    if (this.gridCoordinates.length > 0 && this.xRayMarker) this.xRayMarker.position = { ...this.gridCoordinates[0] };
-    this.blockVisibility = new Array(blocks.length).fill(false);
-    this.blockVisibility[0] = true;
+    
+    this.gridAnimator?.setGridCoordinates(gridCoordinates);
+    
+    // Initialize visibility manager
+    this.visibilityManager = new BlockVisibilityManager(blocks.length);
+    this.visibilityManager.revealBlock(0);
+    
     this.fogOfWar = new FogOfWarTracker();
+    
+    // Handle triangle ranges
     if (this.model.blockTriangleRanges?.length === blocks.length) {
       this.blockTriangleRanges = this.model.blockTriangleRanges;
     } else if (this.model.blockTriangleRanges?.length) {
@@ -127,24 +137,8 @@ export class MapWindow3DRenderer {
     } else {
       this.blockTriangleRanges = blocks.map((_, i) => ({ start: i * 36, count: 36 }));
     }
-    console.log(`[MapWindow3DRenderer] Grid populated with ${this.gridCoordinates.length} blocks`);
-  }
-
-  private createBlockBuffers(): void {
-    if (!this.gl || !this.xRayMarker) return;
-    const halfX = this.xRayMarker.blockSizeVector.x / 2;
-    const halfY = this.xRayMarker.blockSizeVector.y / 2;
-    const halfZ = this.xRayMarker.blockSizeVector.z / 2;
-    const vertices = createCubeVertices(halfX, halfY, halfZ);
-    const indices = createCubeIndices();
-    const positionBuffer = this.gl.createBuffer();
-    const indexBuffer = this.gl.createBuffer();
-    if (!positionBuffer || !indexBuffer) return;
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
-    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW);
-    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, indices, this.gl.STATIC_DRAW);
-    this.blockVertexBuffers = { position: positionBuffer, index: indexBuffer };
+    
+    console.log(`[MapWindow3DRenderer] Grid populated with ${gridCoordinates.length} blocks`);
   }
 
   public loadModel(model: OBJModel): void {
@@ -187,6 +181,7 @@ export class MapWindow3DRenderer {
     }
   }
 
+  // X-ray marker delegation methods
   public getXRayMarker(): XRayMarker | null { return this.xRayMarker; }
   public moveXRayMarkerUp(steps: number = 1): void { if (this.xRayMarker) this.xRayMarker.moveUp(steps); }
   public moveXRayMarkerDown(steps: number = 1): void { if (this.xRayMarker) this.xRayMarker.moveDown(steps); }
@@ -208,117 +203,76 @@ export class MapWindow3DRenderer {
 
   private animate = (): void => {
     if (!this.isRunning) return;
-    this.updateXRayMarkerAnimation();
+    this.updateGridAnimation();
     this.render();
     this.animationFrameId = requestAnimationFrame(this.animate);
   };
 
-  private updateXRayMarkerAnimation(): void {
-    if (!this.xRayMarker || !this.gridCoordinates?.length) return;
-    const now = Date.now();
-    if (now - this.lastGridMoveTime < this.GRID_MOVE_INTERVAL) return;
-    this.lastGridMoveTime = now;
-    if (this.currentGridIndex < this.gridCoordinates.length) {
-      const pos = this.gridCoordinates[this.currentGridIndex];
-      this.xRayMarker.setPosition(pos.x, pos.y, pos.z);
-      this.revealBlock(this.currentGridIndex);
-      this.currentGridIndex++;
-      if (this.currentGridIndex % 10 === 0 || this.currentGridIndex === 1) {
-        console.log(`[MapWindow3DRenderer] Grid step ${this.currentGridIndex}/${this.gridCoordinates.length}`);
-      }
-    } else {
-      this.currentGridIndex = 0;
-      console.log('[MapWindow3DRenderer] Grid scan complete, restarting...');
-    }
-  }
-
-  private revealBlock(blockIndex: number): void {
-    if (blockIndex < 0 || blockIndex >= this.blockVisibility.length) return;
-    if (!this.blockVisibility[blockIndex]) {
-      this.blockVisibility[blockIndex] = true;
-      this.fogOfWar?.revealBlock(blockIndex);
-    }
+  private updateGridAnimation(): void {
+    this.gridAnimator?.update(this.xRayMarker, (index) => {
+      this.visibilityManager?.revealBlock(index);
+      this.fogOfWar?.revealBlock(index);
+    });
   }
 
   public isBlockVisible(blockIndex: number): boolean {
-    if (blockIndex < 0 || blockIndex >= this.blockVisibility.length) return false;
-    return this.blockVisibility[blockIndex];
+    return this.visibilityManager?.isVisible(blockIndex) ?? false;
   }
 
-  public getRevealedBlockCount(): number { return this.fogOfWar?.getRevealedCount() ?? 0; }
+  public getRevealedBlockCount(): number { 
+    return this.fogOfWar?.getRevealedCount() ?? 0; 
+  }
 
   private render(): void {
     if (!this.gl || !this.program || !this.model) return;
     const gl = this.gl;
+    
     let focusPoint = { x: 0, y: 0, z: 0 };
-    if (this.xRayMarker?.visible && this.xRayMarker.position) focusPoint = this.xRayMarker.position;
+    if (this.xRayMarker?.visible && this.xRayMarker.position) {
+      focusPoint = this.xRayMarker.position;
+    }
+    
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.program);
-    const positionLocation = gl.getAttribLocation(this.program, 'a_position');
-    const normalLocation = gl.getAttribLocation(this.program, 'a_normal');
+    
     const matrixLocation = gl.getUniformLocation(this.program, 'u_matrix');
     const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
     const colorLocation = gl.getUniformLocation(this.program, 'u_color');
     const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
     const useLightingLocation = gl.getUniformLocation(this.program, 'u_useLighting');
-    gl.enableVertexAttribArray(positionLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(normalLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-    gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    
     const aspect = this.canvas.width / this.canvas.height;
-    const matrix = createMVPMatrix(this.rotationY, this.rotationX, aspect, this.zoom, focusPoint);
-    const normalMatrix = createNormalMatrix(this.rotationY, this.rotationX);
-    if (hasExtremeValues(matrix)) console.error('[MapWindow3DRenderer] MVP Matrix contains invalid values!');
-    gl.uniformMatrix4fv(matrixLocation, false, matrix);
-    gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
-    gl.uniform4f(colorLocation, 0.5, 0.5, 0.5, 1.0);
-    gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3);
-    gl.uniform1i(useLightingLocation, 1);
-    if (this.blockTriangleRanges.length > 0) {
-      for (let i = 0; i < this.blockTriangleRanges.length; i++) {
-        if (this.blockVisibility[i]) {
-          const range = this.blockTriangleRanges[i];
-          gl.drawElements(gl.TRIANGLES, range.count, gl.UNSIGNED_SHORT, range.start * 2);
-        }
-      }
-    } else {
-      gl.drawElements(gl.TRIANGLES, this.model.indices.length, gl.UNSIGNED_SHORT, 0);
-    }
-    this.renderXRayMarker(matrixLocation, useLightingLocation);
-  }
-
-  private renderXRayMarker(matrixLocation: WebGLUniformLocation | null, useLightingLocation: WebGLUniformLocation | null): void {
-    if (!this.gl || !this.xRayMarker?.visible || !this.blockVertexBuffers || !matrixLocation || !useLightingLocation || !this.program) return;
-    if (!this.blockVertexBuffers.position || !this.blockVertexBuffers.index) return;
-    const gl = this.gl;
-    gl.disable(gl.DEPTH_TEST);
-    gl.depthMask(false);
-    gl.disable(gl.CULL_FACE);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    const aspect = this.canvas.width / this.canvas.height;
-    const baseMatrix = createMVPMatrix(this.rotationY, this.rotationX, aspect, this.zoom, this.xRayMarker.position);
-    const translation = multiplyMatrices(baseMatrix, new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, this.xRayMarker.position.x, this.xRayMarker.position.y, this.xRayMarker.position.z, 1]));
-    const positionLocation = gl.getAttribLocation(this.program, 'a_position');
-    gl.enableVertexAttribArray(positionLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.blockVertexBuffers.position);
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.blockVertexBuffers.index);
-    gl.uniformMatrix4fv(matrixLocation, false, translation);
-    gl.uniform1i(useLightingLocation, 0);
-    const colorLocation = gl.getUniformLocation(this.program, 'u_color');
-    const [r, g, b, a] = this.xRayMarker.color;
-    gl.uniform4f(colorLocation, r, g, b, a);
-    gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthMask(true);
-    gl.enable(gl.CULL_FACE);
-    gl.disable(gl.BLEND);
-    gl.uniform1i(useLightingLocation, 1);
+    
+    // Render main model
+    this.modelRenderer?.render(
+      this.program,
+      this.vertexBuffer,
+      this.normalBuffer,
+      this.indexBuffer,
+      this.blockTriangleRanges,
+      this.visibilityManager ? Array.from({ length: this.blockTriangleRanges.length }, (_, i) => this.visibilityManager.isVisible(i)) : [],
+      matrixLocation,
+      normalMatrixLocation,
+      colorLocation,
+      lightDirLocation,
+      useLightingLocation,
+      this.rotationY,
+      this.rotationX,
+      aspect,
+      this.zoom,
+      focusPoint
+    );
+    
+    // Render X-ray marker
+    this.xRayRenderer?.render(
+      this.xRayMarker!,
+      this.program,
+      this.rotationY,
+      this.rotationX,
+      aspect,
+      this.zoom
+    );
   }
 
   public destroy(): void {
@@ -327,36 +281,15 @@ export class MapWindow3DRenderer {
     this.inputHandler?.destroy();
   }
 
-  /**
-   * Public method to toggle grid animation on/off
-   */
   public toggleGridAnimation(enabled: boolean): void {
     if (enabled) {
-      this.currentGridIndex = 0;
-      this.lastGridMoveTime = Date.now();
-      console.log('[MapWindow3DRenderer] Grid animation started');
+      this.gridAnimator?.start();
     } else {
-      console.log('[MapWindow3DRenderer] Grid animation stopped');
+      this.gridAnimator?.stop();
     }
   }
 
-  /**
-   * Public method to manually move to next grid position
-   */
   public moveToNextGridPosition(): void {
-    if (!this.xRayMarker || this.gridCoordinates.length === 0) return;
-
-    if (this.currentGridIndex < this.gridCoordinates.length) {
-      const pos = this.gridCoordinates[this.currentGridIndex];
-      this.xRayMarker.setPosition(pos.x, pos.y, pos.z);
-
-      // Reveal the block at current index (fog of war)
-      this.revealBlock(this.currentGridIndex);
-
-      this.currentGridIndex++;
-      console.log(`[MapWindow3DRenderer] Manual grid step ${this.currentGridIndex}/${this.gridCoordinates.length}, revealed block ${this.currentGridIndex - 1}`);
-    } else {
-      this.currentGridIndex = 0;
-    }
+    this.gridAnimator?.moveNext();
   }
 }

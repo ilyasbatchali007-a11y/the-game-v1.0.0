@@ -11,10 +11,10 @@ import { MapModelManager } from './MapModelManager';
 import { BlockTriangleRangeManager } from './BlockTriangleRangeManager';
 import { RenderStateStack } from './RenderStateStack';
 import { BlockDrawer } from './BlockDrawer';
-import { MapMatrixCalculator } from './MapMatrixCalculator';
 import { MapBlock } from '../types/MapBlockTypes';
 import { RENDER_CONSTANTS } from './MapRendererTypes';
 import { OBJModel } from '../OBJLoader';
+import { SceneRenderer, RenderDependencies } from './SceneRenderer';
 
 export class MapRenderer3D {
   private gl: WebGLRenderingContext | null = null;
@@ -32,6 +32,7 @@ export class MapRenderer3D {
   private triangleRangeManager: BlockTriangleRangeManager | null = null;
   private renderStateStack: RenderStateStack | null = null;
   private blockDrawer: BlockDrawer | null = null;
+  private sceneRenderer: SceneRenderer | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -185,110 +186,28 @@ export class MapRenderer3D {
 
   private render(): void {
     if (!this.gl || !this.program || !this.modelManager?.getModel()) return;
-
-    const gl = this.gl;
-    const model = this.modelManager.getModel()!;
-
-    let focusPoint = { x: 0, y: 0, z: 0 };
-    const xRayPos = this.xRayMarkerManager?.getPosition();
-    if (this.xRayMarkerManager?.isVisible() && xRayPos) {
-      focusPoint = xRayPos;
-    }
-
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.useProgram(this.program);
-
-    const positionLocation = gl.getAttribLocation(this.program, 'a_position');
-    const normalLocation = gl.getAttribLocation(this.program, 'a_normal');
-    const matrixLocation = gl.getUniformLocation(this.program, 'u_matrix');
-    const normalMatrixLocation = gl.getUniformLocation(this.program, 'u_normalMatrix');
-    const colorLocation = gl.getUniformLocation(this.program, 'u_color');
-    const lightDirLocation = gl.getUniformLocation(this.program, 'u_lightDir');
-    const useLightingLocation = gl.getUniformLocation(this.program, 'u_useLighting');
-
-    gl.enableVertexAttribArray(positionLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.modelManager.getVertexBuffer());
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-
-    gl.enableVertexAttribArray(normalLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.modelManager.getNormalBuffer());
-    gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
-
-    const aspect = this.canvas.width / this.canvas.height;
-    const rotationY = this.inputController?.getRotationY() ?? 0;
-    const rotationX = this.inputController?.getRotationX() ?? RENDER_CONSTANTS.DEFAULT_ROTATION_X;
-    const zoom = this.inputController?.getZoom() ?? RENDER_CONSTANTS.DEFAULT_ZOOM;
-
-    const matrix = MapMatrixCalculator.calculateMVPMatrix(rotationY, rotationX, aspect, zoom, focusPoint);
-    const normalMatrix = MapMatrixCalculator.calculateNormalMatrix(rotationY, rotationX);
-
-    gl.uniformMatrix4fv(matrixLocation, false, matrix);
-    gl.uniformMatrix4fv(normalMatrixLocation, false, normalMatrix);
-    gl.uniform4f(colorLocation, 0.5, 0.5, 0.5, 1.0);
-    gl.uniform3f(lightDirLocation, 0.5, 1.0, 0.3);
-    gl.uniform1i(useLightingLocation, 1);
-
-    // Draw visible blocks using dedicated drawer
-    const triangleRanges = this.triangleRangeManager!.getRanges();
-    const indexBuffer = this.modelManager.getIndexBuffer();
     
-    if (triangleRanges.length > 0 && this.visibilityTracker) {
-      this.blockDrawer!.drawVisibleBlocks(
-        indexBuffer,
-        triangleRanges,
-        this.visibilityTracker.getAllVisibility()
-      );
-    } else {
-      this.blockDrawer!.drawFullModel(indexBuffer, model.indices.length);
+    if (!this.sceneRenderer) {
+      const deps: RenderDependencies = {
+        modelManager: this.modelManager!,
+        triangleRangeManager: this.triangleRangeManager!,
+        visibilityTracker: this.visibilityTracker,
+        blockDrawer: this.blockDrawer!,
+        xRayMarkerManager: this.xRayMarkerManager!,
+        inputController: this.inputController!,
+        renderStateStack: this.renderStateStack!,
+        blockBufferManager: this.blockBufferManager!,
+        canvas: this.canvas,
+        gl: this.gl,
+        program: this.program
+      };
+      this.sceneRenderer = new SceneRenderer(deps);
     }
-
-    this.renderXRayMarker(matrixLocation, useLightingLocation);
-  }
-
-  private renderXRayMarker(matrixLocation: WebGLUniformLocation | null, useLightingLocation: WebGLUniformLocation | null): void {
-    if (!this.gl || !this.xRayMarkerManager?.isVisible() || !matrixLocation || !useLightingLocation || !this.program) return;
-
-    const xRayPos = this.xRayMarkerManager.getPosition();
-    if (!xRayPos) return;
-
-    const indexBuffer = this.blockBufferManager?.getIndexBuffer();
-    if (!indexBuffer) return;
-
-    this.renderStateStack?.push();
-    this.renderStateStack?.configureForXRay();
-
-    const aspect = this.canvas.width / this.canvas.height;
-    const rotationY = this.inputController?.getRotationY() ?? 0;
-    const rotationX = this.inputController?.getRotationX() ?? RENDER_CONSTANTS.DEFAULT_ROTATION_X;
-    const zoom = this.inputController?.getZoom() ?? RENDER_CONSTANTS.DEFAULT_ZOOM;
-
-    const baseMatrix = MapMatrixCalculator.calculateMVPMatrix(rotationY, rotationX, aspect, zoom, xRayPos);
-    if (!baseMatrix) return;
-
-    const translation = MapMatrixCalculator.multiplyMatrices(
-      baseMatrix,
-      MapMatrixCalculator.createTranslationMatrix(xRayPos.x, xRayPos.y, xRayPos.z)
-    );
-
-    const gl = this.gl;
-    const positionLocation = gl.getAttribLocation(this.program, 'a_position');
-    gl.enableVertexAttribArray(positionLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.blockBufferManager!.getPositionBuffer());
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-    gl.uniformMatrix4fv(matrixLocation, false, translation);
-    gl.uniform1i(useLightingLocation, 0);
-
-    const colorLocation = gl.getUniformLocation(this.program, 'u_color');
-    const [r, g, b, a] = this.xRayMarkerManager.getColor();
-    gl.uniform4f(colorLocation, r, g, b, a);
-
-    this.blockDrawer!.drawTriangles(indexBuffer, 36, 0);
-
-    this.renderStateStack?.restoreFromXRay();
-    this.renderStateStack?.pop();
+    
+    // Update visibility tracker reference in case it changed
+    (this.sceneRenderer as any).deps.visibilityTracker = this.visibilityTracker;
+    
+    this.sceneRenderer.render();
   }
 
   public destroy(): void {

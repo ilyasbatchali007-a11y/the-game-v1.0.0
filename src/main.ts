@@ -14,6 +14,7 @@ import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
+import { generateTestMap, getCurrentWorldWidth, getCurrentWorldHeight, mapData } from './config/MapData';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
 import { initializeGameEngine, type EngineContext } from './main/GameEngineInitializer';
 import { UIManager } from './main/UIManager/UIManager';
@@ -97,7 +98,7 @@ function initNewGame() {
   // Reset world and start new game
   if (world) {
     world = new World();
-    generateTestMap();
+    generateDungeon(); // Use the same generator as startup
     if (renderer) renderer.updateMapDataTexture();
     
     // Respawn player at center of new map

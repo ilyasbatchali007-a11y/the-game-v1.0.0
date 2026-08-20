@@ -1,9 +1,8 @@
-// 1. Ensure CELL_SIZE is exported from './config/Constants'
+// Main entry point - Orchestrator for game systems
 import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
-// 2. Fixed export/import style for MovementSystem (switched to default or named depending on your file structure)
 import { MovementSystem } from './systems/MovementSystem'; 
 import { CollisionSystem } from './systems/CollisionSystem';
 import { GLInstancedRenderer } from './render/GLInstancedRenderer';
@@ -12,9 +11,10 @@ import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
 import { getFloorCount } from './config/FloorMap';
-import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
-import { generateDungeon } from './engine/DungeonGenerator';
-import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
+import { DungeonMapVisualizer } from './main/DungeonMapVisualizer';
+import { SaveSlotUIRenderer } from './main/SaveSlotUIRenderer';
+import { KeyboardInputHandler } from './main/KeyboardInputHandler';
+
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -41,6 +41,12 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: WebGL2RenderingContext | null = null;
 let movementSystem: MovementSystem | null = null;
 let collisionSystem: CollisionSystem | null = null;
+let currentSlotId: number | null = null;
+
+// Specialized managers
+let dungeonVisualizer: DungeonMapVisualizer | null = null;
+let saveSlotUI: SaveSlotUIRenderer | null = null;
+let keyboardInputHandler: KeyboardInputHandler | null = null;
 
 // UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
@@ -53,9 +59,6 @@ const btnCloseSlots = document.getElementById('btn-close-slots') as HTMLButtonEl
 const link1 = document.getElementById('link-1') as HTMLAnchorElement;
 const link2 = document.getElementById('link-2') as HTMLAnchorElement;
 const link3 = document.getElementById('link-3') as HTMLAnchorElement;
-
-const NUM_SLOTS = 3;
-let currentSlotId: number | null = null; // The slot used for the current session
 
 async function initEngine() {
   // 1. Setup Canvas & WebGL2 Context
@@ -150,7 +153,9 @@ function startGame() {
   startMenu.classList.add('hidden');
   
   // Reset input state
-  inputState = {};
+  if (keyboardInputHandler) {
+    keyboardInputHandler.resetInput();
+  }
 }
 
 function stopGame() {
@@ -160,96 +165,28 @@ function stopGame() {
 }
 
 function renderSlots() {
-  // Clear existing slots but keep the overlay
-  const overlay = document.getElementById('slots-overlay');
-  slotsContainer.innerHTML = '';
-  if (overlay) {
-    slotsContainer.appendChild(overlay);
-  }
+  if (!saveSlotUI) return;
   
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const slotData = SaveSlotManager.loadFromSlot(i);
-    const slotEl = document.createElement('div');
-    slotEl.className = 'save-slot';
-    
-    if (slotData) {
-      // Slot has a save
-      const parsed = JSON.parse(localStorage.getItem(`ecs_save_${i}`) || '{}');
-      const timestamp = parsed.timestamp || 0;
-      
-      slotEl.classList.remove('empty');
-      
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'slot-info';
-      
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'slot-name';
-      nameDiv.textContent = parsed.name || `Save ${i + 1}`;
-      
-      const dateDiv = document.createElement('div');
-      dateDiv.className = 'slot-date';
-      dateDiv.textContent = SaveSlotManager.formatDate(timestamp);
-      
-      infoDiv.appendChild(nameDiv);
-      infoDiv.appendChild(dateDiv);
-      
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.textContent = 'X';
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        SaveSlotManager.deleteSlot(i);
-        renderSlots();
-      });
-      
-      slotEl.appendChild(infoDiv);
-      slotEl.appendChild(deleteBtn);
-      
-      // Click on slot loads the game
-      slotEl.addEventListener('click', () => {
-        const buffer = SaveSlotManager.loadFromSlot(i);
-        if (buffer && world) {
-          SaveManager.loadWorld(world, buffer);
-          currentSlotId = i;
-          console.log(`[UI] Loaded save slot ${i}`);
-          startGame();
-        }
-      });
-    } else {
-      // Slot is empty
-      slotEl.classList.add('empty');
-      
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'slot-info';
-      
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'slot-name';
-      nameDiv.textContent = `Empty Slot ${i + 1}`;
-      
-      const dateDiv = document.createElement('div');
-      dateDiv.className = 'slot-date';
-      dateDiv.textContent = 'Click to start New Game';
-      
-      infoDiv.appendChild(nameDiv);
-      infoDiv.appendChild(dateDiv);
-      
-      slotEl.appendChild(infoDiv);
-      
-      // Click on empty slot starts new game
-      slotEl.addEventListener('click', () => {
-        currentSlotId = i;
-        initNewGame();
-        startGame();
-      });
+  saveSlotUI.render(
+    slotsContainer,
+    slotsOverlay,
+    world,
+    currentSlotId,
+    (slotId: number) => {
+      currentSlotId = slotId;
+      console.log(`[UI] Loaded save slot ${slotId}`);
+      startGame();
+    },
+    (slotId: number) => {
+      currentSlotId = slotId;
+      initNewGame();
+      startGame();
+    },
+    (slotId: number) => {
+      SaveSlotManager.deleteSlot(slotId);
+      renderSlots();
     }
-    
-    slotsContainer.appendChild(slotEl);
-  }
-  
-  // Re-append the overlay after slots
-  if (overlay) {
-    slotsContainer.appendChild(overlay);
-  }
+  );
 }
 
 function initNewGame() {
@@ -286,7 +223,6 @@ function initNewGame() {
   }
 }
 
-let inputState: Record<string, boolean> = {};
 let accumulator = 0;
 let lastTime = performance.now();
 
@@ -307,6 +243,7 @@ function startGameLoop() {
 
     // Fixed timestep updates
     while (accumulator >= FIXED_DT) {
+      const inputState = keyboardInputHandler?.getInputState() || {};
       movementSystem!.update(world, inputState, FIXED_DT);
       collisionSystem!.update(world as any, FIXED_DT, PLAYER_ID);
 
@@ -365,158 +302,9 @@ function startGameLoop() {
   requestAnimationFrame(loop);
 }
 
-// Add keyboard controls for floor switching (T and G keys) and map toggle (M key), dungeon generation (G key when map visible)
-let floorSwitchCooldown = false;
-
-// Map Canvas Setup
+// Map Canvas Setup - managed by DungeonMapVisualizer
 const mapContainer = document.getElementById('map-container') as HTMLElement;
 const mapCanvas = document.getElementById('map-canvas') as HTMLCanvasElement;
-let mapCtx: CanvasRenderingContext2D | null = null;
-let mapVisible = false;
-let map3DRenderer: MapWindow3DRenderer | null = null;
-let currentMapId: string | null = null;
-let dungeonGenerated = false;
-
-/**
- * Generate new dungeon map with 100 cubes, save both mesh and block data
- */
-async function generateNewDungeon(): Promise<void> {
-  if (!map3DRenderer) return;
-  
-  // Generate unique map ID for this session
-  currentMapId = getDefaultMapId();
-  setCurrentMapId(currentMapId);
-  
-  console.log(`[Main] Generating new dungeon with ID: ${currentMapId}`);
-  
-  // Generate dungeon (blocks + fused mesh)
-  const result = generateDungeon(currentMapId);
-  
-  // Save to persistent storage
-  try {
-    await saveDungeon(result);
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
-    alert(errorMsg);
-    console.error('[Main] Dungeon generation aborted due to save failure:', error);
-    return; // Do not proceed to load the model if save failed
-  }
-  
-  // Load into 3D renderer
-  try {
-    // Parse OBJ content directly (no file load needed)
-    const { OBJLoader } = await import('./engine/OBJLoader');
-    const model = OBJLoader.parseOBJ(result.objContent);
-    map3DRenderer.loadModel(model);
-    
-    // Set block metadata for accurate grid coordinates
-    map3DRenderer.setMapBlocks(result.blocks);
-    
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
-    
-    dungeonGenerated = true;
-    console.log(`[Main] Dungeon generated and loaded: ${result.blocks.length} blocks, ${result.objContent.length} bytes OBJ`);
-  } catch (err) {
-    console.error('[Main] Failed to load generated dungeon:', err);
-  }
-}
-
-/**
- * Load existing saved dungeon by map ID
- */
-async function loadSavedDungeon(mapId: string): Promise<boolean> {
-  if (!map3DRenderer) return false;
-  
-  const savedData = await loadDungeon(mapId);
-  if (!savedData) {
-    console.log(`[Main] No saved dungeon found for ID: ${mapId}`);
-    return false;
-  }
-  
-  currentMapId = mapId;
-  setCurrentMapId(mapId);
-  
-  try {
-    // Parse OBJ content directly
-    const { OBJLoader } = await import('./engine/OBJLoader');
-    const model = OBJLoader.parseOBJ(savedData.objContent);
-    map3DRenderer.loadModel(model);
-    
-    // Set block metadata for accurate grid coordinates
-    map3DRenderer.setMapBlocks(savedData.blocks);
-    
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
-    
-    dungeonGenerated = true;
-    console.log(`[Main] Loaded saved dungeon ${mapId}: ${savedData.blocks.length} blocks`);
-    return true;
-  } catch (err) {
-    console.error('[Main] Failed to load saved dungeon:', err);
-    return false;
-  }
-}
-
-/**
- * Initialize or load dungeon map - checks for saved map first, generates if not found
- */
-async function initOrLoadDungeon(): Promise<void> {
-  if (!map3DRenderer) return;
-  
-  // Try to load existing saved map first
-  const defaultMapId = getDefaultMapId();
-  const loaded = await loadSavedDungeon(defaultMapId);
-  
-  if (!loaded) {
-    // No saved map exists, generate new one
-    await generateNewDungeon();
-  }
-}
-
-/**
- * Load existing dungeon from the blocks.json file in src/3d-objects folder
- */
-async function loadExistingDungeonFromFile(): Promise<void> {
-  if (!map3DRenderer) return;
-  
-  try {
-    // Load the blocks JSON file directly from the project folder
-    const response = await fetch('src/3d-objects/dungeon_1787048292379_dungeon.blocks.json');
-    if (!response.ok) {
-      console.log('[Main] No blocks.json file found in src/3d-objects folder');
-      return;
-    }
-    
-    const blocks = await response.json();
-    
-    // Also load the OBJ file
-    const objResponse = await fetch('src/3d-objects/dungeon_1787048292379_dungeon.obj');
-    if (!objResponse.ok) {
-      console.log('[Main] No .obj file found in src/3d-objects folder');
-      return;
-    }
-    
-    const objContent = await objResponse.text();
-    
-    // Parse OBJ content
-    const { OBJLoader } = await import('./engine/OBJLoader');
-    const model = OBJLoader.parseOBJ(objContent);
-    map3DRenderer.loadModel(model);
-    
-    // Set block metadata for accurate grid coordinates
-    map3DRenderer.setMapBlocks(blocks);
-    
-    // Start the glowing block animation through all positions
-    map3DRenderer.toggleGridAnimation(true);
-    
-    dungeonGenerated = true;
-    currentMapId = 'dungeon_1787048292379';
-    console.log(`[Main] Loaded dungeon from file: ${blocks.length} blocks`);
-  } catch (err) {
-    console.error('[Main] Failed to load dungeon from file:', err);
-  }
-}
 
 function initMapCanvas() {
   if (!mapCanvas || !mapContainer) return;
@@ -530,187 +318,96 @@ function initMapCanvas() {
   mapCanvas.width = Math.floor(width);
   mapCanvas.height = Math.floor(height);
   
-  // Initialize 3D renderer for the map window
-  if (!map3DRenderer) {
-    map3DRenderer = new MapWindow3DRenderer(mapCanvas);
-    // Don't auto-load/generate - wait for user to press G key
-    console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
-  } else {
-    map3DRenderer.resize();
+  // Initialize dungeon visualizer if needed
+  if (!dungeonVisualizer) {
+    dungeonVisualizer = new DungeonMapVisualizer();
   }
+  dungeonVisualizer.initialize(mapCanvas);
+  console.log('[Main] Map canvas initialized. Press G to generate/load dungeon.');
 }
 
 function toggleMap() {
-  mapVisible = !mapVisible;
-  if (mapVisible) {
+  if (!mapContainer) return;
+  
+  const mapVisible = mapContainer.classList.contains('visible');
+  
+  if (!mapVisible) {
     mapContainer.classList.add('visible');
-    // Initialize canvas immediately with fixed dimensions
     initMapCanvas();
-    // Load existing dungeon from file when map is opened
-    loadExistingDungeonFromFile();
+    if (dungeonVisualizer) {
+      dungeonVisualizer.loadDungeonFromFile();
+    }
   } else {
     mapContainer.classList.remove('visible');
   }
 }
+// Keyboard event handlers - delegated to KeyboardInputHandler
 window.addEventListener('keydown', (e) => {
+  // Initialize keyboard handler on first key press if not already done
+  if (!keyboardInputHandler && world) {
+    keyboardInputHandler = new KeyboardInputHandler(
+      mapRenderer,
+      world,
+      camera,
+      renderer,
+      dungeonVisualizer,
+      (slotId: number) => {
+        SaveSlotManager.saveToSlot(world!, slotId, `Save ${slotId + 1}`);
+        console.log(`[UI] Saved to slot ${slotId}!`);
+      },
+      currentSlotId
+    );
+    keyboardInputHandler.registerListeners();
+    return; // Let the registered handler process this key
+  }
+  
   // Toggle map with M key - works only in game, not in menu
   if (e.key === 'm' || e.key === 'M') {
-    if (!gameRunning) return; // Only allow map toggle during gameplay
-    toggleMap();
-    return; // Don't process other inputs when toggling map
-  }
-
-  // G key is now disabled for dungeon generation - only M key loads the existing model
-
-  // Export dungeon files with X key - works only when map is visible
-  if ((e.key === 'x' || e.key === 'X') && mapVisible && currentMapId) {
     if (!gameRunning) return;
-    console.log('[Main] X key pressed - exporting dungeon files');
-    loadDungeon(currentMapId).then(savedData => {
-      if (savedData) {
-        exportDungeonFiles({
-          mapId: savedData.mapId,
-          objContent: savedData.objContent,
-          blocks: savedData.blocks
-        });
-      }
-    });
+    toggleMap();
     return;
   }
 
-  // Delete current dungeon with D key - works only when map is visible
-  if ((e.key === 'd' || e.key === 'D') && mapVisible && currentMapId) {
-    if (!gameRunning) return;
-    console.log('[Main] D key pressed - deleting current dungeon');
-    deleteDungeon(currentMapId);
-    dungeonGenerated = false;
-    currentMapId = null;
-    // Clear the 3D view
-    if (map3DRenderer) {
-      // Optionally reload empty or show message
-      console.log('[Main] Dungeon deleted. Press G to generate a new one.');
+  // Export dungeon files with X key
+  if ((e.key === 'x' || e.key === 'X') && dungeonVisualizer) {
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer?.classList.contains('visible')) {
+      dungeonVisualizer.exportCurrentDungeon();
+    }
+    return;
+  }
+
+  // Delete current dungeon with D key
+  if ((e.key === 'd' || e.key === 'D') && dungeonVisualizer) {
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer?.classList.contains('visible')) {
+      dungeonVisualizer.deleteCurrentDungeon();
     }
     return;
   }
 
   if (!gameRunning) return;
 
-  // Floor switching with T (previous) and G (next) - also respawn player at center of new floor
-  if ((e.key === 't' || e.key === 'T') && !floorSwitchCooldown) {
-    floorSwitchCooldown = true;
-    const currentFloor = mapRenderer.getCurrentFloorId();
-    const newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
-    mapRenderer.switchFloor(newFloor);
-    
-    // Update renderer's map data texture after floor switch
-    if (renderer) {
-      renderer.updateMapDataTexture();
-    }
-    
-    // Teleport player to center of new floor and update camera
-    if (world) {
-      world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
-      world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
-      world.vx[PLAYER_ID] = 0;
-      world.vy[PLAYER_ID] = 0;
-      if (camera) {
-        camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-        camera.snapToTarget();
-      }
-    }
-    
-    setTimeout(() => { floorSwitchCooldown = false; }, 200);
+  // Floor switching with T (previous) and G (next)
+  if ((e.key === 't' || e.key === 'T') && world && camera) {
+    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+    floorSwitchManager.switchToPreviousFloor(mapRenderer, world, camera, renderer);
+    return;
   }
-  
-  if ((e.key === 'g' || e.key === 'G') && !floorSwitchCooldown) {
-    floorSwitchCooldown = true;
-    const currentFloor = mapRenderer.getCurrentFloorId();
-    const newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
-    mapRenderer.switchFloor(newFloor);
-    
-    // Update renderer's map data texture after floor switch
-    if (renderer) {
-      renderer.updateMapDataTexture();
-    }
-    
-    // Teleport player to center of new floor and update camera
-    if (world) {
-      world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
-      world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
-      world.vx[PLAYER_ID] = 0;
-      world.vy[PLAYER_ID] = 0;
-      if (camera) {
-        camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-        camera.snapToTarget();
-      }
-    }
-    
-    setTimeout(() => { floorSwitchCooldown = false; }, 200);
+
+  if ((e.key === 'g' || e.key === 'G') && world && camera) {
+    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+    floorSwitchManager.switchToNextFloor(mapRenderer, world, camera, renderer);
+    return;
   }
-  
+
   // Portal interaction with E key
-  if ((e.key === 'e' || e.key === 'E') && !floorSwitchCooldown && world) {
-    // Get player's current tile position
-    const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
-    const playerRow = Math.floor(world.y[PLAYER_ID] / TILE_SIZE);
-    
-    // Check surrounding tiles (including current tile) for portal
-    let foundPortal = false;
-    for (let dRow = -1; dRow <= 1 && !foundPortal; dRow++) {
-      for (let dCol = -1; dCol <= 1 && !foundPortal; dCol++) {
-        const checkCol = playerCol + dCol;
-        const checkRow = playerRow + dRow;
-        
-        if (checkCol >= 0 && checkCol < getCurrentMapCols() && 
-            checkRow >= 0 && checkRow < getCurrentMapRows()) {
-          const idx = (checkRow * getCurrentMapCols() + checkCol) * 2;
-          const tileId = MAP_TILE_DATA[idx];
-          
-          // Check if this is a portal tile
-          if (tileId === 1000 || tileId === 1001) {
-            floorSwitchCooldown = true;
-            foundPortal = true;
-            
-            const currentFloor = mapRenderer.getCurrentFloorId();
-            let newFloor: number;
-            
-            if (tileId === 1000) {
-              // Next floor portal (blue)
-              newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
-            } else {
-              // Previous floor portal (red)
-              newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
-            }
-            
-            mapRenderer.switchFloor(newFloor);
-            
-            // Update renderer's map data texture after floor switch
-            if (renderer) {
-              renderer.updateMapDataTexture();
-            }
-            
-            // Teleport player to center of new floor and update camera
-            world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
-            world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
-            world.vx[PLAYER_ID] = 0;
-            world.vy[PLAYER_ID] = 0;
-            if (camera) {
-              camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-              camera.snapToTarget();
-            }
-            
-            console.log(`[Portal] Stepped on ${tileId === 1000 ? 'NEXT' : 'PREVIOUS'} floor portal, switched to floor ${newFloor}`);
-            
-            setTimeout(() => { floorSwitchCooldown = false; }, 300);
-          }
-        }
-      }
-    }
+  if ((e.key === 'e' || e.key === 'E') && world && camera) {
+    const floorSwitchManager = new (require('./main/FloorSwitchManager').FloorSwitchManager)();
+    floorSwitchManager.handlePortalInteraction(mapRenderer, world, camera, renderer);
   }
-  
-  inputState[e.key] = true;
-  
-  // Quick save ONLY with Ctrl+S - saves to the slot used to start this session
+
+  // Quick save with Ctrl+S
   if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
     if (world && currentSlotId !== null) {
@@ -722,7 +419,7 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   if (!gameRunning) return;
-  inputState[e.key] = false;
+  // Input state is managed by KeyboardInputHandler
 });
 
 // Handle window resize

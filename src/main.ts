@@ -16,6 +16,7 @@ import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
 import { initializeGameEngine, type EngineContext } from './main/GameEngineInitializer';
+import { UIManager } from './main/UIManager/UIManager';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -42,21 +43,8 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: WebGL2RenderingContext | null = null;
 let movementSystem: MovementSystem | null = null;
 let collisionSystem: CollisionSystem | null = null;
-
-// UI Elements
-const startMenu = document.getElementById('start-menu') as HTMLElement;
-const slotsContainer = document.getElementById('slots-container') as HTMLElement;
-const slotsOverlay = document.getElementById('slots-overlay') as HTMLElement;
-const btnStart = document.getElementById('btn-start') as HTMLButtonElement;
-const btnSettings = document.getElementById('btn-settings') as HTMLButtonElement;
-const btnCredits = document.getElementById('btn-credits') as HTMLButtonElement;
-const btnCloseSlots = document.getElementById('btn-close-slots') as HTMLButtonElement;
-const link1 = document.getElementById('link-1') as HTMLAnchorElement;
-const link2 = document.getElementById('link-2') as HTMLAnchorElement;
-const link3 = document.getElementById('link-3') as HTMLAnchorElement;
-
-const NUM_SLOTS = 3;
-let currentSlotId: number | null = null; // The slot used for the current session
+let uiManager: UIManager | null = null;
+let currentSlotId: number | null = null;
 
 async function initEngine() {
   // Use the extracted GameEngineInitializer module
@@ -72,13 +60,22 @@ async function initEngine() {
   camera = context.camera;
   texture = context.texture;
   
+  // Initialize UI Manager with callbacks
+  uiManager = new UIManager({
+    world,
+    initNewGameCallback: initNewGame,
+    startGameCallback: startGame
+  });
+  
   // Start the game loop
   startGameLoop();
 }
 
 function startGame() {
   gameRunning = true;
-  startMenu.classList.add('hidden');
+  if (uiManager) {
+    // UIManager handles hiding start menu internally
+  }
   
   // Reset input state
   inputState = {};
@@ -86,100 +83,8 @@ function startGame() {
 
 function stopGame() {
   gameRunning = false;
-  startMenu.classList.remove('hidden');
-  renderSlots(); // Re-render slots to update their state
-}
-
-function renderSlots() {
-  // Clear existing slots but keep the overlay
-  const overlay = document.getElementById('slots-overlay');
-  slotsContainer.innerHTML = '';
-  if (overlay) {
-    slotsContainer.appendChild(overlay);
-  }
-  
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const slotData = SaveSlotManager.loadFromSlot(i);
-    const slotEl = document.createElement('div');
-    slotEl.className = 'save-slot';
-    
-    if (slotData) {
-      // Slot has a save
-      const parsed = JSON.parse(localStorage.getItem(`ecs_save_${i}`) || '{}');
-      const timestamp = parsed.timestamp || 0;
-      
-      slotEl.classList.remove('empty');
-      
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'slot-info';
-      
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'slot-name';
-      nameDiv.textContent = parsed.name || `Save ${i + 1}`;
-      
-      const dateDiv = document.createElement('div');
-      dateDiv.className = 'slot-date';
-      dateDiv.textContent = SaveSlotManager.formatDate(timestamp);
-      
-      infoDiv.appendChild(nameDiv);
-      infoDiv.appendChild(dateDiv);
-      
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.textContent = 'X';
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        SaveSlotManager.deleteSlot(i);
-        renderSlots();
-      });
-      
-      slotEl.appendChild(infoDiv);
-      slotEl.appendChild(deleteBtn);
-      
-      // Click on slot loads the game
-      slotEl.addEventListener('click', () => {
-        const buffer = SaveSlotManager.loadFromSlot(i);
-        if (buffer && world) {
-          SaveManager.loadWorld(world, buffer);
-          currentSlotId = i;
-          console.log(`[UI] Loaded save slot ${i}`);
-          startGame();
-        }
-      });
-    } else {
-      // Slot is empty
-      slotEl.classList.add('empty');
-      
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'slot-info';
-      
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'slot-name';
-      nameDiv.textContent = `Empty Slot ${i + 1}`;
-      
-      const dateDiv = document.createElement('div');
-      dateDiv.className = 'slot-date';
-      dateDiv.textContent = 'Click to start New Game';
-      
-      infoDiv.appendChild(nameDiv);
-      infoDiv.appendChild(dateDiv);
-      
-      slotEl.appendChild(infoDiv);
-      
-      // Click on empty slot starts new game
-      slotEl.addEventListener('click', () => {
-        currentSlotId = i;
-        initNewGame();
-        startGame();
-      });
-    }
-    
-    slotsContainer.appendChild(slotEl);
-  }
-  
-  // Re-append the overlay after slots
-  if (overlay) {
-    slotsContainer.appendChild(overlay);
+  if (uiManager) {
+    uiManager.stopGame();
   }
 }
 
@@ -664,64 +569,5 @@ window.addEventListener('resize', () => {
   ctx.viewport(0, 0, canvas.width, canvas.height);
   camera.setViewport(canvas.width, canvas.height);
 });
-
-// Menu Button Handlers
-btnStart.addEventListener('click', () => {
-  // Hide the start button and other menu buttons
-  btnStart.classList.add('hidden');
-  if (btnSettings.parentElement) {
-    btnSettings.parentElement.classList.add('hidden');
-  }
-  // Show slots with animation and show overlay
-  slotsOverlay.classList.add('active');
-  slotsContainer.classList.add('visible');
-  renderSlots();
-});
-
-// Close slots overlay handler
-btnCloseSlots.addEventListener('click', () => {
-  // Hide slots overlay
-  slotsOverlay.classList.remove('active');
-  // Hide slots container
-  slotsContainer.classList.remove('visible');
-  // Show start button and menu buttons again
-  btnStart.classList.remove('hidden');
-  if (btnSettings.parentElement) {
-    btnSettings.parentElement.classList.remove('hidden');
-  }
-});
-
-// Settings and Credits button handlers (placeholder for now)
-btnSettings.addEventListener('click', () => {
-  console.log('[UI] Settings button clicked');
-  // Add settings modal/functionality here
-});
-
-btnCredits.addEventListener('click', () => {
-  console.log('[UI] Credits button clicked');
-  // Add credits modal/functionality here
-});
-
-// Link box handlers (placeholder - replace # with actual URLs)
-link1.addEventListener('click', (e) => {
-  e.preventDefault();
-  console.log('[UI] Link 1 clicked');
-  // Replace with: window.open('YOUR_URL_1', '_blank');
-});
-
-link2.addEventListener('click', (e) => {
-  e.preventDefault();
-  console.log('[UI] Link 2 clicked');
-  // Replace with: window.open('YOUR_URL_2', '_blank');
-});
-
-link3.addEventListener('click', (e) => {
-  e.preventDefault();
-  console.log('[UI] Link 3 clicked');
-  // Replace with: window.open('YOUR_URL_3', '_blank');
-});
-
-// Initial render of slots on page load (hidden by default)
-slotsContainer.classList.remove('visible');
 
 initEngine().catch(console.error);

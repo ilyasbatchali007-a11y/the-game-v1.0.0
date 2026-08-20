@@ -1,4 +1,4 @@
-import { SaveSlotManager } from './SaveSlotManager';
+import { SaveSlotManager } from '../serialization/SaveSlotManager';
 import { World } from '../ecs/World';
 import { SaveManager } from '../serialization/SaveManager';
 

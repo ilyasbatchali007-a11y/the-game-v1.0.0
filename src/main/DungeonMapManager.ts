@@ -1,5 +1,6 @@
 import { MapWindow3DRenderer } from '../engine/MapWindow3DRenderer';
-import { generateDungeon, saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from '../engine/MapPersistence';
+import { generateDungeon } from '../engine/DungeonGenerator';
+import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from '../engine/MapPersistence';
 import { OBJLoader } from '../engine/OBJLoader';
 
 export interface DungeonMapState {
@@ -232,15 +233,7 @@ function handleFloorSwitch(
 ): void {
   if (cooldown) return;
 
-  const { getFloorCount, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } = require('../config/MapData');
-
-  if (e.key === 't' || e.key === 'T') {
-    // Handled in main file due to imports
-  }
-
-  if (e.key === 'g' || e.key === 'G') {
-    // Handled in main file due to imports
-  }
+  // Floor switching logic is handled in main.ts due to import dependencies
 }
 
 function handlePortalInteraction(

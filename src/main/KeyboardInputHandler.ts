@@ -1,10 +1,10 @@
 import { InputStateTracker } from './InputStateTracker';
 import { FloorSwitchManager } from './FloorSwitchManager';
 import { DungeonMapVisualizer } from './DungeonMapVisualizer';
-import { MapRenderer } from '../render/MapRenderer';
-import { GLInstancedRenderer } from '../render/GLInstancedRenderer';
-import { World } from '../ecs/World';
-import { Camera } from '../engine/Camera';
+import { MapRenderer } from '../../render/MapRenderer';
+import { GLInstancedRenderer } from '../../render/GLInstancedRenderer';
+import { World } from '../../ecs/World';
+import { Camera } from '../../engine/Camera';
 
 /**
  * Handles all keyboard input for game controls, floor switching, and debug features.
@@ -19,11 +19,12 @@ export class KeyboardInputHandler {
     private camera: Camera | null,
     private renderer: GLInstancedRenderer | null,
     private dungeonVisualizer: DungeonMapVisualizer | null,
+    floorSwitchManager: FloorSwitchManager,
     private onQuickSave: (slotId: number) => void,
     private currentSlotId: number | null
   ) {
     this.inputTracker = new InputStateTracker();
-    this.floorSwitchManager = new FloorSwitchManager();
+    this.floorSwitchManager = floorSwitchManager;
   }
 
   /**
@@ -67,7 +68,7 @@ export class KeyboardInputHandler {
       return;
     }
 
-    if (!gameRunning) return;
+    if (!isGameRunning()) return;
 
     // Floor switching with T (previous) and G (next)
     if ((e.key === 't' || e.key === 'T') && this.world && this.camera) {

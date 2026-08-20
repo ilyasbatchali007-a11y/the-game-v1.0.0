@@ -3,14 +3,13 @@
  * Separated from main.ts to isolate game loop responsibilities
  */
 
-import { World } from '../ecs/World';
-import { MovementSystem } from '../systems/MovementSystem';
-import { CollisionSystem } from '../systems/CollisionSystem';
-import { GLInstancedRenderer } from '../render/GLInstancedRenderer';
-import { Camera } from '../engine/Camera';
-import { MapRenderer } from '../render/MapRenderer';
-import { FIXED_DT, PLAYER_ID } from '../config/Constants';
-import { WebGLTexture } from 'webgl2';
+import { World } from '../../ecs/World';
+import { MovementSystem } from '../../systems/MovementSystem';
+import { CollisionSystem } from '../../systems/CollisionSystem';
+import { GLInstancedRenderer } from '../../render/GLInstancedRenderer';
+import { Camera } from '../../engine/Camera';
+import { MapRenderer } from '../../render/MapRenderer';
+import { FIXED_DT, PLAYER_ID } from '../../config/Constants';
 
 export interface GameLoopDependencies {
   world: World;
@@ -21,7 +20,7 @@ export interface GameLoopDependencies {
   mapRenderer: MapRenderer;
   canvas: HTMLCanvasElement;
   ctx: WebGL2RenderingContext;
-  texture: WebGLTexture;
+  texture: WebGLTexture | null;
 }
 
 export class GameLoopOrchestrator {

@@ -1,4 +1,4 @@
-import { TILE_SIZE, PLAYER_ID } from '../config/Constants';
+import { CELL_SIZE, PLAYER_ID } from '../config/Constants';
 import { getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from '../config/MapData';
 import { getFloorCount } from '../config/FloorMap';
 
@@ -86,8 +86,8 @@ export class FloorSwitchManager {
   ): void {
     if (this.cooldown || !world) return;
 
-    const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
-    const playerRow = Math.floor(world.y[PLAYER_ID] / TILE_SIZE);
+    const playerCol = Math.floor(world.x[PLAYER_ID] / CELL_SIZE);
+    const playerRow = Math.floor(world.y[PLAYER_ID] / CELL_SIZE);
 
     // Check surrounding tiles (including current tile) for portal
     for (let dRow = -1; dRow <= 1; dRow++) {

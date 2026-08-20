@@ -3,8 +3,8 @@
  * Separated from main.ts to isolate UI responsibilities
  */
 
-import { SaveSlotManager } from '../serialization/SaveSlotManager';
-import { SaveManager } from '../serialization/SaveManager';
+import { SaveSlotManager } from '../../serialization/SaveSlotManager';
+import { SaveManager } from '../../serialization/SaveManager';
 import { World } from '../ecs/World';
 
 const NUM_SLOTS = 3;

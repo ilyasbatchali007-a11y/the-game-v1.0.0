@@ -15,6 +15,7 @@ import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
+import { initializeGameEngine, type EngineContext } from './main/GameEngineInitializer';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -58,89 +59,19 @@ const NUM_SLOTS = 3;
 let currentSlotId: number | null = null; // The slot used for the current session
 
 async function initEngine() {
-  // 1. Setup Canvas & WebGL2 Context
-  canvas = document.getElementById('canvas') as HTMLCanvasElement;
-if (!canvas) throw new Error('Canvas not found');
-
-// Set canvas to window size for proper viewport
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-  // Create a guaranteed non-null reference for TypeScript closures
-  const gl = canvas.getContext('webgl2');
-  if (!gl) throw new Error('WebGL 2 is not supported.');
-
-  // Create a guaranteed non-null reference for TypeScript closures
-  ctx = gl as WebGL2RenderingContext;
-
-  ctx.viewport(0, 0, canvas.width, canvas.height);
-  ctx.clearColor(0.1, 0.1, 0.12, 1.0);
-
-  // 2. Initialize Core Systems & World
-  world = new World(); 
-  movementSystem = new MovementSystem();
-  // CollisionSystem does not require constructor parameters
-  collisionSystem = new CollisionSystem();
-  renderer = new GLInstancedRenderer(ctx, MAX_ENTITIES);
+  // Use the extracted GameEngineInitializer module
+  const context = await initializeGameEngine();
   
-  // Generate test map BEFORE spawning player
-  generateTestMap();
-  console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
+  // Extract context values into module-level variables for backward compatibility
+  canvas = context.canvas;
+  ctx = context.ctx;
+  world = context.world;
+  movementSystem = context.movementSystem;
+  collisionSystem = context.collisionSystem;
+  renderer = context.renderer;
+  camera = context.camera;
+  texture = context.texture;
   
-  // Update renderer's map data texture after map generation
-  renderer.updateMapDataTexture();
-  
-  // Spawn player entity at center of map (avoiding border walls)
-  const playerX = getCurrentWorldWidth() / 2;
-  const playerY = getCurrentWorldHeight() / 2;
-  world.active[PLAYER_ID] = 1;
-  world.x[PLAYER_ID] = playerX;
-  world.y[PLAYER_ID] = playerY;
-  world.w[PLAYER_ID] = 32;
-  world.h[PLAYER_ID] = 32;
-  world.speed[PLAYER_ID] = 200;
-  world.vx[PLAYER_ID] = 0;
-  world.vy[PLAYER_ID] = 0;
-  world.rotation[PLAYER_ID] = 0;
-  
-  // Update sparse set for renderer
-  world.set.count = 1;
-  world.set.dense[0] = PLAYER_ID;
-  
-  // Set up isometric projection (rotate 45 degrees, scale Y by 0.5)
-  renderer.setIsometricView(Math.PI / 4, 0.5);
-  
-  // Create camera following the player with isometric view and offset
-  // Offset positions camera to show more of the map above the player
-  camera = createPlayerCamera(
-    { x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] },
-    canvas.width,
-    canvas.height,
-    1.0, // Immediate camera follow
-    -320,   // offsetX (keep original camera offset)
-    -100    // offsetY (keep original camera offset)
-  );
-  
-  // Initialize camera position to player position so map is visible on first frame
-  camera.snapToTarget();
-
-  // 3. Load Atlas Texture (not used for floor - chessboard pattern is rendered in shader)
-  // Texture is still loaded for entity rendering compatibility
-  try {
-    texture = await AssetLoader.loadTexture(
-      ctx,
-      'src/atlas pictures/atlas floor.jpg'
-    );
-    console.log('[Engine] Atlas texture loaded successfully');
-  } catch (error) {
-    console.warn('[Engine] Failed to load atlas texture, using placeholder', error);
-    // Fallback to a simple placeholder texture
-    texture = await AssetLoader.loadTexture(
-      ctx,
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-    );
-  }
-
   // Start the game loop
   startGameLoop();
 }

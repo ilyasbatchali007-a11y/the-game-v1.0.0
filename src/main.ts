@@ -47,6 +47,7 @@ let currentSlotId: number | null = null; // The slot used for the current sessio
 let canvas: HTMLCanvasElement;
 let ctx: WebGL2RenderingContext;
 let renderer: GLInstancedRenderer;
+let texture: WebGLTexture;
 let world: World;
 let movementSystem: MovementSystem;
 let collisionSystem: CollisionSystem;

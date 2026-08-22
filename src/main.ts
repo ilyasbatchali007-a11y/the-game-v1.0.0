@@ -51,6 +51,8 @@ let world: World;
 let movementSystem: MovementSystem;
 let collisionSystem: CollisionSystem;
 let camera: Camera;
+let gameRunning = false;
+let inputState: Record<string, boolean> = {};
 
 async function initEngine() {
   // 1. Setup Canvas & WebGL2 Context
@@ -281,7 +283,6 @@ function initNewGame() {
   }
 }
 
-let inputState: Record<string, boolean> = {};
 let accumulator = 0;
 let lastTime = performance.now();
 

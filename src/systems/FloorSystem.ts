@@ -404,6 +404,13 @@ export const FloorSystem = new class {
     }
 
     /**
+     * Get the current floor data object
+     */
+    public getCurrentFloorData(): FloorSystemState {
+        return this.state;
+    }
+
+    /**
      * Check if using atlas
      */
     public isUsingAtlas(): boolean {

@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { FloorSystem, generateTestMap, getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapCols, getCurrentMapRows, getFloorCount } from './systems/FloorSystem';
+import { FloorSystem, generateTestMap, getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapCols, getCurrentMapRows, getFloorCount, getCurrentFloorData } from './systems/FloorSystem';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -83,7 +83,7 @@ canvas.height = window.innerHeight;
   
   // Generate test map BEFORE spawning player
   generateTestMap();
-  console.log('[Engine] Map generated, size:', FloorSystem.getCurrentFloorData().tileData.length, 'tiles');
+  console.log('[Engine] Map generated, size:', getCurrentFloorData().tileData.length, 'tiles');
   
   // Update renderer's map data texture after map generation
   renderer.updateMapDataTexture();
@@ -661,7 +661,7 @@ window.addEventListener('keydown', (e) => {
         if (checkCol >= 0 && checkCol < getCurrentMapCols() && 
             checkRow >= 0 && checkRow < getCurrentMapRows()) {
           const idx = (checkRow * getCurrentMapCols() + checkCol) * 2;
-          const tileId = FloorSystem.getCurrentFloorData().tileData[idx];
+          const tileId = getCurrentFloorData().tileData[idx];
           
           // Check if this is a portal tile
           if (tileId === 1000 || tileId === 1001) {

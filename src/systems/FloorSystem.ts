@@ -447,4 +447,5 @@ export const getCurrentMapRows = () => FloorSystem.getMapRows();
 export const getFloorCount = () => FloorSystem.getFloorCount();
 export const switchFloor = (floorId: number) => FloorSystem.switchFloor(floorId);
 export const getCurrentFloorId = () => FloorSystem.getCurrentFloorId();
+export const getCurrentFloorData = () => FloorSystem.getCurrentFloorData();
 export const getFloorConfig = (floorId: number) => FLOOR_DIMENSIONS[floorId];

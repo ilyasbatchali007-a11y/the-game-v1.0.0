@@ -2,10 +2,9 @@
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
 // Supports 20 independent floors with customized sizes that can be switched at runtime
-// Uses green chessboard pattern texture for all floors
+// Now uses consolidated FloorSystem for all floor data
 
-import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap } from '../config/MapData';
+import { FloorSystem } from '../systems/FloorSystem';
 
 export interface IFloorRenderData {
   x: number;
@@ -21,10 +20,10 @@ export interface IFloorRenderData {
 
 export class MapRenderer {
   private currentFloorId: number = 0;
-  private floorConfig: FloorConfig;
 
-  constructor(floorConfig: FloorConfig = ARENA_FLOOR) {
-    this.floorConfig = floorConfig;
+  constructor() {
+    // Initialize FloorSystem with floor 0 by default
+    FloorSystem.init(0);
   }
 
   /**
@@ -33,25 +32,12 @@ export class MapRenderer {
    * @returns true if successful, false if invalid floor ID
    */
   public switchFloor(floorId: number): boolean {
-    if (floorId < 0 || floorId >= getFloorCount()) {
-      console.warn(`Invalid floor ID: ${floorId}. Must be between 0 and ${getFloorCount() - 1}`);
-      return false;
+    const success = FloorSystem.switchFloor(floorId);
+    if (success) {
+      this.currentFloorId = floorId;
+      console.log(`[MapRenderer] Switched to Floor ${floorId}`);
     }
-    
-    this.currentFloorId = floorId;
-    this.floorConfig = getFloorById(floorId);
-    
-    // Regenerate the map data with new dimensions and texture settings
-    const cols = Math.floor(this.floorConfig.width / 64);
-    const rows = Math.floor(this.floorConfig.depth / 64);
-    generateTestMap({
-      cols,
-      rows,
-      useAtlas: this.floorConfig.useAtlas
-    });
-    
-    console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
-    return true;
+    return success;
   }
 
   /**
@@ -64,18 +50,8 @@ export class MapRenderer {
   /**
    * Get all available floor configurations
    */
-  public getAvailableFloors(): FloorConfig[] {
-    return FLOORS;
-  }
-
-  /**
-   * Get configuration for a specific floor
-   */
-  public getFloorConfig(floorId: number): FloorConfig | null {
-    if (floorId < 0 || floorId >= getFloorCount()) {
-      return null;
-    }
-    return getFloorById(floorId);
+  public getAvailableFloors(): number {
+    return FloorSystem.getFloorCount();
   }
 
   /**
@@ -88,18 +64,21 @@ export class MapRenderer {
     viewportWidth: number,
     viewportHeight: number
   ): IFloorRenderData {
+    const dims = FloorSystem.getPixelDimensions();
+    const useAtlas = FloorSystem.isUsingAtlas();
+    
     // Return the entire world as one seamless floor rectangle
     // Camera offset is applied by the renderer/camera system
     return {
       x: 0,
       y: 0,
-      width: this.floorConfig.width,
-      height: this.floorConfig.depth,
-      texturePath: this.floorConfig.texturePath,
-      repeatX: this.floorConfig.repeatX,
-      repeatZ: this.floorConfig.repeatZ,
+      width: dims.width,
+      height: dims.height,
+      texturePath: useAtlas ? '/textures/atlas.png' : '',
+      repeatX: dims.width / 64,
+      repeatZ: dims.height / 64,
       floorId: this.currentFloorId,
-      useAtlas: this.floorConfig.useAtlas
+      useAtlas
     };
   }
 

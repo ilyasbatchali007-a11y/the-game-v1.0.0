@@ -9,8 +9,7 @@ type World = {
   h: number[];
 };
 
-import { getCurrentWorldWidth, getCurrentWorldHeight } from '../config/MapData';
-import { isTileBlocking, TILE_SIZE } from '../config/MapData';
+import { FloorSystem, TILE_SIZE } from '../systems/FloorSystem';
 
 export class CollisionSystem {
   public update(world: World, dt: number, playerId: number = 0): void {
@@ -47,9 +46,9 @@ export class CollisionSystem {
     let nextX = x + vx * dt;
     let nextY = y + vy * dt;
 
-    // Get current world dimensions dynamically
-    const worldWidth = getCurrentWorldWidth();
-    const worldHeight = getCurrentWorldHeight();
+    // Get current world dimensions dynamically from FloorSystem
+    const worldWidth = FloorSystem.getWorldWidth();
+    const worldHeight = FloorSystem.getWorldHeight();
 
     // Clamp to world bounds (dynamic)
     nextX = Math.max(0, Math.min(nextX, worldWidth - width));
@@ -69,9 +68,7 @@ export class CollisionSystem {
 
     let hasCollision = false;
     for (const corner of corners) {
-      const col = Math.floor(corner.x / TILE_SIZE);
-      const row = Math.floor(corner.y / TILE_SIZE);
-      if (isTileBlocking(col, row)) {
+      if (FloorSystem.isPositionBlocking(corner.x, corner.y)) {
         hasCollision = true;
         break;
       }
@@ -88,9 +85,7 @@ export class CollisionSystem {
         { x: nextX + width - margin, y: y + height - margin }
       ];
       for (const corner of xCorners) {
-        const col = Math.floor(corner.x / TILE_SIZE);
-        const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row)) {
+        if (FloorSystem.isPositionBlocking(corner.x, corner.y)) {
           canMoveX = false;
           break;
         }
@@ -109,9 +104,7 @@ export class CollisionSystem {
         { x: x + width - margin, y: nextY + height - margin }
       ];
       for (const corner of yCorners) {
-        const col = Math.floor(corner.x / TILE_SIZE);
-        const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row)) {
+        if (FloorSystem.isPositionBlocking(corner.x, corner.y)) {
           canMoveY = false;
           break;
         }

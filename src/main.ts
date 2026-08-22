@@ -43,6 +43,15 @@ const link3 = document.getElementById('link-3') as HTMLAnchorElement;
 const NUM_SLOTS = 3;
 let currentSlotId: number | null = null; // The slot used for the current session
 
+// Global engine state variables
+let canvas: HTMLCanvasElement;
+let ctx: WebGL2RenderingContext;
+let renderer: GLInstancedRenderer;
+let world: World;
+let movementSystem: MovementSystem;
+let collisionSystem: CollisionSystem;
+let camera: Camera;
+
 async function initEngine() {
   // 1. Setup Canvas & WebGL2 Context
   canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -71,7 +80,7 @@ canvas.height = window.innerHeight;
   
   // Generate test map BEFORE spawning player
   generateTestMap();
-  console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
+  console.log('[Engine] Map generated, size:', FloorSystem.getCurrentFloorData().tileData.length, 'tiles');
   
   // Update renderer's map data texture after map generation
   renderer.updateMapDataTexture();
@@ -650,7 +659,7 @@ window.addEventListener('keydown', (e) => {
         if (checkCol >= 0 && checkCol < getCurrentMapCols() && 
             checkRow >= 0 && checkRow < getCurrentMapRows()) {
           const idx = (checkRow * getCurrentMapCols() + checkCol) * 2;
-          const tileId = MAP_TILE_DATA[idx];
+          const tileId = FloorSystem.getCurrentFloorData().tileData[idx];
           
           // Check if this is a portal tile
           if (tileId === 1000 || tileId === 1001) {

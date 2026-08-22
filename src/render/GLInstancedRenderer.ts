@@ -1,7 +1,6 @@
 import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
-import { FloorConfig } from '../config/FloorMap';
-import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { FloorSystem, getCurrentMapCols, getCurrentMapRows, getFloorConfig } from '../systems/FloorSystem';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -538,6 +537,13 @@ export class GLInstancedRenderer {
   private createMapDataTexture(): void {
     const gl = this.gl;
     
+    // Get current floor's map data
+    const mapData = FloorSystem.getMapData();
+    if (!mapData) {
+      console.error('Failed to get map data from FloorSystem');
+      return;
+    }
+    
     // Create a texture with dimensions matching the map (32x32)
     const texture = gl.createTexture();
     if (!texture) {
@@ -545,7 +551,7 @@ export class GLInstancedRenderer {
       return;
     }
     
-    // Convert MAP_TILE_DATA to RGBA format for texture
+    // Convert mapData to RGBA format for texture
     // R channel: tileId / 1024 (normalized)
     // G channel: isStatic (0 or 1)
     // B and A channels: unused (set to 0)
@@ -557,8 +563,8 @@ export class GLInstancedRenderer {
       const srcIdx = i * 2;
       const dstIdx = i * 4;
       
-      const tileId = MAP_TILE_DATA[srcIdx];
-      const isStatic = MAP_TILE_DATA[srcIdx + 1];
+      const tileId = mapData[srcIdx];
+      const isStatic = mapData[srcIdx + 1];
       
       // Store tileId across R and B channels for precision (R = low byte, B = high byte)
       // This allows tile IDs up to 65535 (256 * 256)

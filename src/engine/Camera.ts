@@ -9,7 +9,7 @@
 
 import { lerp, clamp } from '../utils/MathUtils';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config/Constants';
-import { TILE_SIZE } from '../config/MapData';
+import { TILE_SIZE } from '../systems/FloorSystem';
 
 export interface ICameraTarget {
   x: number;      // World X position (pixels)

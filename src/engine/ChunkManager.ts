@@ -5,7 +5,7 @@
 // kept resident on GPU buffers to avoid re-uploading entire tile buffers every frame.
 // Uses gl.bufferSubData for partial updates and frustum culling at chunk level.
 
-import { TILE_SIZE, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { TILE_SIZE, getCurrentMapCols, getCurrentMapRows } from '../systems/FloorSystem';
 
 export const CHUNK_SIZE = 32;
 export const CHUNK_WIDTH = CHUNK_SIZE;

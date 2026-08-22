@@ -386,6 +386,17 @@ export const FloorSystem = new class {
     }
 
     /**
+     * Get current map dimensions in tiles
+     */
+    public getMapCols(): number {
+        return this.state.width;
+    }
+
+    public getMapRows(): number {
+        return this.state.height;
+    }
+
+    /**
      * Get current floor ID
      */
     public getCurrentFloorId(): number {
@@ -419,3 +430,13 @@ export const FloorSystem = new class {
         return true;
     }
 };
+
+// Export helper functions for backwards compatibility
+export const generateTestMap = () => FloorSystem.init(0);
+export const getCurrentWorldWidth = () => FloorSystem.getWorldWidth();
+export const getCurrentWorldHeight = () => FloorSystem.getWorldHeight();
+export const getCurrentMapCols = () => FloorSystem.getMapCols();
+export const getCurrentMapRows = () => FloorSystem.getMapRows();
+export const getFloorCount = () => FloorSystem.getFloorCount();
+export const switchFloor = (floorId: number) => FloorSystem.switchFloor(floorId);
+export const getCurrentFloorId = () => FloorSystem.getCurrentFloorId();

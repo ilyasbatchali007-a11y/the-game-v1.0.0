@@ -1,1 +1,3 @@
-Nothing should be ignored based on the provided file changes. The changes only involve TypeScript source files (.ts) which are not build artifacts, dependencies, or temporary files.
+```ts
+
+```

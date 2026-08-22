@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
+import { FloorSystem, generateTestMap, getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapCols, getCurrentMapRows, getFloorCount } from './systems/FloorSystem';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -11,7 +11,6 @@ import { AssetLoader } from './engine/AssetLoader';
 import { SaveManager } from './serialization/SaveManager';
 import { SaveSlotManager } from './serialization/SaveSlotManager';
 import { Camera, createPlayerCamera } from './engine/Camera';
-import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
@@ -30,19 +29,6 @@ const mapRenderer = new MapRenderer();
 (window as any).getAvailableFloors = () => {
   return mapRenderer.getAvailableFloors();
 };
-
-// Game State
-let gameRunning = false;
-let world: World | null = null;
-let renderer: GLInstancedRenderer | null = null;
-let camera: Camera | null = null;
-let texture: WebGLTexture | null = null;
-let canvas: HTMLCanvasElement | null = null;
-let ctx: WebGL2RenderingContext | null = null;
-let movementSystem: MovementSystem | null = null;
-let collisionSystem: CollisionSystem | null = null;
-
-// UI Elements
 const startMenu = document.getElementById('start-menu') as HTMLElement;
 const slotsContainer = document.getElementById('slots-container') as HTMLElement;
 const slotsOverlay = document.getElementById('slots-overlay') as HTMLElement;

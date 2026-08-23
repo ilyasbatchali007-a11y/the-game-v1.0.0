@@ -42,17 +42,19 @@ export interface TileData {
 }
 
 // Tile IDs: 0 = floor (passable), 1 = decoration, 2 = wall (blocking)
-// Portal tiles: 1000 = next floor portal, 1001 = previous floor portal
+// Portal tiles: Old system used 1000/1001 for next/previous floor
+// New system uses directional IDs: 2001=UP, 2002=DOWN, 2003=LEFT, 2004=RIGHT, 2005=FRONT, 2006=BACK
 export let MAP_DATA = new Uint8Array(DEFAULT_MAP_COLS * DEFAULT_MAP_ROWS);
 
 // New: Map data with atlas tile information
 export let MAP_TILE_DATA = new Float32Array(DEFAULT_MAP_COLS * DEFAULT_MAP_ROWS * 2); 
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
 
-export function generateTestMap(floorConfig?: { cols: number; rows: number; useAtlas: boolean }): void {
+export function generateTestMap(floorConfig?: { cols: number; rows: number; useAtlas: boolean; floorId?: number }): void {
   const cols = floorConfig?.cols || DEFAULT_MAP_COLS;
   const rows = floorConfig?.rows || DEFAULT_MAP_ROWS;
   const useAtlas = floorConfig?.useAtlas ?? true;
+  const floorId = floorConfig?.floorId ?? 0;
   
   // Update current map dimensions
   setMapDimensions(cols, rows);
@@ -78,31 +80,12 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
       }
     }
     
-    // Add portal tiles near spawn point (center of map)
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
-    
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
+    // Spawn portals based on List 3 placement data for this floor
+    spawnPortalsForFloor(floorId, cols, rows);
     
   } else {
     // Floors 1-19 - Green chessboard pattern (all tiles are passable floor)
-    // Add portal tiles on ALL floors, not just Floor 0
+    // Spawn portals based on List 3 placement data for this floor
     MAP_DATA.fill(0);
     MAP_TILE_DATA.fill(0);
     
@@ -117,26 +100,72 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
       }
     }
     
-    // Add portal tiles near spawn point (center of map) on ALL floors
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
+    // Spawn portals based on List 3 placement data for this floor
+    spawnPortalsForFloor(floorId, cols, rows);
+  }
+}
+
+/**
+ * Spawn portal tiles on a floor based on List 3 placement data and List 2 adjacency
+ * @param floorId - The floor ID to spawn portals for
+ * @param cols - Number of columns in the map
+ * @param rows - Number of rows in the map
+ */
+function spawnPortalsForFloor(floorId: number, cols: number, rows: number): void {
+  // Access PortalManager from global scope (set when module loads)
+  const PortalManager = (globalThis as any).__PortalManager;
+  
+  if (!PortalManager) {
+    console.warn('[PortalManager] Not yet loaded, skipping portal spawn for floor', floorId);
+    return;
+  }
+  
+  const placements = PortalManager.getAllPlacements(floorId);
+  
+  for (const { direction, placement } of placements) {
+    // Check if this direction has a valid connection in List 2
+    if (!PortalManager.hasPortal(floorId, direction)) {
+      continue; // Skip if no actual connection exists
     }
     
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
+    const tileId = PortalManager.getTileIdForDirection(direction);
+    
+    if (direction === 'up' || direction === 'down') {
+      // Single tile at fixed coordinates
+      const x = placement.x!;
+      const z = placement.z!;
+      if (x >= 0 && x < cols && z >= 0 && z < rows) {
+        const idx = (z * cols + x) * 2;
+        MAP_TILE_DATA[idx] = tileId;
+        MAP_TILE_DATA[idx + 1] = 1; // isStatic = true
+      }
+    } else {
+      // Wall-line portals: left/right span Z axis, front/back span X axis
+      const buffer = placement.buffer || 2;
+      
+      if (direction === 'left' || direction === 'right') {
+        // Left/Right walls: line along Z axis at edge of map
+        const col = direction === 'left' ? buffer : cols - 1 - buffer;
+        const startZ = placement.startZ || buffer;
+        const endZ = placement.endZ || rows - 1 - buffer;
+        
+        for (let z = startZ; z <= endZ; z++) {
+          const idx = (z * cols + col) * 2;
+          MAP_TILE_DATA[idx] = tileId;
+          MAP_TILE_DATA[idx + 1] = 1; // isStatic = true
+        }
+      } else if (direction === 'front' || direction === 'back') {
+        // Front/Back walls: line along X axis at edge of map
+        const row = direction === 'front' ? buffer : rows - 1 - buffer;
+        const startX = placement.startX || buffer;
+        const endX = placement.endX || cols - 1 - buffer;
+        
+        for (let x = startX; x <= endX; x++) {
+          const idx = (row * cols + x) * 2;
+          MAP_TILE_DATA[idx] = tileId;
+          MAP_TILE_DATA[idx + 1] = 1; // isStatic = true
+        }
+      }
     }
   }
 }

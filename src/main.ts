@@ -1,6 +1,6 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
 // Import PortalManager FIRST to ensure it initialized before map generation
-import { PortalManager, DIRECTION_NAMES } from './config/PortalManager';
+import { PortalManager, DIRECTION_NAMES, PORTAL_TILE_IDS } from './config/PortalManager';
 import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
@@ -20,9 +20,6 @@ import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId,
 
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
-
-// Import PortalManager at top level for immediate availability
-import { PortalManager, DIRECTION_NAMES, PORTAL_TILE_IDS } from './config/PortalManager';
 
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {

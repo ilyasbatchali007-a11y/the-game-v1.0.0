@@ -116,19 +116,24 @@ function spawnPortalsForFloor(floorId: number, cols: number, rows: number): void
   const PortalManager = (globalThis as any).__PortalManager;
   
   if (!PortalManager) {
-    console.warn('[PortalManager] Not yet loaded, skipping portal spawn for floor', floorId);
+    console.error('[PortalManager] CRITICAL: Not loaded at all! Check import order.');
     return;
   }
   
+  console.log('[PortalManager] Spawning portals for floor', floorId, 'with', cols, 'x', rows, 'tiles');
+  
   const placements = PortalManager.getAllPlacements(floorId);
+  console.log('[PortalManager] Found', placements.length, 'portal placements for floor', floorId);
   
   for (const { direction, placement } of placements) {
     // Check if this direction has a valid connection in List 2
     if (!PortalManager.hasPortal(floorId, direction)) {
+      console.log('[PortalManager] Skipping', direction, '- no adjacency connection');
       continue; // Skip if no actual connection exists
     }
     
     const tileId = PortalManager.getTileIdForDirection(direction);
+    console.log('[PortalManager] Placing', direction, 'portal with tile ID', tileId, 'coords:', placement);
     
     if (direction === 'up' || direction === 'down') {
       // Single tile at fixed coordinates

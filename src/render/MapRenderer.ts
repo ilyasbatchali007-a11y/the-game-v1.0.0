@@ -1,11 +1,13 @@
 // SRC/render/MapRenderer.ts
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
-// Supports 20 independent floors with customized sizes that can be switched at runtime
+// Supports 100 independent floors with customized sizes that can be switched at runtime
 // Uses green chessboard pattern texture for all floors
+// Integrated with PortalSystem for 6-directional portal teleportation
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
 import { generateTestMap } from '../config/MapData';
+import { portalSystem, type PortalDirection } from '../systems/PortalSystem';
 
 export interface IFloorRenderData {
   x: number;
@@ -28,8 +30,8 @@ export class MapRenderer {
   }
 
   /**
-   * Switch to a different floor by ID (0-19)
-   * @param floorId - The floor ID to switch to (0-19)
+   * Switch to a different floor by ID (0-99)
+   * @param floorId - The floor ID to switch to (0-99)
    * @returns true if successful, false if invalid floor ID
    */
   public switchFloor(floorId: number): boolean {
@@ -44,11 +46,18 @@ export class MapRenderer {
     // Regenerate the map data with new dimensions and texture settings
     const cols = Math.floor(this.floorConfig.width / 64);
     const rows = Math.floor(this.floorConfig.depth / 64);
+    
+    // Generate portal tiles for this floor using PortalSystem
+    let portalTiles: Array<{ col: number; row: number; tileId: number }> | undefined;
+    if (portalSystem && portalSystem.isInitialized()) {
+      portalTiles = portalSystem.generatePortalTiles(floorId, cols, rows);
+    }
+    
     generateTestMap({
       cols,
       rows,
       useAtlas: this.floorConfig.useAtlas
-    });
+    }, portalTiles);
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;

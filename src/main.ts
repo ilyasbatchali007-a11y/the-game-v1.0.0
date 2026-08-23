@@ -15,6 +15,7 @@ import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
+import { portalSystem, PORTAL_TILE_IDS, TILE_ID_TO_DIRECTION, type PortalDirection } from './systems/PortalSystem';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -30,6 +31,19 @@ const mapRenderer = new MapRenderer();
 (window as any).getAvailableFloors = () => {
   return mapRenderer.getAvailableFloors();
 };
+
+// Initialize PortalSystem on startup
+async function initializePortalSystem(): Promise<void> {
+  try {
+    await portalSystem.initialize();
+    console.log('[Main] PortalSystem initialized successfully');
+  } catch (error) {
+    console.error('[Main] Failed to initialize PortalSystem:', error);
+  }
+}
+
+// Start initialization
+initializePortalSystem();
 
 // Game State
 let gameRunning = false;
@@ -648,7 +662,7 @@ window.addEventListener('keydown', (e) => {
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   
-  // Portal interaction with E key
+  // Portal interaction with E key (6-directional teleportation system)
   if ((e.key === 'e' || e.key === 'E') && !floorSwitchCooldown && world) {
     // Get player's current tile position
     const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
@@ -656,6 +670,8 @@ window.addEventListener('keydown', (e) => {
     
     // Check surrounding tiles (including current tile) for portal
     let foundPortal = false;
+    let portalTileId = -1;
+    
     for (let dRow = -1; dRow <= 1 && !foundPortal; dRow++) {
       for (let dCol = -1; dCol <= 1 && !foundPortal; dCol++) {
         const checkCol = playerCol + dCol;
@@ -666,40 +682,44 @@ window.addEventListener('keydown', (e) => {
           const idx = (checkRow * getCurrentMapCols() + checkCol) * 2;
           const tileId = MAP_TILE_DATA[idx];
           
-          // Check if this is a portal tile
-          if (tileId === 1000 || tileId === 1001) {
+          // Check if this is a portal tile (2000-2005)
+          if (portalSystem.isPortalTile(tileId)) {
             floorSwitchCooldown = true;
             foundPortal = true;
+            portalTileId = tileId;
             
             const currentFloor = mapRenderer.getCurrentFloorId();
-            let newFloor: number;
+            const direction = TILE_ID_TO_DIRECTION[tileId] as PortalDirection | undefined;
             
-            if (tileId === 1000) {
-              // Next floor portal (blue)
-              newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
-            } else {
-              // Previous floor portal (red)
-              newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
+            if (!direction) {
+              console.warn(`[Portal] Unknown portal tile ID: ${tileId}`);
+              floorSwitchCooldown = false;
+              return;
             }
             
-            mapRenderer.switchFloor(newFloor);
+            // Use PortalSystem to get destination floor from adjacency data
+            const newFloor = portalSystem.teleport(currentFloor, direction);
             
-            // Update renderer's map data texture after floor switch
-            if (renderer) {
-              renderer.updateMapDataTexture();
+            if (newFloor !== null) {
+              mapRenderer.switchFloor(newFloor);
+              
+              // Update renderer's map data texture after floor switch
+              if (renderer) {
+                renderer.updateMapDataTexture();
+              }
+              
+              // Teleport player to center of new floor and update camera
+              world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
+              world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
+              world.vx[PLAYER_ID] = 0;
+              world.vy[PLAYER_ID] = 0;
+              if (camera) {
+                camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+                camera.snapToTarget();
+              }
+              
+              console.log(`[Portal] Used ${direction} portal (ID ${tileId}), teleported from floor ${currentFloor} to floor ${newFloor}`);
             }
-            
-            // Teleport player to center of new floor and update camera
-            world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
-            world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
-            world.vx[PLAYER_ID] = 0;
-            world.vy[PLAYER_ID] = 0;
-            if (camera) {
-              camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-              camera.snapToTarget();
-            }
-            
-            console.log(`[Portal] Stepped on ${tileId === 1000 ? 'NEXT' : 'PREVIOUS'} floor portal, switched to floor ${newFloor}`);
             
             setTimeout(() => { floorSwitchCooldown = false; }, 300);
           }

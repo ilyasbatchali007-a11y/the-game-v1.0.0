@@ -18,6 +18,9 @@ import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId,
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
+// Import PortalManager at top level for immediate availability
+import { PortalManager, DIRECTION_NAMES, PORTAL_TILE_IDS } from './config/PortalManager';
+
 // Expose floor switching function globally for UI/debugging
 (window as any).switchFloor = (floorId: number) => {
   return mapRenderer.switchFloor(floorId);
@@ -83,8 +86,8 @@ canvas.height = window.innerHeight;
   collisionSystem = new CollisionSystem();
   renderer = new GLInstancedRenderer(ctx, MAX_ENTITIES);
   
-  // Generate test map BEFORE spawning player
-  generateTestMap();
+  // Generate test map BEFORE spawning player (Floor 0 by default)
+  generateTestMap({ cols: 32, rows: 32, useAtlas: true, floorId: 0 });
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
   // Update renderer's map data texture after map generation

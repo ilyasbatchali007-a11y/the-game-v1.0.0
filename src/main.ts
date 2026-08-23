@@ -1,4 +1,6 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
+// Import PortalManager FIRST to ensure it initialized before map generation
+import { PortalManager, DIRECTION_NAMES } from './config/PortalManager';
 import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
@@ -15,8 +17,7 @@ import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
-// Import PortalManager early to ensure it's initialized before map generation
-import { PortalManager, DIRECTION_NAMES } from './config/PortalManager';
+
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
@@ -85,8 +86,8 @@ canvas.height = window.innerHeight;
   collisionSystem = new CollisionSystem();
   renderer = new GLInstancedRenderer(ctx, MAX_ENTITIES);
   
-  // Generate test map BEFORE spawning player
-  generateTestMap();
+  // Generate test map BEFORE spawning player (Floor 0 with portals)
+  generateTestMap({ cols: 32, rows: 32, useAtlas: true, floorId: 0 });
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
   // Update renderer's map data texture after map generation

@@ -42,14 +42,17 @@ export interface TileData {
 }
 
 // Tile IDs: 0 = floor (passable), 1 = decoration, 2 = wall (blocking)
-// Portal tiles: 1000 = next floor portal, 1001 = previous floor portal
+// Portal tiles: 2000-2005 = directional portals (UP/DOWN/LEFT/RIGHT/FRONT/BACK)
 export let MAP_DATA = new Uint8Array(DEFAULT_MAP_COLS * DEFAULT_MAP_ROWS);
 
 // New: Map data with atlas tile information
 export let MAP_TILE_DATA = new Float32Array(DEFAULT_MAP_COLS * DEFAULT_MAP_ROWS * 2); 
 // Format: [tileId, isStatic, tileId, isStatic, ...] for each tile
 
-export function generateTestMap(floorConfig?: { cols: number; rows: number; useAtlas: boolean }): void {
+// Import PortalManager for placePortalsForFloor function
+import { PortalManager } from './PortalManager';
+
+export async function generateTestMap(floorConfig?: { cols: number; rows: number; useAtlas: boolean }): Promise<void> {
   const cols = floorConfig?.cols || DEFAULT_MAP_COLS;
   const rows = floorConfig?.rows || DEFAULT_MAP_ROWS;
   const useAtlas = floorConfig?.useAtlas ?? true;
@@ -78,31 +81,11 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
       }
     }
     
-    // Add portal tiles near spawn point (center of map)
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
-    
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
+    // Portal placement is now handled by PortalManager based on JSON config
     
   } else {
     // Floors 1-19 - Green chessboard pattern (all tiles are passable floor)
-    // Add portal tiles on ALL floors, not just Floor 0
+    // Portal tiles are placed by PortalManager based on JSON config
     MAP_DATA.fill(0);
     MAP_TILE_DATA.fill(0);
     
@@ -116,27 +99,23 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
         MAP_TILE_DATA[dataIdx + 1] = 1;  // isStatic = true
       }
     }
-    
-    // Add portal tiles near spawn point (center of map) on ALL floors
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
-    
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
+  }
+}
+
+/**
+ * Place portals on the current floor using PortalManager data
+ * Call this after generateTestMap() to add directional portals
+ */
+export function placePortalsForFloor(floorId: number): void {
+  const placements = PortalManager.getPlacementsForFloor(floorId);
+  
+  for (const placement of placements) {
+    const { x, z, tileId } = placement;
+    // Validate bounds
+    if (x >= 0 && x < getCurrentMapCols() && z >= 0 && z < getCurrentMapRows()) {
+      const idx = (z * getCurrentMapCols() + x) * 2;
+      MAP_TILE_DATA[idx] = tileId;
+      MAP_TILE_DATA[idx + 1] = 1; // isStatic = true
     }
   }
 }

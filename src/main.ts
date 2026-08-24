@@ -1,5 +1,5 @@
 // 1. Ensure CELL_SIZE is exported from './config/Constants'
-import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from './config/MapData';
+import { generateTestMap, MAP_DATA, getCurrentWorldWidth, getCurrentWorldHeight, TILE_SIZE, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA, placePortalsForFloor } from './config/MapData';
 import { MapRenderer } from './render/MapRenderer';
 import { MAX_ENTITIES, FIXED_DT, WORLD_WIDTH, WORLD_HEIGHT, CELL_SIZE, PLAYER_ID } from './config/Constants';
 import { World } from './ecs/World';
@@ -15,12 +15,13 @@ import { getFloorCount } from './config/FloorMap';
 import { MapWindow3DRenderer } from './engine/MapWindow3DRenderer';
 import { generateDungeon } from './engine/DungeonGenerator';
 import { saveDungeon, loadDungeon, hasDungeon, getDefaultMapId, setCurrentMapId, exportDungeonFiles, deleteDungeon } from './engine/MapPersistence';
+import { PortalManager, PortalDirection, PORTAL_TILE_IDS } from './config/PortalManager';
 // 💡 ADDITION: Initialize MapRenderer with floor switching support
 const mapRenderer = new MapRenderer();
 
 // Expose floor switching function globally for UI/debugging
-(window as any).switchFloor = (floorId: number) => {
-  return mapRenderer.switchFloor(floorId);
+(window as any).switchFloor = async (floorId: number) => {
+  return await mapRenderer.switchFloor(floorId);
 };
 
 (window as any).getCurrentFloor = () => {
@@ -76,6 +77,9 @@ canvas.height = window.innerHeight;
   ctx.viewport(0, 0, canvas.width, canvas.height);
   ctx.clearColor(0.1, 0.1, 0.12, 1.0);
 
+  // Initialize PortalManager first before any floor operations
+  await mapRenderer.initializePortalManager();
+  
   // 2. Initialize Core Systems & World
   world = new World(); 
   movementSystem = new MovementSystem();
@@ -83,8 +87,10 @@ canvas.height = window.innerHeight;
   collisionSystem = new CollisionSystem();
   renderer = new GLInstancedRenderer(ctx, MAX_ENTITIES);
   
-  // Generate test map BEFORE spawning player
-  generateTestMap();
+  // Generate test map BEFORE spawning player (Floor 0 by default)
+  await generateTestMap();
+  // Place portals for Floor 0
+  placePortalsForFloor(0);
   console.log('[Engine] Map generated, size:', MAP_DATA.length, 'tiles');
   
   // Update renderer's map data texture after map generation
@@ -552,7 +558,7 @@ function toggleMap() {
     mapContainer.classList.remove('visible');
   }
 }
-window.addEventListener('keydown', (e) => {
+window.addEventListener('keydown', async (e) => {
   // Toggle map with M key - works only in game, not in menu
   if (e.key === 'm' || e.key === 'M') {
     if (!gameRunning) return; // Only allow map toggle during gameplay
@@ -666,42 +672,44 @@ window.addEventListener('keydown', (e) => {
           const idx = (checkRow * getCurrentMapCols() + checkCol) * 2;
           const tileId = MAP_TILE_DATA[idx];
           
-          // Check if this is a portal tile
-          if (tileId === 1000 || tileId === 1001) {
+          // Check if this is a portal tile (2000-2005)
+          if (tileId >= 2000 && tileId <= 2005) {
             floorSwitchCooldown = true;
             foundPortal = true;
             
             const currentFloor = mapRenderer.getCurrentFloorId();
-            let newFloor: number;
             
-            if (tileId === 1000) {
-              // Next floor portal (blue)
-              newFloor = currentFloor < getFloorCount() - 1 ? currentFloor + 1 : 0;
+            // Get direction from tile ID and look up target floor
+            const direction = tileId - 2000 as PortalDirection;
+            const targetFloor = PortalManager.getTargetFloor(currentFloor, direction);
+            
+            // Handle falsy-zero correctly: floor 0 is valid!
+            if (targetFloor !== undefined && targetFloor !== null) {
+              await mapRenderer.switchFloor(targetFloor);
+              
+              // Update renderer's map data texture after floor switch
+              if (renderer) {
+                renderer.updateMapDataTexture();
+              }
+              
+              // Teleport player to center of new floor and update camera
+              world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
+              world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
+              world.vx[PLAYER_ID] = 0;
+              world.vy[PLAYER_ID] = 0;
+              if (camera) {
+                camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+                camera.snapToTarget();
+              }
+              
+              const directionNames = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'FRONT', 'BACK'];
+              console.log(`[Portal] Used ${directionNames[direction]} portal, switched to floor ${targetFloor}`);
+              
+              setTimeout(() => { floorSwitchCooldown = false; }, 300);
             } else {
-              // Previous floor portal (red)
-              newFloor = currentFloor > 0 ? currentFloor - 1 : getFloorCount() - 1;
+              console.warn(`[Portal] No connection in direction ${direction} from floor ${currentFloor}`);
+              floorSwitchCooldown = false;
             }
-            
-            mapRenderer.switchFloor(newFloor);
-            
-            // Update renderer's map data texture after floor switch
-            if (renderer) {
-              renderer.updateMapDataTexture();
-            }
-            
-            // Teleport player to center of new floor and update camera
-            world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
-            world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
-            world.vx[PLAYER_ID] = 0;
-            world.vy[PLAYER_ID] = 0;
-            if (camera) {
-              camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
-              camera.snapToTarget();
-            }
-            
-            console.log(`[Portal] Stepped on ${tileId === 1000 ? 'NEXT' : 'PREVIOUS'} floor portal, switched to floor ${newFloor}`);
-            
-            setTimeout(() => { floorSwitchCooldown = false; }, 300);
           }
         }
       }

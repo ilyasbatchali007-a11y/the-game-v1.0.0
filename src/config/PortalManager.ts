@@ -88,8 +88,6 @@ export class PortalManager {
     adjacencyUrl: string,
     placementUrl: string
   ): Promise<void> {
-    console.log('[PortalManager] Loading portal data...');
-    
     try {
       const [adjacencyResponse, placementResponse] = await Promise.all([
         fetch(adjacencyUrl),
@@ -104,7 +102,6 @@ export class PortalManager {
       const placementData: PortalPlacementEntry[] = await placementResponse.json();
       
       this.buildPortalData(adjacencyData, placementData);
-      console.log(`[PortalManager] Loaded portals for ${this.floorDimensions.size} floors`);
     } catch (error) {
       console.error('[PortalManager] Failed to load portal data:', error);
       throw error;
@@ -192,7 +189,6 @@ export class PortalManager {
               // Left portal (at X): threshold at X+1
               // Right portal (at X): threshold at X-1
               const thresholdX = dir === 'left' ? x + 1 : x - 1;
-              console.log(`[DEBUG GEN] Floor ${floorId} | Dir ${dir} | Threshold at (${thresholdX}, ${z}) | Target: ${targetFloor}`);
               portals.push({
                 x: thresholdX,
                 z,
@@ -222,11 +218,6 @@ export class PortalManager {
               // Front portal (at Z): threshold at Z+1
               // Back portal (at Z): threshold at Z-1
               const thresholdZ = dir === 'front' ? z + 1 : z - 1;
-              
-              // DEBUG: Only log for Floor 95 at (50, 7)
-              if (floorId === 95 && x === 50 && thresholdZ === 7) {
-                  console.log(`[DEBUG GEN] Floor 95 Threshold GENERATED at (50, 7). Target: ${targetFloor}`);
-              }
               
               portals.push({
                 x,

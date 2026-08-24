@@ -1,11 +1,15 @@
 // SRC/render/MapRenderer.ts
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
-// Supports 20 independent floors with customized sizes that can be switched at runtime
-// Uses green chessboard pattern texture for all floors
+// Supports 100 independent floors with customized sizes that can be switched at runtime
+// Uses green chessboard pattern texture for all floors except Floor 0 (atlas)
+// Integrated with PortalManager for 6-directional teleport system
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap } from '../config/MapData';
+import { generateTestMap, MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { portalManager, PORTAL_TILE_IDS, PortalDirection } from '../config/PortalManager';
+import adjacencyData from '../config/block_floors_adjacency.json';
+import placementData from '../config/list3_portal_placement (2).json';
 
 export interface IFloorRenderData {
   x: number;
@@ -22,21 +26,68 @@ export interface IFloorRenderData {
 export class MapRenderer {
   private currentFloorId: number = 0;
   private floorConfig: FloorConfig;
+  private portalManagerInitialized: boolean = false;
 
   constructor(floorConfig: FloorConfig = ARENA_FLOOR) {
     this.floorConfig = floorConfig;
   }
 
   /**
-   * Switch to a different floor by ID (0-19)
-   * @param floorId - The floor ID to switch to (0-19)
+   * Initialize the PortalManager with adjacency and placement data
+   * Called automatically on first floor switch if not already initialized
+   */
+  private async ensurePortalManagerInitialized(): Promise<void> {
+    if (this.portalManagerInitialized) {
+      return;
+    }
+
+    try {
+      await portalManager.initialize(adjacencyData, placementData);
+      this.portalManagerInitialized = true;
+      console.log('[MapRenderer] PortalManager initialized');
+    } catch (error) {
+      console.error('[MapRenderer] Failed to initialize PortalManager:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Place portal tiles on the current floor based on PortalManager data
+   * Must be called after generateTestMap for each floor
+   */
+  private placePortalTiles(): void {
+    if (!portalManager.isInitialized()) {
+      console.warn('[MapRenderer] PortalManager not initialized, skipping portal placement');
+      return;
+    }
+
+    const portals = portalManager.getPortalsForFloor(this.currentFloorId);
+    const cols = getCurrentMapCols();
+    const rows = getCurrentMapRows();
+
+    for (const portal of portals) {
+      // Check if portal coordinates are within map bounds
+      if (portal.x >= 0 && portal.x < cols && portal.z >= 0 && portal.z < rows) {
+        const idx = (portal.z * cols + portal.x) * 2;
+        MAP_TILE_DATA[idx] = portal.tileId;
+        MAP_TILE_DATA[idx + 1] = 1; // isStatic = true
+      }
+    }
+  }
+
+  /**
+   * Switch to a different floor by ID (0-99)
+   * @param floorId - The floor ID to switch to (0-99)
    * @returns true if successful, false if invalid floor ID
    */
-  public switchFloor(floorId: number): boolean {
-    if (floorId < 0 || floorId >= getFloorCount()) {
+  public async switchFloor(floorId: number): Promise<boolean> {
+    if (floorId === undefined || floorId === null || floorId < 0 || floorId >= getFloorCount()) {
       console.warn(`Invalid floor ID: ${floorId}. Must be between 0 and ${getFloorCount() - 1}`);
       return false;
     }
+    
+    // Ensure PortalManager is initialized before first floor switch
+    await this.ensurePortalManagerInitialized();
     
     this.currentFloorId = floorId;
     this.floorConfig = getFloorById(floorId);
@@ -49,6 +100,9 @@ export class MapRenderer {
       rows,
       useAtlas: this.floorConfig.useAtlas
     });
+    
+    // Place portal tiles based on PortalManager data
+    this.placePortalTiles();
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;

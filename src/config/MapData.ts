@@ -42,7 +42,7 @@ export interface TileData {
 }
 
 // Tile IDs: 0 = floor (passable), 1 = decoration, 2 = wall (blocking)
-// Portal tiles: 1000 = next floor portal, 1001 = previous floor portal
+// Portal tiles: 2000-2005 for 6-directional portals (up/down/left/right/front/back)
 export let MAP_DATA = new Uint8Array(DEFAULT_MAP_COLS * DEFAULT_MAP_ROWS);
 
 // New: Map data with atlas tile information
@@ -78,31 +78,12 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
       }
     }
     
-    // Add portal tiles near spawn point (center of map)
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
-    
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
+    // Portal tiles are now placed by PortalManager based on JSON data
+    // No hardcoded portal placement here anymore
     
   } else {
-    // Floors 1-19 - Green chessboard pattern (all tiles are passable floor)
-    // Add portal tiles on ALL floors, not just Floor 0
+    // Floors 1-99 - Green chessboard pattern (all tiles are passable floor)
+    // Portal tiles are placed by PortalManager based on JSON data
     MAP_DATA.fill(0);
     MAP_TILE_DATA.fill(0);
     
@@ -117,27 +98,8 @@ export function generateTestMap(floorConfig?: { cols: number; rows: number; useA
       }
     }
     
-    // Add portal tiles near spawn point (center of map) on ALL floors
-    const spawnCol = Math.floor(cols / 2);
-    const spawnRow = Math.floor(rows / 2);
-    
-    // Next floor portal (ID 1000, bright cyan) - placed to the right of spawn
-    const nextPortalCol = spawnCol + 2;
-    const nextPortalRow = spawnRow;
-    if (nextPortalCol < cols && nextPortalRow < rows) {
-      const nextPortalIdx = nextPortalRow * cols + nextPortalCol;
-      MAP_TILE_DATA[nextPortalIdx * 2] = 1000;     // Static tile ID for next floor portal
-      MAP_TILE_DATA[nextPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
-    
-    // Previous floor portal (ID 1001, bright magenta) - placed to the left of spawn
-    const prevPortalCol = spawnCol - 2;
-    const prevPortalRow = spawnRow;
-    if (prevPortalCol >= 0 && prevPortalRow < rows) {
-      const prevPortalIdx = prevPortalRow * cols + prevPortalCol;
-      MAP_TILE_DATA[prevPortalIdx * 2] = 1001;     // Static tile ID for previous floor portal
-      MAP_TILE_DATA[prevPortalIdx * 2 + 1] = 1;    // isStatic = true
-    }
+    // Portal tiles are now placed by PortalManager based on JSON data
+    // No hardcoded portal placement here anymore
   }
 }
 

@@ -1,4 +1,14 @@
 ```
 # Build artifacts
 dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Compiled files
+*.js
+
+# Vite specific
+.node_modules/.vite/
 ```

@@ -47,7 +47,8 @@ export class MapRenderer {
     generateTestMap({
       cols,
       rows,
-      useAtlas: this.floorConfig.useAtlas
+      useAtlas: this.floorConfig.useAtlas,
+      floorId: this.currentFloorId  // Pass floorId so portals spawn correctly
     });
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);

@@ -140,8 +140,9 @@ export class PortalManager {
     // Build portal placement data and dimensions
     for (const entry of placementData) {
       const floorId = entry.floor;
-      const widthTiles = Math.floor(entry.width / 64);
-      const depthTiles = Math.floor(entry.depth / 64);
+      // width and depth in JSON are already tile counts, not world units
+      const widthTiles = entry.width;
+      const depthTiles = entry.depth;
       
       this.floorDimensions.set(floorId, { width: widthTiles, depth: depthTiles });
       

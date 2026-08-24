@@ -8,6 +8,7 @@ export interface PortalData {
   direction: PortalDirection;
   tileId: number;      // 2000-2005
   targetFloor: number | null;
+  isThreshold?: boolean; // Optional flag for invisible threshold tiles
 }
 
 export type PortalDirection = 'up' | 'down' | 'left' | 'right' | 'front' | 'back';

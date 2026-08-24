@@ -64,9 +64,30 @@ export class CollisionSystem {
     const worldWidth = getCurrentWorldWidth();
     const worldHeight = getCurrentWorldHeight();
 
-    // Clamp to world bounds (dynamic) - using full entity bounds
-    nextX = Math.max(0, Math.min(nextX, worldWidth - width));
-    nextY = Math.max(0, Math.min(nextY, worldHeight - height));
+    // Strict map boundary check: ensure the FULL outer base stays within valid tile bounds
+    // This prevents the entity from floating off the edge due to the shrunken footprint
+    const mapWidthTiles = Math.floor(worldWidth / TILE_SIZE);
+    const mapHeightTiles = Math.floor(worldHeight / TILE_SIZE);
+    
+    // Check full base bounds (x to x+width, and bottom edge at y+height-1)
+    const baseLeft = Math.floor(nextX / TILE_SIZE);
+    const baseRight = Math.floor((nextX + width - 1) / TILE_SIZE);
+    const baseBottom = Math.floor((nextY + height - 1) / TILE_SIZE);
+    
+    // Clamp to keep full base inside valid tile grid
+    if (baseLeft < 0) {
+      nextX = 0;
+    }
+    if (baseRight >= mapWidthTiles) {
+      nextX = (mapWidthTiles * TILE_SIZE) - width;
+    }
+    if (baseBottom >= mapHeightTiles) {
+      nextY = (mapHeightTiles * TILE_SIZE) - height;
+    }
+    // Also clamp top edge to prevent going above map
+    if (nextY < 0) {
+      nextY = 0;
+    }
 
     // Check tile collisions at footprint corners
     // This enables seamless sliding along walls with floating-point positions

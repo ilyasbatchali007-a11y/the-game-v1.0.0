@@ -199,13 +199,15 @@ export class PortalManager {
                 targetFloor
               });
               
-              // Add barrier 1 tile inward (left: +1 X, right: -1 X)
-              const barrierX = dir === 'left' ? x + 1 : x - 1;
+              // Add threshold row: make tile directly inward from portal unwalkable
+              // Left portal (at X): threshold at X+1
+              // Right portal (at X): threshold at X-1
+              const thresholdX = dir === 'left' ? x + 1 : x - 1;
               barriers.push({
-                x: barrierX,
+                x: thresholdX,
                 z,
                 direction: dir,
-                tileId: 0,  // Floor tile (invisible/chessboard) - collision handled by isStatic flag
+                tileId: 0,  // Floor tile (invisible) - collision set in MAP_DATA
                 portalTileId: tileId
               });
             }
@@ -224,13 +226,15 @@ export class PortalManager {
                 targetFloor
               });
               
-              // Add barrier 1 tile inward (front: +1 Z, back: -1 Z)
-              const barrierZ = dir === 'front' ? z + 1 : z - 1;
+              // Add threshold row: make tile directly inward from portal unwalkable
+              // Front portal (at Z): threshold at Z+1
+              // Back portal (at Z): threshold at Z-1
+              const thresholdZ = dir === 'front' ? z + 1 : z - 1;
               barriers.push({
                 x,
-                z: barrierZ,
+                z: thresholdZ,
                 direction: dir,
-                tileId: 0,  // Floor tile (invisible/chessboard) - collision handled by isStatic flag
+                tileId: 0,  // Floor tile (invisible) - collision set in MAP_DATA
                 portalTileId: tileId
               });
             }

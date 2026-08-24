@@ -10,7 +10,7 @@ type World = {
 };
 
 import { getCurrentWorldWidth, getCurrentWorldHeight } from '../config/MapData';
-import { isTileBlocking, isThresholdTile, TILE_SIZE } from '../config/MapData';
+import { isTileBlocking, TILE_SIZE } from '../config/MapData';
 
 export class CollisionSystem {
   public update(world: World, dt: number, playerId: number = 0): void {
@@ -71,7 +71,7 @@ export class CollisionSystem {
     for (const corner of corners) {
       const col = Math.floor(corner.x / TILE_SIZE);
       const row = Math.floor(corner.y / TILE_SIZE);
-      if (isTileBlocking(col, row) || isThresholdTile(col, row)) {
+      if (isTileBlocking(col, row)) {
         hasCollision = true;
         break;
       }
@@ -90,7 +90,7 @@ export class CollisionSystem {
       for (const corner of xCorners) {
         const col = Math.floor(corner.x / TILE_SIZE);
         const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row) || isThresholdTile(col, row)) {
+        if (isTileBlocking(col, row)) {
           canMoveX = false;
           break;
         }
@@ -111,7 +111,7 @@ export class CollisionSystem {
       for (const corner of yCorners) {
         const col = Math.floor(corner.x / TILE_SIZE);
         const row = Math.floor(corner.y / TILE_SIZE);
-        if (isTileBlocking(col, row) || isThresholdTile(col, row)) {
+        if (isTileBlocking(col, row)) {
           canMoveY = false;
           break;
         }

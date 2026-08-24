@@ -2,15 +2,12 @@
 // Manages 6-directional portal system with spatial adjacency
 // Loads adjacency data and portal placement from JSON files
 
-import { setThresholdTiles } from './MapData';
-
 export interface PortalData {
   x: number;           // Tile column position
   z: number;           // Tile row position  
   direction: PortalDirection;
   tileId: number;      // 2000-2005
   targetFloor: number | null;
-  isThreshold?: boolean; // True if this is the unwalkable threshold tile
 }
 
 export type PortalDirection = 'up' | 'down' | 'left' | 'right' | 'front' | 'back';
@@ -64,7 +61,7 @@ interface PortalPlacementEntry {
 export class PortalManager {
   private static instance: PortalManager;
   
-  // Map: floorId -> array of portal data for that floor (includes thresholds)
+  // Map: floorId -> array of portal data for that floor
   private floorPortals: Map<number, PortalData[]> = new Map();
   
   // Map: floorId -> floor dimensions (width, depth in tiles)
@@ -120,9 +117,6 @@ export class PortalManager {
     this.floorPortals.clear();
     this.floorDimensions.clear();
     this.adjacencyLookup.clear();
-    
-    // Build threshold tiles set for collision system
-    const thresholdSet = new Set<string>();
     
     // Build adjacency lookup: normalize string IDs to numbers
     for (const entry of adjacencyData) {
@@ -189,22 +183,6 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
-              
-              // Add threshold tile: make tile directly inward from portal unwalkable
-              // Left portal (at X): threshold at X+1
-              // Right portal (at X): threshold at X-1
-              const thresholdX = dir === 'left' ? x + 1 : x - 1;
-              portals.push({
-                x: thresholdX,
-                z,
-                direction: dir,
-                tileId: 0,  // Floor tile (invisible)
-                targetFloor,
-                isThreshold: true
-              });
-              
-              // Track threshold tile for collision system
-              thresholdSet.add(`${thresholdX},${z}`);
             }
           } else if (dir === 'front' || dir === 'back') {
             // Horizontal line along X axis at fixed Z
@@ -221,27 +199,10 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
-              
-              // Add threshold tile: make tile directly inward from portal unwalkable
-              // Front portal (at Z): threshold at Z+1
-              // Back portal (at Z): threshold at Z-1
-              const thresholdZ = dir === 'front' ? z + 1 : z - 1;
-              
-              portals.push({
-                x,
-                z: thresholdZ,
-                direction: dir,
-                tileId: 0,  // Floor tile (invisible)
-                targetFloor,
-                isThreshold: true
-              });
-              
-              // Track threshold tile for collision system
-              thresholdSet.add(`${x},${thresholdZ}`);
             }
           }
         } else {
-          // Point portals (up/down) - no thresholds needed
+          // Point portals (up/down)
           portals.push({
             x: config.x,
             z: config.z,
@@ -254,9 +215,6 @@ export class PortalManager {
       
       this.floorPortals.set(floorId, portals);
     }
-    
-    // Register threshold tiles with collision system
-    setThresholdTiles(thresholdSet);
   }
   
   /**

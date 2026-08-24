@@ -369,14 +369,14 @@ export class PortalManager {
   
   /**
    * Generate MAP_TILE_DATA entries for all barrier tiles on a floor
-   * Barriers use tileId 2 (collision block) but should render as floor (invisible)
-   * Returns array of {index, tileId, isStatic} for setting in MAP_TILE_DATA
+   * Barriers use tileId 0 (floor) but are marked as static AND set MAP_DATA to 2 (blocking)
+   * Returns array of {index, tileId, isStatic, blockingIndex} for setting in MAP_TILE_DATA and MAP_DATA
    */
   public generateBarrierTileData(
     floorId: number,
     mapCols: number
-  ): Array<{ index: number; tileId: number; isStatic: number }> {
-    const result: Array<{ index: number; tileId: number; isStatic: number }> = [];
+  ): Array<{ index: number; tileId: number; isStatic: number; blockingIndex?: number }> {
+    const result: Array<{ index: number; tileId: number; isStatic: number; blockingIndex?: number }> = [];
     const barriers = this.floorBarriers.get(floorId);
     
     if (!barriers) return result;
@@ -391,8 +391,9 @@ export class PortalManager {
       const idx = (barrier.z * mapCols + barrier.x) * 2;
       result.push({
         index: idx,
-        tileId: barrier.tileId,  // Tile ID 2 for collision
-        isStatic: 1
+        tileId: 0,  // Floor tile (invisible/chessboard pattern)
+        isStatic: 1,
+        blockingIndex: barrier.z * mapCols + barrier.x  // Index in MAP_DATA to set to 2 (blocking)
       });
     }
     

@@ -5,7 +5,7 @@
 // Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA } from '../config/MapData';
+import { generateTestMap, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA, MAP_DATA } from '../config/MapData';
 import { portalManager } from '../config/PortalManager';
 
 export interface IFloorRenderData {
@@ -87,6 +87,11 @@ export class MapRenderer {
       if (entry.index < MAP_TILE_DATA.length) {
         MAP_TILE_DATA[entry.index] = entry.tileId;
         MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
+        
+        // Set MAP_DATA to 2 (blocking) for barrier tiles
+        if (entry.blockingIndex !== undefined && entry.blockingIndex < MAP_DATA.length) {
+          MAP_DATA[entry.blockingIndex] = 2;
+        }
       }
     }
     

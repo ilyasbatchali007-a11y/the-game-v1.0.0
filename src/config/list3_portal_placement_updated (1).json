@@ -6,21 +6,21 @@
     "portals": {
       "left": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 99,
         "x": 6
       },
       "right": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 99,
         "x": 97
       },
       "front": null,
       "back": {
         "buffer": 5,
-        "startX": 5,
-        "endX": 99,
+        "startX": 7,
+        "endX": 96,
         "z": 8
       },
       "up": {
@@ -121,7 +121,7 @@
       "front": {
         "buffer": 7,
         "startX": 7,
-        "endX": 123,
+        "endX": 122,
         "z": 125
       },
       "back": null,
@@ -139,7 +139,7 @@
     "portals": {
       "left": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 158,
         "x": 6
       },
@@ -325,7 +325,7 @@
     "portals": {
       "left": {
         "buffer": 7,
-        "startZ": 7,
+        "startZ": 9,
         "endZ": 131,
         "x": 6
       },
@@ -630,7 +630,7 @@
       "front": {
         "buffer": 7,
         "startX": 7,
-        "endX": 136,
+        "endX": 135,
         "z": 138
       },
       "back": null,
@@ -670,20 +670,20 @@
       "left": null,
       "right": {
         "buffer": 5,
-        "startZ": 5,
-        "endZ": 101,
+        "startZ": 9,
+        "endZ": 100,
         "x": 99
       },
       "front": {
         "buffer": 5,
         "startX": 5,
-        "endX": 101,
+        "endX": 98,
         "z": 101
       },
       "back": {
         "buffer": 5,
         "startX": 5,
-        "endX": 101,
+        "endX": 98,
         "z": 8
       },
       "up": null,
@@ -701,7 +701,7 @@
       "left": null,
       "right": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 141,
         "x": 142
       },
@@ -753,7 +753,7 @@
       "left": null,
       "right": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 106,
         "x": 105
       },
@@ -761,7 +761,7 @@
       "back": {
         "buffer": 6,
         "startX": 6,
-        "endX": 106,
+        "endX": 104,
         "z": 8
       },
       "up": null,
@@ -827,7 +827,7 @@
       "left": null,
       "right": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 147,
         "x": 148
       },
@@ -861,7 +861,7 @@
       "right": null,
       "front": {
         "buffer": 6,
-        "startX": 6,
+        "startX": 7,
         "endX": 122,
         "z": 123
       },
@@ -905,7 +905,7 @@
     "portals": {
       "left": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 98,
         "x": 6
       },
@@ -913,7 +913,7 @@
       "front": null,
       "back": {
         "buffer": 5,
-        "startX": 5,
+        "startX": 7,
         "endX": 98,
         "z": 8
       },
@@ -929,7 +929,7 @@
       "left": null,
       "right": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 159,
         "x": 160
       },
@@ -1204,7 +1204,7 @@
       "right": null,
       "front": {
         "buffer": 6,
-        "startX": 6,
+        "startX": 7,
         "endX": 109,
         "z": 110
       },
@@ -1270,7 +1270,7 @@
     "portals": {
       "left": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 116,
         "x": 6
       },
@@ -1278,7 +1278,7 @@
       "front": null,
       "back": {
         "buffer": 6,
-        "startX": 6,
+        "startX": 7,
         "endX": 116,
         "z": 8
       },
@@ -1322,21 +1322,21 @@
     "portals": {
       "left": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 95,
         "x": 6
       },
       "right": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 95,
         "x": 93
       },
       "front": null,
       "back": {
         "buffer": 5,
-        "startX": 5,
-        "endX": 95,
+        "startX": 7,
+        "endX": 92,
         "z": 8
       },
       "up": {
@@ -1720,21 +1720,21 @@
     "portals": {
       "left": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 110,
         "x": 6
       },
       "right": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 110,
         "x": 109
       },
       "front": null,
       "back": {
         "buffer": 6,
-        "startX": 6,
-        "endX": 110,
+        "startX": 7,
+        "endX": 108,
         "z": 8
       },
       "up": null,
@@ -1748,7 +1748,7 @@
     "portals": {
       "left": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 151,
         "x": 6
       },
@@ -1827,7 +1827,7 @@
       "front": {
         "buffer": 6,
         "startX": 6,
-        "endX": 118,
+        "endX": 116,
         "z": 119
       },
       "back": null,
@@ -1866,7 +1866,7 @@
     "portals": {
       "left": {
         "buffer": 5,
-        "startZ": 5,
+        "startZ": 9,
         "endZ": 97,
         "x": 6
       },
@@ -1874,7 +1874,7 @@
       "front": null,
       "back": {
         "buffer": 5,
-        "startX": 5,
+        "startX": 7,
         "endX": 97,
         "z": 8
       },
@@ -1983,20 +1983,20 @@
     "portals": {
       "left": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 107,
         "x": 6
       },
       "right": null,
       "front": {
         "buffer": 6,
-        "startX": 6,
+        "startX": 7,
         "endX": 107,
         "z": 108
       },
       "back": {
         "buffer": 6,
-        "startX": 6,
+        "startX": 7,
         "endX": 107,
         "z": 8
       },
@@ -2085,20 +2085,20 @@
       "left": null,
       "right": {
         "buffer": 6,
-        "startZ": 6,
+        "startZ": 9,
         "endZ": 115,
         "x": 114
       },
       "front": {
         "buffer": 6,
         "startX": 6,
-        "endX": 115,
+        "endX": 113,
         "z": 116
       },
       "back": {
         "buffer": 6,
         "startX": 6,
-        "endX": 115,
+        "endX": 113,
         "z": 8
       },
       "up": null,
@@ -2146,7 +2146,7 @@
       "front": {
         "buffer": 7,
         "startX": 7,
-        "endX": 132,
+        "endX": 131,
         "z": 134
       },
       "back": null,
@@ -2242,7 +2242,7 @@
       "front": {
         "buffer": 6,
         "startX": 6,
-        "endX": 121,
+        "endX": 119,
         "z": 122
       },
       "back": null,
@@ -2257,7 +2257,7 @@
     "portals": {
       "left": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 145,
         "x": 6
       },
@@ -2322,7 +2322,7 @@
       "left": null,
       "right": {
         "buffer": 8,
-        "startZ": 8,
+        "startZ": 9,
         "endZ": 142,
         "x": 143
       },
@@ -2363,20 +2363,20 @@
       "left": null,
       "right": {
         "buffer": 7,
-        "startZ": 7,
+        "startZ": 9,
         "endZ": 124,
         "x": 124
       },
       "front": {
         "buffer": 7,
         "startX": 7,
-        "endX": 124,
+        "endX": 123,
         "z": 126
       },
       "back": {
         "buffer": 7,
         "startX": 7,
-        "endX": 124,
+        "endX": 123,
         "z": 8
       },
       "up": null,

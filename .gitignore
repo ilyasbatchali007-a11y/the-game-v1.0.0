@@ -1,11 +1,1 @@
-```
-# Dependencies
-node_modules/
-
-# Build artifacts
-dist/
-
-# Vite cache
-.node/
-.vite/
-```
+Nothing needs to be added to .gitignore since only a TypeScript source file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.

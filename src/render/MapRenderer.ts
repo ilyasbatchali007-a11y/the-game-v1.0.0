@@ -1,11 +1,12 @@
 // SRC/render/MapRenderer.ts
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
-// Supports 20 independent floors with customized sizes that can be switched at runtime
+// Supports 100 independent floors with customized sizes that can be switched at runtime
 // Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap } from '../config/MapData';
+import { generateTestMap, getCurrentMapCols, getCurrentMapRows, MAP_TILE_DATA, MAP_DATA } from '../config/MapData';
+import { portalManager } from '../config/PortalManager';
 
 export interface IFloorRenderData {
   x: number;
@@ -46,17 +47,49 @@ export class MapRenderer {
     }
     this.floorConfig = floorConfig;
     
+    // Get floor dimensions from PortalManager (uses actual JSON data)
+    const dims = portalManager.getFloorDimensions(floorId);
+    const cols = dims ? dims.width : Math.floor(this.floorConfig.width / 64);
+    const rows = dims ? dims.depth : Math.floor(this.floorConfig.depth / 64);
+    
     // Regenerate the map data with new dimensions and texture settings
-    const cols = Math.floor(this.floorConfig.width / 64);
-    const rows = Math.floor(this.floorConfig.depth / 64);
     generateTestMap({
       cols,
       rows,
       useAtlas: this.floorConfig.useAtlas
     });
     
+    // Generate portal tiles for this floor using PortalManager
+    this.generatePortalTiles(floorId, cols);
+    
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;
+  }
+
+  /**
+   * Generate portal tile data for the current floor using PortalManager
+   */
+  private generatePortalTiles(floorId: number, mapCols: number): void {
+    // Generate portal tiles (includes thresholds)
+    const portalData = portalManager.generatePortalTileData(floorId, mapCols);
+    
+    for (const entry of portalData) {
+      if (entry.index < MAP_TILE_DATA.length) {
+        MAP_TILE_DATA[entry.index] = entry.tileId;
+        MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
+        
+        // DEBUG: Log collision map writes for threshold tiles (Only for Floor 95 at 50,7)
+        const idx = Math.floor(entry.index / 2);
+        const debugX = idx % mapCols;
+        const debugZ = Math.floor(idx / mapCols);
+        
+        if (entry.tileId === 0 && entry.isStatic === 1 && floorId === 95 && debugX === 50 && debugZ === 7) {
+          console.log(`[DEBUG COLL] Floor 95: Wrote SOLID (2) to MAP_DATA at Index ${idx} (Coords: 50, 7)`);
+        }
+      }
+    }
+    
+    console.log(`[MapRenderer] Generated ${portalData.length} portal/threshold tiles for floor ${floorId}`);
   }
 
   /**

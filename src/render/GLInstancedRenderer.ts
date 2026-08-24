@@ -153,16 +153,33 @@ void main() {
     float baseTileId = lowByte + (highByte * 256.0);  // Reconstruct full tile ID
     float isStatic = mapData.g;              // Static flag stored in G channel
     
-    // Portal tile check: render special colors for portal tiles (BEFORE chessboard/atlas decision)
-    if (baseTileId > 999.5) {
-      // Portal tiles - use solid bright colors instead of atlas textures or chessboard
-      if (baseTileId < 1000.5) {
-        // Tile ID 1000: Next floor portal (Bright Red)
-        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    // Portal tile check: render special colors for 6-directional portal tiles (BEFORE chessboard/atlas decision)
+    // Portal IDs: 2000-2005 for up/down/left/right/front/back
+    if (baseTileId > 1999.5 && baseTileId < 2005.5) {
+      // Portal tiles - use distinct bright colors for each direction
+      if (baseTileId < 2000.5) {
+        // Tile ID 2000: UP portal (Bright Yellow)
+        fragColor = vec4(1.0, 1.0, 0.0, 1.0);
+        return;
+      } else if (baseTileId < 2001.5) {
+        // Tile ID 2001: DOWN portal (Bright Magenta)
+        fragColor = vec4(1.0, 0.0, 1.0, 1.0);
+        return;
+      } else if (baseTileId < 2002.5) {
+        // Tile ID 2002: LEFT portal (Bright Cyan)
+        fragColor = vec4(0.0, 1.0, 1.0, 1.0);
+        return;
+      } else if (baseTileId < 2003.5) {
+        // Tile ID 2003: RIGHT portal (Bright Orange)
+        fragColor = vec4(1.0, 0.5, 0.0, 1.0);
+        return;
+      } else if (baseTileId < 2004.5) {
+        // Tile ID 2004: FRONT portal (Bright Green)
+        fragColor = vec4(0.0, 1.0, 0.0, 1.0);
         return;
       } else {
-        // Tile ID 1001: Previous floor portal (Bright Blue/Cyan)
-        fragColor = vec4(0.0, 0.8, 1.0, 1.0);
+        // Tile ID 2005: BACK portal (Bright Purple)
+        fragColor = vec4(0.5, 0.0, 1.0, 1.0);
         return;
       }
     }

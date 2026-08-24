@@ -2,6 +2,7 @@ import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { FloorConfig } from '../config/FloorMap';
 import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { CELL_SIZE } from '../config/Constants';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -530,6 +531,9 @@ export class GLInstancedRenderer {
   
   /**
    * Render player entity as a 3D cube with red color and per-face shading
+   * The player sprite height extends past a single tile height, so we anchor
+   * the rendering to the bottom-center of the physics cell by shifting the
+   * render Y-position upward by (playerSpriteHeight - tileHeight).
    */
   public renderPlayer(world: World, width: number, height: number, texture: WebGLTexture,
                       cameraX: number = 0, cameraY: number = 0): void {
@@ -538,13 +542,22 @@ export class GLInstancedRenderer {
     
     if (!worldAny || !worldAny.active || !worldAny.active[PLAYER_ID]) return;
     
+    // Get player dimensions
+    const playerWidth = worldAny.width[PLAYER_ID];
+    const playerHeight = worldAny.height[PLAYER_ID];
+    
+    // Calculate render Y offset to anchor the sprite base to the tile bottom
+    // renderY = worldY - (entityHeight - tileHeight) ensures the bottom base
+    // of the red block rests strictly inside the 32x32 physics cell
+    const renderY = worldAny.py[PLAYER_ID] - (playerHeight - CELL_SIZE);
+    
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
-    const cubeHeight = (worldAny.height && worldAny.height[PLAYER_ID]) ? worldAny.height[PLAYER_ID] * 2.0 : 64.0;
+    const cubeHeight = playerHeight * 2.0;
     const elevation = worldAny.z ? worldAny.z[PLAYER_ID] : 0.0;
     this.instanceData[0] = worldAny.px[PLAYER_ID];
-    this.instanceData[1] = worldAny.py[PLAYER_ID];
-    this.instanceData[2] = worldAny.width[PLAYER_ID];
-    this.instanceData[3] = worldAny.height[PLAYER_ID];
+    this.instanceData[1] = renderY;  // Apply Y offset to anchor base to tile bottom
+    this.instanceData[2] = playerWidth;
+    this.instanceData[3] = playerHeight;
     this.instanceData[4] = cubeHeight;
     this.instanceData[5] = worldAny.rotation ? worldAny.rotation[PLAYER_ID] : 0;
     this.instanceData[6] = elevation;

@@ -681,19 +681,23 @@ window.addEventListener('keydown', (e) => {
       let portalRow = playerRow;
       
       // Calculate portal position based on barrier direction
-      // Barriers are 1 tile inward from portals, so we go opposite direction to find portal
+      // Barriers are 1 tile inward from portals:
+      // - Left portal (at X): barrier at X+1 → portal is LEFT of barrier (col - 1)
+      // - Right portal (at X): barrier at X-1 → portal is RIGHT of barrier (col + 1)
+      // - Front portal (at Z): barrier at Z+1 → portal is FRONT of barrier (row - 1)
+      // - Back portal (at Z): barrier at Z-1 → portal is BACK of barrier (row + 1)
       switch (barrier.direction) {
         case 'left':
-          portalCol = playerCol - 1;  // Portal is to the left of barrier
+          portalCol = playerCol - 1;  // Portal is to the LEFT of barrier
           break;
         case 'right':
-          portalCol = playerCol + 1;  // Portal is to the right of barrier
+          portalCol = playerCol + 1;  // Portal is to the RIGHT of barrier
           break;
         case 'front':
-          portalRow = playerRow - 1;  // Portal is in front of barrier
+          portalRow = playerRow - 1;  // Portal is FRONT of barrier
           break;
         case 'back':
-          portalRow = playerRow + 1;  // Portal is behind barrier
+          portalRow = playerRow + 1;  // Portal is BACK of barrier
           break;
         default:
           // Up/down barriers don't exist (point portals have no barriers)

@@ -672,35 +672,35 @@ window.addEventListener('keydown', (e) => {
     
     const currentFloor = mapRenderer.getCurrentFloorId();
     
-    // First check: Is player standing on a barrier tile?
-    const barrier = portalManager.getBarrierAtPosition(currentFloor, playerCol, playerRow);
+    // Check: Is player standing on a threshold tile (isThreshold=true)?
+    const portal = portalManager.getPortalAtPosition(currentFloor, playerCol, playerRow);
     
-    if (barrier) {
-      // Player is on a barrier - check adjacent tile in the portal direction for the actual portal
+    if (portal && portal.isThreshold) {
+      // Player is on a threshold - check adjacent tile in the portal direction for the actual portal
       let portalCol = playerCol;
       let portalRow = playerRow;
       
-      // Calculate portal position based on barrier direction
-      // Barriers are 1 tile inward from portals:
-      // - Left portal (at X): barrier at X+1 → portal is LEFT of barrier (col - 1)
-      // - Right portal (at X): barrier at X-1 → portal is RIGHT of barrier (col + 1)
-      // - Front portal (at Z): barrier at Z+1 → portal is FRONT of barrier (row - 1)
-      // - Back portal (at Z): barrier at Z-1 → portal is BACK of barrier (row + 1)
-      switch (barrier.direction) {
+      // Calculate portal position based on threshold direction
+      // Thresholds are 1 tile inward from portals:
+      // - Left portal (at X): threshold at X+1 → portal is LEFT of threshold (col - 1)
+      // - Right portal (at X): threshold at X-1 → portal is RIGHT of threshold (col + 1)
+      // - Front portal (at Z): threshold at Z+1 → portal is FRONT of threshold (row - 1)
+      // - Back portal (at Z): threshold at Z-1 → portal is BACK of threshold (row + 1)
+      switch (portal.direction) {
         case 'left':
-          portalCol = playerCol - 1;  // Portal is to the LEFT of barrier
+          portalCol = playerCol - 1;  // Portal is to the LEFT of threshold
           break;
         case 'right':
-          portalCol = playerCol + 1;  // Portal is to the RIGHT of barrier
+          portalCol = playerCol + 1;  // Portal is to the RIGHT of threshold
           break;
         case 'front':
-          portalRow = playerRow - 1;  // Portal is FRONT of barrier
+          portalRow = playerRow - 1;  // Portal is FRONT of threshold
           break;
         case 'back':
-          portalRow = playerRow + 1;  // Portal is BACK of barrier
+          portalRow = playerRow + 1;  // Portal is BACK of threshold
           break;
         default:
-          // Up/down barriers don't exist (point portals have no barriers)
+          // Up/down thresholds don't exist (point portals have no thresholds)
           return;
       }
       
@@ -711,7 +711,7 @@ window.addEventListener('keydown', (e) => {
         const tileId = MAP_TILE_DATA[idx];
         
         // Verify this is the expected portal tile
-        if (tileId === barrier.portalTileId && tileId >= 2000 && tileId <= 2005) {
+        if (tileId === portal.tileId && tileId >= 2000 && tileId <= 2005) {
           floorSwitchCooldown = true;
           
           // Look up target floor from PortalManager using direction

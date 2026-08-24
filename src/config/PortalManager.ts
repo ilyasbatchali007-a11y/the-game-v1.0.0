@@ -8,14 +8,7 @@ export interface PortalData {
   direction: PortalDirection;
   tileId: number;      // 2000-2005
   targetFloor: number | null;
-}
-
-export interface BarrierData {
-  x: number;           // Tile column position
-  z: number;           // Tile row position
-  direction: PortalDirection;  // Direction this barrier protects
-  tileId: number;      // 2 (collision block) but rendered as floor
-  portalTileId: number; // The portal tile this barrier protects (2000-2005)
+  isThreshold?: boolean; // True if this is the unwalkable threshold tile
 }
 
 export type PortalDirection = 'up' | 'down' | 'left' | 'right' | 'front' | 'back';
@@ -69,11 +62,8 @@ interface PortalPlacementEntry {
 export class PortalManager {
   private static instance: PortalManager;
   
-  // Map: floorId -> array of portal data for that floor
+  // Map: floorId -> array of portal data for that floor (includes thresholds)
   private floorPortals: Map<number, PortalData[]> = new Map();
-  
-  // Map: floorId -> array of barrier data for that floor
-  private floorBarriers: Map<number, BarrierData[]> = new Map();
   
   // Map: floorId -> floor dimensions (width, depth in tiles)
   private floorDimensions: Map<number, { width: number; depth: number }> = new Map();
@@ -129,7 +119,6 @@ export class PortalManager {
     placementData: PortalPlacementEntry[]
   ): void {
     this.floorPortals.clear();
-    this.floorBarriers.clear();
     this.floorDimensions.clear();
     this.adjacencyLookup.clear();
     
@@ -159,7 +148,6 @@ export class PortalManager {
       this.floorDimensions.set(floorId, { width: widthTiles, depth: depthTiles });
       
       const portals: PortalData[] = [];
-      const barriers: BarrierData[] = [];
       const portalsConfig = entry.portals;
       
       // Process each direction
@@ -191,6 +179,7 @@ export class PortalManager {
             const endZ = config.endZ;
             
             for (let z = startZ; z <= endZ; z++) {
+              // Add portal tile
               portals.push({
                 x,
                 z,
@@ -199,16 +188,17 @@ export class PortalManager {
                 targetFloor
               });
               
-              // Add threshold row: make tile directly inward from portal unwalkable
+              // Add threshold tile: make tile directly inward from portal unwalkable
               // Left portal (at X): threshold at X+1
               // Right portal (at X): threshold at X-1
               const thresholdX = dir === 'left' ? x + 1 : x - 1;
-              barriers.push({
+              portals.push({
                 x: thresholdX,
                 z,
                 direction: dir,
-                tileId: 0,  // Floor tile (invisible) - collision set in MAP_DATA
-                portalTileId: tileId
+                tileId: 0,  // Floor tile (invisible)
+                targetFloor,
+                isThreshold: true
               });
             }
           } else if (dir === 'front' || dir === 'back') {
@@ -218,6 +208,7 @@ export class PortalManager {
             const endX = config.endX;
             
             for (let x = startX; x <= endX; x++) {
+              // Add portal tile
               portals.push({
                 x,
                 z,
@@ -226,21 +217,22 @@ export class PortalManager {
                 targetFloor
               });
               
-              // Add threshold row: make tile directly inward from portal unwalkable
+              // Add threshold tile: make tile directly inward from portal unwalkable
               // Front portal (at Z): threshold at Z+1
               // Back portal (at Z): threshold at Z-1
               const thresholdZ = dir === 'front' ? z + 1 : z - 1;
-              barriers.push({
+              portals.push({
                 x,
                 z: thresholdZ,
                 direction: dir,
-                tileId: 0,  // Floor tile (invisible) - collision set in MAP_DATA
-                portalTileId: tileId
+                tileId: 0,  // Floor tile (invisible)
+                targetFloor,
+                isThreshold: true
               });
             }
           }
         } else {
-          // Point portals (up/down) - no barriers needed
+          // Point portals (up/down) - no thresholds needed
           portals.push({
             x: config.x,
             z: config.z,
@@ -252,7 +244,6 @@ export class PortalManager {
       }
       
       this.floorPortals.set(floorId, portals);
-      this.floorBarriers.set(floorId, barriers);
     }
   }
   
@@ -370,76 +361,7 @@ export class PortalManager {
     
     return result;
   }
-  
-  /**
-   * Generate MAP_TILE_DATA entries for all barrier tiles on a floor
-   * Barriers use tileId 0 (floor) but are marked as static AND set MAP_DATA to 2 (blocking)
-   * Returns array of {index, tileId, isStatic, blockingIndex} for setting in MAP_TILE_DATA and MAP_DATA
-   */
-  public generateBarrierTileData(
-    floorId: number,
-    mapCols: number
-  ): Array<{ index: number; tileId: number; isStatic: number; blockingIndex?: number }> {
-    const result: Array<{ index: number; tileId: number; isStatic: number; blockingIndex?: number }> = [];
-    const barriers = this.floorBarriers.get(floorId);
-    
-    if (!barriers) return result;
-    
-    for (const barrier of barriers) {
-      // Validate bounds
-      if (barrier.x < 0 || barrier.x >= mapCols || barrier.z < 0) {
-        console.warn(`[PortalManager] Barrier out of bounds on floor ${floorId}: (${barrier.x}, ${barrier.z})`);
-        continue;
-      }
-      
-      const idx = (barrier.z * mapCols + barrier.x) * 2;
-      result.push({
-        index: idx,
-        tileId: 0,  // Floor tile (invisible/chessboard pattern)
-        isStatic: 1,
-        blockingIndex: barrier.z * mapCols + barrier.x  // Index in MAP_DATA to set to 2 (blocking)
-      });
-    }
-    
-    return result;
-  }
-  
-  /**
-   * Get all barrier data for a specific floor
-   */
-  public getFloorBarriers(floorId: number): BarrierData[] {
-    return this.floorBarriers.get(floorId) || [];
-  }
-  
-  /**
-   * Check if a tile position is a barrier, return barrier data if so
-   */
-  public getBarrierAtPosition(floorId: number, col: number, row: number): BarrierData | null {
-    const barriers = this.floorBarriers.get(floorId);
-    if (!barriers) return null;
-    
-    for (const barrier of barriers) {
-      if (barrier.x === col && barrier.z === row) {
-        return barrier;
-      }
-    }
-    return null;
-  }
-  
-  /**
-   * Get barrier positions set for efficient lookup (returns Set of "col,row" strings)
-   */
-  public getBarrierPositionsSet(floorId: number): Set<string> {
-    const barrierSet = new Set<string>();
-    const barriers = this.floorBarriers.get(floorId);
-    if (barriers) {
-      for (const barrier of barriers) {
-        barrierSet.add(`${barrier.x},${barrier.z}`);
-      }
-    }
-    return barrierSet;
-  }
-  
+
   /**
    * Get total number of floors with portal data
    */

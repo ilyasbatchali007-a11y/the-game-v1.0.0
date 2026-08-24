@@ -70,7 +70,7 @@ export class MapRenderer {
    * Generate portal tile data for the current floor using PortalManager
    */
   private generatePortalTiles(floorId: number, mapCols: number): void {
-    // Generate portal tiles
+    // Generate portal tiles (includes thresholds)
     const portalData = portalManager.generatePortalTileData(floorId, mapCols);
     
     for (const entry of portalData) {
@@ -80,22 +80,7 @@ export class MapRenderer {
       }
     }
     
-    // Generate barrier tiles (invisible collision blocks)
-    const barrierData = portalManager.generateBarrierTileData(floorId, mapCols);
-    
-    for (const entry of barrierData) {
-      if (entry.index < MAP_TILE_DATA.length) {
-        MAP_TILE_DATA[entry.index] = entry.tileId;
-        MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
-        
-        // Set MAP_DATA to 2 (blocking) for barrier tiles
-        if (entry.blockingIndex !== undefined && entry.blockingIndex < MAP_DATA.length) {
-          MAP_DATA[entry.blockingIndex] = 2;
-        }
-      }
-    }
-    
-    console.log(`[MapRenderer] Generated ${portalData.length} portal tiles and ${barrierData.length} barrier tiles for floor ${floorId}`);
+    console.log(`[MapRenderer] Generated ${portalData.length} portal/threshold tiles for floor ${floorId}`);
   }
 
   /**

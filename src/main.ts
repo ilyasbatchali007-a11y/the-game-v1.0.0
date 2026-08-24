@@ -664,13 +664,22 @@ window.addEventListener('keydown', (e) => {
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   
-  // Portal interaction with E key - 6-directional teleport system with barrier buffer
+  // Portal interaction with E key - 6-directional teleport system with threshold buffer
   if ((e.key === 'e' || e.key === 'E') && !floorSwitchCooldown && world) {
     // Get player's current tile position
     const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
     const playerRow = Math.floor(world.y[PLAYER_ID] / TILE_SIZE);
     
     const currentFloor = mapRenderer.getCurrentFloorId();
+    const currentWidth = getCurrentMapCols();
+    
+    // DEBUG: Log player position and tile data
+    const pIdx = playerRow * currentWidth + playerCol;
+    const pTileVisual = MAP_TILE_DATA[pIdx * 2];
+    const pTileColl = MAP_TILE_DATA[pIdx * 2 + 1];
+    const portalAtPlayer = portalManager.getPortalAtPosition(currentFloor, playerCol, playerRow);
+    const isThresholdHere = portalAtPlayer ? portalAtPlayer.isThreshold : false;
+    console.log(`[DEBUG PLAYER] Standing at (${playerCol}, ${playerRow}) | Visual: ${pTileVisual} | Collision: ${pTileColl} | IsThreshold?: ${isThresholdHere}`);
     
     // Check: Is player standing on a threshold tile (isThreshold=true)?
     const portal = portalManager.getPortalAtPosition(currentFloor, playerCol, playerRow);

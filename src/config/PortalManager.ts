@@ -192,6 +192,7 @@ export class PortalManager {
               // Left portal (at X): threshold at X+1
               // Right portal (at X): threshold at X-1
               const thresholdX = dir === 'left' ? x + 1 : x - 1;
+              console.log(`[DEBUG GEN] Floor ${floorId} | Dir ${dir} | Threshold at (${thresholdX}, ${z}) | Target: ${targetFloor}`);
               portals.push({
                 x: thresholdX,
                 z,
@@ -221,6 +222,7 @@ export class PortalManager {
               // Front portal (at Z): threshold at Z+1
               // Back portal (at Z): threshold at Z-1
               const thresholdZ = dir === 'front' ? z + 1 : z - 1;
+              console.log(`[DEBUG GEN] Floor ${floorId} | Dir ${dir} | Threshold at (${x}, ${thresholdZ}) | Target: ${targetFloor}`);
               portals.push({
                 x,
                 z: thresholdZ,

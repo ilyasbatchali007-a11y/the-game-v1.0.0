@@ -77,6 +77,14 @@ export class MapRenderer {
       if (entry.index < MAP_TILE_DATA.length) {
         MAP_TILE_DATA[entry.index] = entry.tileId;
         MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
+        
+        // DEBUG: Log collision map writes for threshold tiles
+        const idx = Math.floor(entry.index / 2);
+        const debugX = idx % mapCols;
+        const debugZ = Math.floor(idx / mapCols);
+        if (entry.tileId === 0 && entry.isStatic === 1) {
+          console.log(`[DEBUG COLL] Wrote SOLID (2) to MAP_DATA at Index ${idx} (Coords: ${debugX}, ${debugZ})`);
+        }
       }
     }
     

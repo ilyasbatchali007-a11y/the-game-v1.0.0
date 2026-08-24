@@ -664,13 +664,90 @@ window.addEventListener('keydown', (e) => {
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
   
-  // Portal interaction with E key - 6-directional teleport system
+  // Portal interaction with E key - 6-directional teleport system with barrier buffer
   if ((e.key === 'e' || e.key === 'E') && !floorSwitchCooldown && world) {
     // Get player's current tile position
     const playerCol = Math.floor(world.x[PLAYER_ID] / TILE_SIZE);
     const playerRow = Math.floor(world.y[PLAYER_ID] / TILE_SIZE);
     
-    // Check surrounding tiles (including current tile) for portal
+    const currentFloor = mapRenderer.getCurrentFloorId();
+    
+    // First check: Is player standing on a barrier tile?
+    const barrier = portalManager.getBarrierAtPosition(currentFloor, playerCol, playerRow);
+    
+    if (barrier) {
+      // Player is on a barrier - check adjacent tile in the portal direction for the actual portal
+      let portalCol = playerCol;
+      let portalRow = playerRow;
+      
+      // Calculate portal position based on barrier direction
+      // Barriers are 1 tile inward from portals, so we go opposite direction to find portal
+      switch (barrier.direction) {
+        case 'left':
+          portalCol = playerCol - 1;  // Portal is to the left of barrier
+          break;
+        case 'right':
+          portalCol = playerCol + 1;  // Portal is to the right of barrier
+          break;
+        case 'front':
+          portalRow = playerRow - 1;  // Portal is in front of barrier
+          break;
+        case 'back':
+          portalRow = playerRow + 1;  // Portal is behind barrier
+          break;
+        default:
+          // Up/down barriers don't exist (point portals have no barriers)
+          return;
+      }
+      
+      // Check if the portal tile exists at the calculated position
+      if (portalCol >= 0 && portalCol < getCurrentMapCols() && 
+          portalRow >= 0 && portalRow < getCurrentMapRows()) {
+        const idx = (portalRow * getCurrentMapCols() + portalCol) * 2;
+        const tileId = MAP_TILE_DATA[idx];
+        
+        // Verify this is the expected portal tile
+        if (tileId === barrier.portalTileId && tileId >= 2000 && tileId <= 2005) {
+          floorSwitchCooldown = true;
+          
+          // Look up target floor from PortalManager using direction
+          const direction = DIRECTION_NAMES[tileId];
+          if (direction) {
+            const targetFloor = portalManager.getTargetFloor(currentFloor, direction);
+            
+            // Validate target floor exists (Falsy-zero safety: floor 0 is valid)
+            if (targetFloor !== null && targetFloor !== undefined) {
+              mapRenderer.switchFloor(targetFloor);
+              
+              // Update renderer's map data texture after floor switch
+              if (renderer) {
+                renderer.updateMapDataTexture();
+              }
+              
+              // Teleport player to center of new floor and update camera
+              world.x[PLAYER_ID] = getCurrentWorldWidth() / 2;
+              world.y[PLAYER_ID] = getCurrentWorldHeight() / 2;
+              world.vx[PLAYER_ID] = 0;
+              world.vy[PLAYER_ID] = 0;
+              if (camera) {
+                camera.setTarget({ x: world.x[PLAYER_ID], y: world.y[PLAYER_ID] });
+                camera.snapToTarget();
+              }
+              
+              console.log(`[Portal] Used ${direction.toUpperCase()} portal from barrier (ID ${tileId}), switched from floor ${currentFloor} to floor ${targetFloor}`);
+            } else {
+              console.warn(`[Portal] Portal ${direction} on floor ${currentFloor} has no connection`);
+            }
+            
+            setTimeout(() => { floorSwitchCooldown = false; }, 300);
+          }
+        }
+      }
+      return;  // Exit early - player was on barrier, handled above
+    }
+    
+    // Fallback: Legacy behavior - check surrounding tiles for direct portal access
+    // (This allows up/down portals which have no barriers)
     let foundPortal = false;
     let targetFloor: number | null = null;
     let portalDirection = '';
@@ -689,8 +766,6 @@ window.addEventListener('keydown', (e) => {
           if (tileId >= 2000 && tileId <= 2005) {
             floorSwitchCooldown = true;
             foundPortal = true;
-            
-            const currentFloor = mapRenderer.getCurrentFloorId();
             
             // Look up target floor from PortalManager using direction
             const direction = DIRECTION_NAMES[tileId];

@@ -10,6 +10,14 @@ export interface PortalData {
   targetFloor: number | null;
 }
 
+export interface BarrierData {
+  x: number;           // Tile column position
+  z: number;           // Tile row position
+  direction: PortalDirection;  // Direction this barrier protects
+  tileId: number;      // 2 (collision block) but rendered as floor
+  portalTileId: number; // The portal tile this barrier protects (2000-2005)
+}
+
 export type PortalDirection = 'up' | 'down' | 'left' | 'right' | 'front' | 'back';
 
 export const PORTAL_TILE_IDS: Record<PortalDirection, number> = {
@@ -63,6 +71,9 @@ export class PortalManager {
   
   // Map: floorId -> array of portal data for that floor
   private floorPortals: Map<number, PortalData[]> = new Map();
+  
+  // Map: floorId -> array of barrier data for that floor
+  private floorBarriers: Map<number, BarrierData[]> = new Map();
   
   // Map: floorId -> floor dimensions (width, depth in tiles)
   private floorDimensions: Map<number, { width: number; depth: number }> = new Map();
@@ -118,6 +129,7 @@ export class PortalManager {
     placementData: PortalPlacementEntry[]
   ): void {
     this.floorPortals.clear();
+    this.floorBarriers.clear();
     this.floorDimensions.clear();
     this.adjacencyLookup.clear();
     
@@ -147,6 +159,7 @@ export class PortalManager {
       this.floorDimensions.set(floorId, { width: widthTiles, depth: depthTiles });
       
       const portals: PortalData[] = [];
+      const barriers: BarrierData[] = [];
       const portalsConfig = entry.portals;
       
       // Process each direction
@@ -185,6 +198,16 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
+              
+              // Add barrier 1 tile inward (left: +1 X, right: -1 X)
+              const barrierX = dir === 'left' ? x + 1 : x - 1;
+              barriers.push({
+                x: barrierX,
+                z,
+                direction: dir,
+                tileId: 2,  // Collision block tile
+                portalTileId: tileId
+              });
             }
           } else if (dir === 'front' || dir === 'back') {
             // Horizontal line along X axis at fixed Z
@@ -200,10 +223,20 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
+              
+              // Add barrier 1 tile inward (front: +1 Z, back: -1 Z)
+              const barrierZ = dir === 'front' ? z + 1 : z - 1;
+              barriers.push({
+                x,
+                z: barrierZ,
+                direction: dir,
+                tileId: 2,  // Collision block tile
+                portalTileId: tileId
+              });
             }
           }
         } else {
-          // Point portals (up/down)
+          // Point portals (up/down) - no barriers needed
           portals.push({
             x: config.x,
             z: config.z,
@@ -215,6 +248,7 @@ export class PortalManager {
       }
       
       this.floorPortals.set(floorId, portals);
+      this.floorBarriers.set(floorId, barriers);
     }
   }
   
@@ -331,6 +365,74 @@ export class PortalManager {
     }
     
     return result;
+  }
+  
+  /**
+   * Generate MAP_TILE_DATA entries for all barrier tiles on a floor
+   * Barriers use tileId 2 (collision block) but should render as floor (invisible)
+   * Returns array of {index, tileId, isStatic} for setting in MAP_TILE_DATA
+   */
+  public generateBarrierTileData(
+    floorId: number,
+    mapCols: number
+  ): Array<{ index: number; tileId: number; isStatic: number }> {
+    const result: Array<{ index: number; tileId: number; isStatic: number }> = [];
+    const barriers = this.floorBarriers.get(floorId);
+    
+    if (!barriers) return result;
+    
+    for (const barrier of barriers) {
+      // Validate bounds
+      if (barrier.x < 0 || barrier.x >= mapCols || barrier.z < 0) {
+        console.warn(`[PortalManager] Barrier out of bounds on floor ${floorId}: (${barrier.x}, ${barrier.z})`);
+        continue;
+      }
+      
+      const idx = (barrier.z * mapCols + barrier.x) * 2;
+      result.push({
+        index: idx,
+        tileId: barrier.tileId,  // Tile ID 2 for collision
+        isStatic: 1
+      });
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Get all barrier data for a specific floor
+   */
+  public getFloorBarriers(floorId: number): BarrierData[] {
+    return this.floorBarriers.get(floorId) || [];
+  }
+  
+  /**
+   * Check if a tile position is a barrier, return barrier data if so
+   */
+  public getBarrierAtPosition(floorId: number, col: number, row: number): BarrierData | null {
+    const barriers = this.floorBarriers.get(floorId);
+    if (!barriers) return null;
+    
+    for (const barrier of barriers) {
+      if (barrier.x === col && barrier.z === row) {
+        return barrier;
+      }
+    }
+    return null;
+  }
+  
+  /**
+   * Get barrier positions set for efficient lookup (returns Set of "col,row" strings)
+   */
+  public getBarrierPositionsSet(floorId: number): Set<string> {
+    const barrierSet = new Set<string>();
+    const barriers = this.floorBarriers.get(floorId);
+    if (barriers) {
+      for (const barrier of barriers) {
+        barrierSet.add(`${barrier.x},${barrier.z}`);
+      }
+    }
+    return barrierSet;
   }
   
   /**

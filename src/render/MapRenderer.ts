@@ -70,6 +70,7 @@ export class MapRenderer {
    * Generate portal tile data for the current floor using PortalManager
    */
   private generatePortalTiles(floorId: number, mapCols: number): void {
+    // Generate portal tiles
     const portalData = portalManager.generatePortalTileData(floorId, mapCols);
     
     for (const entry of portalData) {
@@ -79,7 +80,17 @@ export class MapRenderer {
       }
     }
     
-    console.log(`[MapRenderer] Generated ${portalData.length} portal tiles for floor ${floorId}`);
+    // Generate barrier tiles (invisible collision blocks)
+    const barrierData = portalManager.generateBarrierTileData(floorId, mapCols);
+    
+    for (const entry of barrierData) {
+      if (entry.index < MAP_TILE_DATA.length) {
+        MAP_TILE_DATA[entry.index] = entry.tileId;
+        MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
+      }
+    }
+    
+    console.log(`[MapRenderer] Generated ${portalData.length} portal tiles and ${barrierData.length} barrier tiles for floor ${floorId}`);
   }
 
   /**

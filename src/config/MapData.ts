@@ -120,6 +120,22 @@ export function isPositionBlocking(worldX: number, worldY: number): boolean {
   return isTileBlocking(col, row);
 }
 
+// Threshold tile tracking - managed by PortalManager
+let thresholdTiles: Set<string> | null = null;
+
+export function setThresholdTiles(tiles: Set<string>): void {
+  thresholdTiles = tiles;
+}
+
+export function clearThresholdTiles(): void {
+  thresholdTiles = null;
+}
+
+export function isThresholdTile(col: number, row: number): boolean {
+  if (!thresholdTiles) return false;
+  return thresholdTiles.has(`${col},${row}`);
+}
+
 // Get tile data for atlas rendering
 export function getTileData(col: number, row: number): { tileId: number; isStatic: number } {
   if (col < 0 || col >= getCurrentMapCols() || row < 0 || row >= getCurrentMapRows()) {

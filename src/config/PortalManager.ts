@@ -2,6 +2,8 @@
 // Manages 6-directional portal system with spatial adjacency
 // Loads adjacency data and portal placement from JSON files
 
+import { setThresholdTiles } from './MapData';
+
 export interface PortalData {
   x: number;           // Tile column position
   z: number;           // Tile row position  
@@ -119,6 +121,9 @@ export class PortalManager {
     this.floorDimensions.clear();
     this.adjacencyLookup.clear();
     
+    // Build threshold tiles set for collision system
+    const thresholdSet = new Set<string>();
+    
     // Build adjacency lookup: normalize string IDs to numbers
     for (const entry of adjacencyData) {
       const floorId = entry.floor;
@@ -197,6 +202,9 @@ export class PortalManager {
                 targetFloor,
                 isThreshold: true
               });
+              
+              // Track threshold tile for collision system
+              thresholdSet.add(`${thresholdX},${z}`);
             }
           } else if (dir === 'front' || dir === 'back') {
             // Horizontal line along X axis at fixed Z
@@ -227,6 +235,9 @@ export class PortalManager {
                 targetFloor,
                 isThreshold: true
               });
+              
+              // Track threshold tile for collision system
+              thresholdSet.add(`${x},${thresholdZ}`);
             }
           }
         } else {
@@ -243,6 +254,9 @@ export class PortalManager {
       
       this.floorPortals.set(floorId, portals);
     }
+    
+    // Register threshold tiles with collision system
+    setThresholdTiles(thresholdSet);
   }
   
   /**

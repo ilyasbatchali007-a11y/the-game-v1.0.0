@@ -8,7 +8,7 @@ export interface PortalData {
   direction: PortalDirection;
   tileId: number;      // 2000-2005
   targetFloor: number | null;
-  isThreshold?: boolean; // True if this is the unwalkable threshold tile
+  isThreshold?: boolean; // Optional flag for invisible threshold tiles
 }
 
 export type PortalDirection = 'up' | 'down' | 'left' | 'right' | 'front' | 'back';
@@ -62,7 +62,7 @@ interface PortalPlacementEntry {
 export class PortalManager {
   private static instance: PortalManager;
   
-  // Map: floorId -> array of portal data for that floor (includes thresholds)
+  // Map: floorId -> array of portal data for that floor
   private floorPortals: Map<number, PortalData[]> = new Map();
   
   // Map: floorId -> floor dimensions (width, depth in tiles)
@@ -88,8 +88,6 @@ export class PortalManager {
     adjacencyUrl: string,
     placementUrl: string
   ): Promise<void> {
-    console.log('[PortalManager] Loading portal data...');
-    
     try {
       const [adjacencyResponse, placementResponse] = await Promise.all([
         fetch(adjacencyUrl),
@@ -104,7 +102,6 @@ export class PortalManager {
       const placementData: PortalPlacementEntry[] = await placementResponse.json();
       
       this.buildPortalData(adjacencyData, placementData);
-      console.log(`[PortalManager] Loaded portals for ${this.floorDimensions.size} floors`);
     } catch (error) {
       console.error('[PortalManager] Failed to load portal data:', error);
       throw error;
@@ -187,20 +184,6 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
-              
-              // Add threshold tile: make tile directly inward from portal unwalkable
-              // Left portal (at X): threshold at X+1
-              // Right portal (at X): threshold at X-1
-              const thresholdX = dir === 'left' ? x + 1 : x - 1;
-              console.log(`[DEBUG GEN] Floor ${floorId} | Dir ${dir} | Threshold at (${thresholdX}, ${z}) | Target: ${targetFloor}`);
-              portals.push({
-                x: thresholdX,
-                z,
-                direction: dir,
-                tileId: 0,  // Floor tile (invisible)
-                targetFloor,
-                isThreshold: true
-              });
             }
           } else if (dir === 'front' || dir === 'back') {
             // Horizontal line along X axis at fixed Z
@@ -217,29 +200,10 @@ export class PortalManager {
                 tileId,
                 targetFloor
               });
-              
-              // Add threshold tile: make tile directly inward from portal unwalkable
-              // Front portal (at Z): threshold at Z+1
-              // Back portal (at Z): threshold at Z-1
-              const thresholdZ = dir === 'front' ? z + 1 : z - 1;
-              
-              // DEBUG: Only log for Floor 95 at (50, 7)
-              if (floorId === 95 && x === 50 && thresholdZ === 7) {
-                  console.log(`[DEBUG GEN] Floor 95 Threshold GENERATED at (50, 7). Target: ${targetFloor}`);
-              }
-              
-              portals.push({
-                x,
-                z: thresholdZ,
-                direction: dir,
-                tileId: 0,  // Floor tile (invisible)
-                targetFloor,
-                isThreshold: true
-              });
             }
           }
         } else {
-          // Point portals (up/down) - no thresholds needed
+          // Point portals (up/down)
           portals.push({
             x: config.x,
             z: config.z,

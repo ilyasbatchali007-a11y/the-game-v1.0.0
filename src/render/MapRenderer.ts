@@ -5,7 +5,8 @@
 // Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap } from '../config/MapData';
+import { generateTestMap, placePortalsForFloor } from '../config/MapData';
+import { PortalManager } from '../config/PortalManager';
 
 export interface IFloorRenderData {
   x: number;
@@ -22,9 +23,20 @@ export interface IFloorRenderData {
 export class MapRenderer {
   private currentFloorId: number = 0;
   private floorConfig: FloorConfig;
+  private portalManagerInitialized = false;
 
   constructor(floorConfig: FloorConfig = ARENA_FLOOR) {
     this.floorConfig = floorConfig;
+  }
+
+  /**
+   * Initialize the PortalManager (call once at app startup)
+   */
+  public async initializePortalManager(): Promise<void> {
+    if (!this.portalManagerInitialized) {
+      await PortalManager.initialize();
+      this.portalManagerInitialized = true;
+    }
   }
 
   /**
@@ -32,7 +44,7 @@ export class MapRenderer {
    * @param floorId - The floor ID to switch to (0-19)
    * @returns true if successful, false if invalid floor ID
    */
-  public switchFloor(floorId: number): boolean {
+  public async switchFloor(floorId: number): Promise<boolean> {
     if (floorId < 0 || floorId >= getFloorCount()) {
       console.warn(`Invalid floor ID: ${floorId}. Must be between 0 and ${getFloorCount() - 1}`);
       return false;
@@ -44,11 +56,14 @@ export class MapRenderer {
     // Regenerate the map data with new dimensions and texture settings
     const cols = Math.floor(this.floorConfig.width / 64);
     const rows = Math.floor(this.floorConfig.depth / 64);
-    generateTestMap({
+    await generateTestMap({
       cols,
       rows,
       useAtlas: this.floorConfig.useAtlas
     });
+    
+    // Place portals for this floor using PortalManager data
+    placePortalsForFloor(floorId);
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;

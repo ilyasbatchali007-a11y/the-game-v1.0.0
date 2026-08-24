@@ -36,8 +36,8 @@ export class CollisionSystem {
 
   /**
    * Checks if the full outer base of the entity is on valid walkable floor tiles.
-   * This validates all 4 corners of the base against the tile grid.
-   * Returns false if any corner is out of bounds OR on a blocking tile (void/wall).
+   * This validates all 4 diamond points of the base against the tile grid.
+   * Returns false if any diamond point is out of bounds OR on a blocking tile (void/wall).
    */
   private isBaseOnValidFloor(
     x: number,
@@ -45,27 +45,38 @@ export class CollisionSystem {
     width: number,
     height: number
   ): boolean {
-    // Calculate tile coordinates for the full base corners
-    const leftCol = Math.floor(x / TILE_SIZE);
-    const rightCol = Math.floor((x + width - 1) / TILE_SIZE);
-    const bottomRow = Math.floor((y + height - 1) / TILE_SIZE);
-    
+    // Calculate the 4 diamond footprint points for the base of the entity
+    const diamondPoints = [
+      { x: x + width / 2, y: y },           // Top
+      { x: x + width / 2, y: y + height },  // Bottom
+      { x: x, y: y + height / 2 },          // Left
+      { x: x + width, y: y + height / 2 }   // Right
+    ];
+
     // Get current map dimensions directly from MAP_DATA array
     const mapCols = getCurrentMapCols();
     const mapRows = getCurrentMapRows();
-    
-    // Check if base corners are within strict grid bounds
-    // If any corner is outside the array, it's VOID
-    if (leftCol < 0 || rightCol >= mapCols || bottomRow < 0 || bottomRow >= mapRows) {
+
+    // Verify that all 4 diamond points fall strictly within map boundaries
+    // and are not on blocking tiles
+    for (const pt of diamondPoints) {
+      // Convert each point to integer tile coordinates using standard grid mapping
+      const col = Math.floor(pt.x / TILE_SIZE);
+      const row = Math.floor(pt.y / TILE_SIZE);
+
+      // Check if point is within strict grid bounds
+      if (col < 0 || col >= mapCols || row < 0 || row >= mapRows) {
         return false;
+      }
+
+      // Check if point is on a blocking tile
+      if (isTileBlocking(col, row)) {
+        return false;
+      }
     }
-    
-    // Check if both bottom corners are on valid walkable floor tiles
-    // isTileBlocking returns true for walls/void (including tile ID 0 if configured so), false for walkable
-    const leftWalkable = !isTileBlocking(leftCol, bottomRow);
-    const rightWalkable = !isTileBlocking(rightCol, bottomRow);
-    
-    return leftWalkable && rightWalkable;
+
+    // Return true only if all 4 diamond points land on valid walkable tiles
+    return true;
   }
 
   private moveAndSlide(

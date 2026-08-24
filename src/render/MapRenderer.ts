@@ -1,11 +1,12 @@
 // SRC/render/MapRenderer.ts
 // Optimized single-quad floor renderer - renders entire floor as ONE rectangle
 // Reduces draw calls from 1024+ to 1 for maximum performance
-// Supports 20 independent floors with customized sizes that can be switched at runtime
+// Supports 100 independent floors with customized sizes that can be switched at runtime
 // Uses green chessboard pattern texture for all floors
 
 import { ARENA_FLOOR, FloorConfig, FLOORS, getFloorById, getFloorCount } from '../config/FloorMap';
-import { generateTestMap } from '../config/MapData';
+import { generateTestMap, setMapDimensions, placePortalsForFloor } from '../config/MapData';
+import { PortalManager } from '../config/PortalManager';
 
 export interface IFloorRenderData {
   x: number;
@@ -28,8 +29,8 @@ export class MapRenderer {
   }
 
   /**
-   * Switch to a different floor by ID (0-19)
-   * @param floorId - The floor ID to switch to (0-19)
+   * Switch to a different floor by ID (0-99)
+   * @param floorId - The floor ID to switch to (0-99)
    * @returns true if successful, false if invalid floor ID
    */
   public switchFloor(floorId: number): boolean {
@@ -41,14 +42,29 @@ export class MapRenderer {
     this.currentFloorId = floorId;
     this.floorConfig = getFloorById(floorId);
     
+    // Get actual floor dimensions from PortalManager (List 3 data)
+    const dims = PortalManager.getDimensions(floorId);
+    let cols: number, rows: number;
+    
+    if (dims) {
+      // Use real dimensions from List 3
+      cols = dims.width;
+      rows = dims.depth;
+    } else {
+      // Fallback to config-based dimensions
+      cols = Math.floor(this.floorConfig.width / 64);
+      rows = Math.floor(this.floorConfig.depth / 64);
+    }
+    
     // Regenerate the map data with new dimensions and texture settings
-    const cols = Math.floor(this.floorConfig.width / 64);
-    const rows = Math.floor(this.floorConfig.depth / 64);
     generateTestMap({
       cols,
       rows,
       useAtlas: this.floorConfig.useAtlas
     });
+    
+    // Place portal tiles for this floor using PortalManager data
+    placePortalsForFloor(floorId);
     
     console.log(`[MapRenderer] Switched to Floor ${floorId} (${cols}x${rows} tiles, ${this.floorConfig.width}x${this.floorConfig.depth}px)`);
     return true;

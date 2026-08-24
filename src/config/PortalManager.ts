@@ -205,7 +205,7 @@ export class PortalManager {
                 x: barrierX,
                 z,
                 direction: dir,
-                tileId: 2,  // Collision block tile
+                tileId: 0,  // Floor tile (invisible/chessboard) - collision handled by isStatic flag
                 portalTileId: tileId
               });
             }
@@ -230,7 +230,7 @@ export class PortalManager {
                 x,
                 z: barrierZ,
                 direction: dir,
-                tileId: 2,  // Collision block tile
+                tileId: 0,  // Floor tile (invisible/chessboard) - collision handled by isStatic flag
                 portalTileId: tileId
               });
             }

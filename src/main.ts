@@ -663,6 +663,18 @@ window.addEventListener('keydown', (e) => {
     
     setTimeout(() => { floorSwitchCooldown = false; }, 200);
   }
+
+  // Toggle isometric view with O key
+  if ((e.key === 'o' || e.key === 'O') && !floorSwitchCooldown) {
+    floorSwitchCooldown = true;
+    if (renderer) {
+      renderer.toggleIsometricView();
+      const mode = renderer.getIsIsometricView() ? "ON (isometric)" : "OFF (flat 2D)";
+      console.log(`[Main] Isometric view toggled: ${mode}`);
+    }
+    setTimeout(() => { floorSwitchCooldown = false; }, 200);
+    return;
+  }
   
   // Portal interaction with E key - 6-directional teleport system with threshold buffer
   if ((e.key === 'e' || e.key === 'E') && !floorSwitchCooldown && world) {

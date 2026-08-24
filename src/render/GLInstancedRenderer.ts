@@ -271,6 +271,7 @@ export class GLInstancedRenderer {
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
   private isoScale: number = 0.5;          // Y compression for isometric
+  private isIsometricView: boolean = true; // Track current view mode
   private cameraOffsetX: number = 0;
   private cameraOffsetY: number = 0;
 
@@ -456,7 +457,32 @@ export class GLInstancedRenderer {
   public setIsometricView(angleRadians: number, scaleY: number): void {
     this.isoAngle = angleRadians;
     this.isoScale = scaleY;
+    this.isIsometricView = true;
   }
+
+  /**
+   * Toggle between isometric view and flat 2D top-down view
+   */
+  public toggleIsometricView(): void {
+    this.isIsometricView = !this.isIsometricView;
+    if (this.isIsometricView) {
+      // Restore isometric view (45° rotation, 0.5 Y scale)
+      this.isoAngle = Math.PI / 4;
+      this.isoScale = 0.5;
+    } else {
+      // Switch to flat 2D top-down view (no rotation, 1.0 Y scale)
+      this.isoAngle = 0;
+      this.isoScale = 1.0;
+    }
+  }
+
+  /**
+   * Check if currently in isometric view mode
+   */
+  public getIsIsometricView(): boolean {
+    return this.isIsometricView;
+  }
+
   public render(world: World, width: number, height: number, texture: WebGLTexture, 
                 cameraX: number = 0, cameraY: number = 0): void {
     const gl = this.gl;

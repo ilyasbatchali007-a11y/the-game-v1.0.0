@@ -9,7 +9,7 @@ type World = {
   h: number[];
 };
 
-import { getCurrentWorldWidth, getCurrentWorldHeight, getMapData, getCurrentMapRows, getCurrentMapCols } from '../config/MapData';
+import { getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapRows, getCurrentMapCols } from '../config/MapData';
 import { isTileBlocking, TILE_SIZE } from '../config/MapData';
 
 export class CollisionSystem {

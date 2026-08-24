@@ -66,7 +66,7 @@ async function initEngine() {
   try {
     await portalManager.loadPortalData(
       'src/config/block_floors_adjacency.json',
-      'src/config/list3_portal_placement_updated.json'
+      'src/config/list3_portal_placement_updated (1).json'
     );
     console.log('[Engine] Portal data loaded successfully');
   } catch (error) {

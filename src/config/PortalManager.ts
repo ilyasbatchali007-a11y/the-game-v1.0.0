@@ -222,7 +222,12 @@ export class PortalManager {
               // Front portal (at Z): threshold at Z+1
               // Back portal (at Z): threshold at Z-1
               const thresholdZ = dir === 'front' ? z + 1 : z - 1;
-              console.log(`[DEBUG GEN] Floor ${floorId} | Dir ${dir} | Threshold at (${x}, ${thresholdZ}) | Target: ${targetFloor}`);
+              
+              // DEBUG: Only log for Floor 95 at (50, 7)
+              if (floorId === 95 && x === 50 && thresholdZ === 7) {
+                  console.log(`[DEBUG GEN] Floor 95 Threshold GENERATED at (50, 7). Target: ${targetFloor}`);
+              }
+              
               portals.push({
                 x,
                 z: thresholdZ,

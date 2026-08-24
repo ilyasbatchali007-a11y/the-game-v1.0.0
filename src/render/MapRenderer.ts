@@ -78,12 +78,13 @@ export class MapRenderer {
         MAP_TILE_DATA[entry.index] = entry.tileId;
         MAP_TILE_DATA[entry.index + 1] = entry.isStatic;
         
-        // DEBUG: Log collision map writes for threshold tiles
+        // DEBUG: Log collision map writes for threshold tiles (Only for Floor 95 at 50,7)
         const idx = Math.floor(entry.index / 2);
         const debugX = idx % mapCols;
         const debugZ = Math.floor(idx / mapCols);
-        if (entry.tileId === 0 && entry.isStatic === 1) {
-          console.log(`[DEBUG COLL] Wrote SOLID (2) to MAP_DATA at Index ${idx} (Coords: ${debugX}, ${debugZ})`);
+        
+        if (entry.tileId === 0 && entry.isStatic === 1 && floorId === 95 && debugX === 50 && debugZ === 7) {
+          console.log(`[DEBUG COLL] Floor 95: Wrote SOLID (2) to MAP_DATA at Index ${idx} (Coords: 50, 7)`);
         }
       }
     }

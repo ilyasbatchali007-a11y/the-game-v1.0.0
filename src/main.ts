@@ -673,13 +673,16 @@ window.addEventListener('keydown', (e) => {
     const currentFloor = mapRenderer.getCurrentFloorId();
     const currentWidth = getCurrentMapCols();
     
-    // DEBUG: Log player position and tile data
+    // DEBUG: Log player position and tile data (Only for Floor 95 at 50,7)
     const pIdx = playerRow * currentWidth + playerCol;
     const pTileVisual = MAP_TILE_DATA[pIdx * 2];
     const pTileColl = MAP_TILE_DATA[pIdx * 2 + 1];
     const portalAtPlayer = portalManager.getPortalAtPosition(currentFloor, playerCol, playerRow);
     const isThresholdHere = portalAtPlayer ? portalAtPlayer.isThreshold : false;
-    console.log(`[DEBUG PLAYER] Standing at (${playerCol}, ${playerRow}) | Visual: ${pTileVisual} | Collision: ${pTileColl} | IsThreshold?: ${isThresholdHere}`);
+    
+    if (currentFloor === 95 && playerCol === 50 && playerRow === 7) {
+        console.log(`[DEBUG PLAYER] Floor 95: Standing at (50, 7) | Visual: ${pTileVisual} | Collision: ${pTileColl} | IsThreshold?: ${isThresholdHere}`);
+    }
     
     // Check: Is player standing on a threshold tile (isThreshold=true)?
     const portal = portalManager.getPortalAtPosition(currentFloor, playerCol, playerRow);

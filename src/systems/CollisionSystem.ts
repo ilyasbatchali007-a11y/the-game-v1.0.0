@@ -9,7 +9,7 @@ type World = {
   h: number[];
 };
 
-import { getCurrentWorldWidth, getCurrentWorldHeight } from '../config/MapData';
+import { getCurrentWorldWidth, getCurrentWorldHeight, getMapData, getCurrentMapRows, getCurrentMapCols } from '../config/MapData';
 import { isTileBlocking, TILE_SIZE } from '../config/MapData';
 
 export class CollisionSystem {
@@ -25,8 +25,8 @@ export class CollisionSystem {
       world.y[playerId],
       vx,
       vy,
-      world.w[playerId] || 32,
-      world.h[playerId] || 32,
+      world.w[playerId] || TILE_SIZE,
+      world.h[playerId] || TILE_SIZE,
       dt
     );
 
@@ -36,7 +36,8 @@ export class CollisionSystem {
 
   /**
    * Checks if the full outer base of the entity is on valid walkable floor tiles.
-   * This validates all 4 corners of the $32 \times 32$ base against the tile grid.
+   * This validates all 4 corners of the base against the tile grid.
+   * Returns false if any corner is out of bounds OR on a blocking tile (void/wall).
    */
   private isBaseOnValidFloor(
     x: number,
@@ -49,25 +50,18 @@ export class CollisionSystem {
     const rightCol = Math.floor((x + width - 1) / TILE_SIZE);
     const bottomRow = Math.floor((y + height - 1) / TILE_SIZE);
     
-    // Get current world dimensions dynamically
-    const worldWidth = getCurrentWorldWidth();
-    const worldHeight = getCurrentWorldHeight();
-    const mapWidthTiles = Math.floor(worldWidth / TILE_SIZE);
-    const mapHeightTiles = Math.floor(worldHeight / TILE_SIZE);
+    // Get current map dimensions directly from MAP_DATA array
+    const mapCols = getCurrentMapCols();
+    const mapRows = getCurrentMapRows();
     
-    // Check if base corners are within grid bounds
-    const withinBounds = 
-        leftCol >= 0 && 
-        rightCol < mapWidthTiles && 
-        bottomRow >= 0 && 
-        bottomRow < mapHeightTiles;
-    
-    if (!withinBounds) {
+    // Check if base corners are within strict grid bounds
+    // If any corner is outside the array, it's VOID
+    if (leftCol < 0 || rightCol >= mapCols || bottomRow < 0 || bottomRow >= mapRows) {
         return false;
     }
     
     // Check if both bottom corners are on valid walkable floor tiles
-    // isTileBlocking returns true for walls/void, false for walkable floors
+    // isTileBlocking returns true for walls/void (including tile ID 0 if configured so), false for walkable
     const leftWalkable = !isTileBlocking(leftCol, bottomRow);
     const rightWalkable = !isTileBlocking(rightCol, bottomRow);
     

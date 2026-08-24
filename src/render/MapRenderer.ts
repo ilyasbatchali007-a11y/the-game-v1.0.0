@@ -39,7 +39,12 @@ export class MapRenderer {
     }
     
     this.currentFloorId = floorId;
-    this.floorConfig = getFloorById(floorId);
+    const floorConfig = getFloorById(floorId);
+    if (!floorConfig) {
+      console.warn(`Floor configuration not found for ID: ${floorId}`);
+      return false;
+    }
+    this.floorConfig = floorConfig;
     
     // Regenerate the map data with new dimensions and texture settings
     const cols = Math.floor(this.floorConfig.width / 64);
@@ -75,7 +80,8 @@ export class MapRenderer {
     if (floorId < 0 || floorId >= getFloorCount()) {
       return null;
     }
-    return getFloorById(floorId);
+    const floorConfig = getFloorById(floorId);
+    return floorConfig || null;
   }
 
   /**

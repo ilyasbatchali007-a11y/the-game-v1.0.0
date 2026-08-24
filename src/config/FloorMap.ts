@@ -14,7 +14,7 @@ export interface FloorConfig {
   staticTileRangeEnd: number;
   variationTileRangeStart: number;
   variationTileRangeEnd: number;
-},
+}
 
 // Generate green chessboard texture at module initialization
 let GREEN_CHESSBOARD_TEXTURE = '';
@@ -32,8 +32,8 @@ if (typeof document !== 'undefined') {
     ctx.fillRect(halfSize, 0, halfSize, halfSize);
     ctx.fillRect(0, halfSize, halfSize, halfSize);
     GREEN_CHESSBOARD_TEXTURE = canvas.toDataURL('image/png');
-  },
-},
+  }
+}
 
 // Default floor dimensions match the world size (160 tiles x 64px = 10240px)
 export const ARENA_FLOOR: FloorConfig = {
@@ -170,5 +170,14 @@ export const FLOORS: FloorConfig[] = [
   { id: 97, width: 9664.0, depth: 9664.0, texturePath: GREEN_CHESSBOARD_TEXTURE, repeatX: 151.0, repeatZ: 151.0, useAtlas: false, atlasTileCountX: 32, atlasTileCountY: 32, staticTileRangeStart: 0, staticTileRangeEnd: 99, variationTileRangeStart: 100, variationTileRangeEnd: 1023 },
   { id: 98, width: 11008.0, depth: 11008.0, texturePath: GREEN_CHESSBOARD_TEXTURE, repeatX: 172.0, repeatZ: 172.0, useAtlas: false, atlasTileCountX: 32, atlasTileCountY: 32, staticTileRangeStart: 0, staticTileRangeEnd: 99, variationTileRangeStart: 100, variationTileRangeEnd: 1023 },
   { id: 99, width: 8448.0, depth: 8448.0, texturePath: GREEN_CHESSBOARD_TEXTURE, repeatX: 132.0, repeatZ: 132.0, useAtlas: false, atlasTileCountX: 32, atlasTileCountY: 32, staticTileRangeStart: 0, staticTileRangeEnd: 99, variationTileRangeStart: 100, variationTileRangeEnd: 1023 },
-  { id: 100, width: 2048.0, depth: 2048.0, texturePath: GREEN_CHESSBOARD_TEXTURE, repeatX: 32.0, repeatZ: 32.0, useAtlas: false, atlasTileCountX: 32, atlasTileCountY: 32, staticTileRangeStart: 0, staticTileRangeEnd: 99, variationTileRangeStart: 100, variationTileRangeEnd: 1023 },
+  { id: 100, width: 2048.0, depth: 2048.0, texturePath: GREEN_CHESSBOARD_TEXTURE, repeatX: 32.0, repeatZ: 32.0, useAtlas: false, atlasTileCountX: 32, atlasTileCountY: 32, staticTileRangeStart: 0, staticTileRangeEnd: 99, variationTileRangeStart: 100, variationTileRangeEnd: 1023 }
 ];
+
+// Helper functions to get floor information
+export function getFloorById(id: number): FloorConfig | undefined {
+  return FLOORS.find(floor => floor.id === id);
+}
+
+export function getFloorCount(): number {
+  return FLOORS.length;
+}

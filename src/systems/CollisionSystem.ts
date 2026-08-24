@@ -64,29 +64,57 @@ export class CollisionSystem {
     const worldWidth = getCurrentWorldWidth();
     const worldHeight = getCurrentWorldHeight();
 
-    // Strict map boundary check: ensure the FULL outer base stays within valid tile bounds
+    // Strict map boundary check: ensure the FULL outer base stays on valid walkable tiles
     // This prevents the entity from floating off the edge due to the shrunken footprint
     const mapWidthTiles = Math.floor(worldWidth / TILE_SIZE);
     const mapHeightTiles = Math.floor(worldHeight / TILE_SIZE);
     
-    // Check full base bounds (x to x+width, and bottom edge at y+height-1)
-    const baseLeft = Math.floor(nextX / TILE_SIZE);
-    const baseRight = Math.floor((nextX + width - 1) / TILE_SIZE);
-    const baseBottom = Math.floor((nextY + height - 1) / TILE_SIZE);
+    // Calculate tile coordinates for the full base corners
+    const leftCol = Math.floor(nextX / TILE_SIZE);
+    const rightCol = Math.floor((nextX + width - 1) / TILE_SIZE);
+    const bottomRow = Math.floor((nextY + height - 1) / TILE_SIZE);
     
-    // Clamp to keep full base inside valid tile grid
-    if (baseLeft < 0) {
-      nextX = 0;
-    }
-    if (baseRight >= mapWidthTiles) {
-      nextX = (mapWidthTiles * TILE_SIZE) - width;
-    }
-    if (baseBottom >= mapHeightTiles) {
-      nextY = (mapHeightTiles * TILE_SIZE) - height;
-    }
-    // Also clamp top edge to prevent going above map
-    if (nextY < 0) {
-      nextY = 0;
+    // Check if base corners are within grid bounds
+    const withinBounds = 
+        leftCol >= 0 && 
+        rightCol < mapWidthTiles && 
+        bottomRow >= 0 && 
+        bottomRow < mapHeightTiles;
+    
+    if (withinBounds) {
+        // Check if both bottom corners are on valid walkable floor tiles
+        // Assuming tile ID > 0 represents walkable floor (green grass), 
+        // and 0/null/-1 represents void/empty/non-walkable
+        const leftTile = isTileBlocking(leftCol, bottomRow) ? null : { id: 1 }; // Simplified: if not blocking, it's walkable
+        const rightTile = isTileBlocking(rightCol, bottomRow) ? null : { id: 1 };
+        
+        // Invert logic: isTileBlocking returns true for walls, false for floors
+        // So we need to check if the tile is NOT blocking (i.e., is walkable)
+        // But we also need to handle out-of-bounds which might return undefined behavior
+        // Let's directly check if the position is valid and walkable
+        const leftWalkable = !isTileBlocking(leftCol, bottomRow);
+        const rightWalkable = !isTileBlocking(rightCol, bottomRow);
+        
+        if (!leftWalkable || !rightWalkable) {
+            // Reject movement: one or both corners would be on void/non-walkable tile
+            // Revert to previous position to stay on valid tiles
+            nextX = x;
+            nextY = y;
+        }
+    } else {
+        // Out of grid bounds entirely, clamp to map edges
+        if (leftCol < 0) {
+            nextX = 0;
+        }
+        if (rightCol >= mapWidthTiles) {
+            nextX = (mapWidthTiles * TILE_SIZE) - width;
+        }
+        if (bottomRow >= mapHeightTiles) {
+            nextY = (mapHeightTiles * TILE_SIZE) - height;
+        }
+        if (nextY < 0) {
+            nextY = 0;
+        }
     }
 
     // Check tile collisions at footprint corners

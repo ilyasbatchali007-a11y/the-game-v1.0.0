@@ -2,6 +2,8 @@ import { World } from '../ecs/World';
 import { PLAYER_ID } from '../config/Constants';
 import { FloorConfig } from '../config/FloorMap';
 import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
+import { CELL_SIZE } from '../config/Constants';
+import { debug } from '../utils/DebugTools';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -271,6 +273,7 @@ export class GLInstancedRenderer {
   // Isometric view defaults
   private isoAngle: number = Math.PI / 4;  // 45 degrees
   private isoScale: number = 0.5;          // Y compression for isometric
+  private isIsometricView: boolean = true; // Track current view mode
   private cameraOffsetX: number = 0;
   private cameraOffsetY: number = 0;
 
@@ -456,7 +459,32 @@ export class GLInstancedRenderer {
   public setIsometricView(angleRadians: number, scaleY: number): void {
     this.isoAngle = angleRadians;
     this.isoScale = scaleY;
+    this.isIsometricView = true;
   }
+
+  /**
+   * Toggle between isometric view and flat 2D top-down view
+   */
+  public toggleIsometricView(): void {
+    this.isIsometricView = !this.isIsometricView;
+    if (this.isIsometricView) {
+      // Restore isometric view (45° rotation, 0.5 Y scale)
+      this.isoAngle = Math.PI / 4;
+      this.isoScale = 0.5;
+    } else {
+      // Switch to flat 2D top-down view (no rotation, 1.0 Y scale)
+      this.isoAngle = 0;
+      this.isoScale = 1.0;
+    }
+  }
+
+  /**
+   * Check if currently in isometric view mode
+   */
+  public getIsIsometricView(): boolean {
+    return this.isIsometricView;
+  }
+
   public render(world: World, width: number, height: number, texture: WebGLTexture, 
                 cameraX: number = 0, cameraY: number = 0): void {
     const gl = this.gl;
@@ -504,6 +532,9 @@ export class GLInstancedRenderer {
   
   /**
    * Render player entity as a 3D cube with red color and per-face shading
+   * The player sprite height extends past a single tile height, so we anchor
+   * the rendering to the bottom-center of the physics cell by shifting the
+   * render Y-position upward by (playerSpriteHeight - tileHeight).
    */
   public renderPlayer(world: World, width: number, height: number, texture: WebGLTexture,
                       cameraX: number = 0, cameraY: number = 0): void {
@@ -512,13 +543,62 @@ export class GLInstancedRenderer {
     
     if (!worldAny || !worldAny.active || !worldAny.active[PLAYER_ID]) return;
     
+    // Get player dimensions
+    const playerWidth = worldAny.width[PLAYER_ID];
+    const playerHeight = worldAny.height[PLAYER_ID];
+    
+    // Structural variables for bounding box math
+    const pX = worldAny.px[PLAYER_ID];
+    const pY = worldAny.py[PLAYER_ID];
+    const pW = worldAny.width[PLAYER_ID]; // 32
+    const pH = worldAny.height[PLAYER_ID]; // 32
+
+    // Base alignment (proven to target Top-Left corner based on shader trace)
+    const MULT_W = 0.5;
+    const MULT_H = 0.5;
+    const DIV_CELL = 2.0;
+
+    let renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
+    let renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
+
+    // THE FIX: 
+    // 1. Math.round() eliminates WebGL sub-pixel anti-aliasing gaps.
+    // 2. The -1 micro-offset pulls the cube diagonally up/left to counteract 
+    //    the visual "height bleed" of the isometric projection, bringing the \n    //    Front/Left/Right edges back onto the tile without ruining the Back.
+    renderX = Math.round(renderX) - 1;
+    renderY = Math.round(renderY) - 1;
+    
+    // --- DEBUG LOG START ---
+    // Only log if player is moving to prevent spam
+    const vx = worldAny.vx ? worldAny.vx[PLAYER_ID] : 0;
+    const vy = worldAny.vy ? worldAny.vy[PLAYER_ID] : 0;
+    
+    if (debug.isDebugEnabled && (vx !== 0 || vy !== 0)) {
+      const physCX = pX + (pW * 0.5);
+      const physCY = pY + (pH * 0.5);
+      
+      // Visual center based on the rendered quad size (CELL_SIZE)
+      const visCX = renderX + (CELL_SIZE * 0.5);
+      const visCY = renderY + (CELL_SIZE * 0.5);
+      
+      const deltaX = visCX - physCX;
+      const deltaY = visCY - physCY;
+
+      debug.log('RENDER DRIFT', 
+        `PhysCenter: (${physCX.toFixed(2)}, ${physCY.toFixed(2)}) | ` +
+        `VisCenter: (${visCX.toFixed(2)}, ${visCY.toFixed(2)}) | ` +
+        `Delta: (${deltaX.toFixed(2)}, ${deltaY.toFixed(2)})`
+      );
+    }
+    // --- DEBUG LOG END ---
+    
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
-    const cubeHeight = (worldAny.height && worldAny.height[PLAYER_ID]) ? worldAny.height[PLAYER_ID] * 2.0 : 64.0;
+    const cubeHeight = playerHeight * 2.0;
     const elevation = worldAny.z ? worldAny.z[PLAYER_ID] : 0.0;
-    this.instanceData[0] = worldAny.px[PLAYER_ID];
-    this.instanceData[1] = worldAny.py[PLAYER_ID];
-    this.instanceData[2] = worldAny.width[PLAYER_ID];
-    this.instanceData[3] = worldAny.height[PLAYER_ID];
+    this.instanceData[0] = renderX;  // Apply tuned X offset
+    this.instanceData[1] = renderY;  // Apply tuned Y offset to anchor base to tile bottom
+    this.instanceData[2] = playerWidth;
+    this.instanceData[3] = playerHeight;
     this.instanceData[4] = cubeHeight;
     this.instanceData[5] = worldAny.rotation ? worldAny.rotation[PLAYER_ID] : 0;
     this.instanceData[6] = elevation;

@@ -546,15 +546,26 @@ export class GLInstancedRenderer {
     const playerWidth = worldAny.width[PLAYER_ID];
     const playerHeight = worldAny.height[PLAYER_ID];
     
-    // Calculate the actual visual height of the rendered cube mesh
-    // Positive offset pushes the visual mesh down onto the tile floor
-    const renderY = worldAny.py[PLAYER_ID] + (CELL_SIZE / 2); // +16px
+    // Structural variables for bounding box math
+    const pX = worldAny.px[PLAYER_ID];
+    const pY = worldAny.py[PLAYER_ID];
+    const pW = worldAny.width[PLAYER_ID];
+    const pH = worldAny.height[PLAYER_ID];
+
+    // TUNING CONTROLS (Tweak these multipliers/dividers during testing)
+    const MULT_W = 0.5; // Controls width influence on X offset
+    const MULT_H = 0.5; // Controls height influence on Y offset
+    const DIV_CELL = 2; // Controls CELL_SIZE division factor
+
+    // Calculated offsets
+    const renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
+    const renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
     
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
     const cubeHeight = playerHeight * 2.0;
     const elevation = worldAny.z ? worldAny.z[PLAYER_ID] : 0.0;
-    this.instanceData[0] = worldAny.px[PLAYER_ID];
-    this.instanceData[1] = renderY;  // Apply Y offset to anchor base to tile bottom
+    this.instanceData[0] = renderX;  // Apply tuned X offset
+    this.instanceData[1] = renderY;  // Apply tuned Y offset to anchor base to tile bottom
     this.instanceData[2] = playerWidth;
     this.instanceData[3] = playerHeight;
     this.instanceData[4] = cubeHeight;

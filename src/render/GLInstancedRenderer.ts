@@ -547,13 +547,8 @@ export class GLInstancedRenderer {
     const playerHeight = worldAny.height[PLAYER_ID];
     
     // Calculate the actual visual height of the rendered cube mesh
-    // The cube extrusion height is playerHeight * 2.0 (see line 555)
-    const visualHeight = playerHeight * 2.0;
-    
-    // Shift upward by the difference between visual height and tile size
-    // renderY = worldY - (visualHeight - CELL_SIZE) anchors the bottom base
-    // of the red block strictly inside the 32x32 physics cell
-    const renderY = worldAny.py[PLAYER_ID] - (visualHeight - CELL_SIZE);
+    // Exact 16px vertical anchor offset for isometric tile base
+    const renderY = worldAny.py[PLAYER_ID] - (CELL_SIZE / 2);
     
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
     const cubeHeight = playerHeight * 2.0;

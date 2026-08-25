@@ -549,17 +549,24 @@ export class GLInstancedRenderer {
     // Structural variables for bounding box math
     const pX = worldAny.px[PLAYER_ID];
     const pY = worldAny.py[PLAYER_ID];
-    const pW = worldAny.width[PLAYER_ID];
-    const pH = worldAny.height[PLAYER_ID];
+    const pW = worldAny.width[PLAYER_ID]; // 32
+    const pH = worldAny.height[PLAYER_ID]; // 32
 
-    // TUNING CONTROLS (Tweak these multipliers/dividers during testing)
-    const MULT_W = 0.5; // Controls width influence on X offset
-    const MULT_H = 0.5; // Controls height influence on Y offset
-    const DIV_CELL = 2; // Controls CELL_SIZE division factor
+    // Base alignment (proven to target Top-Left corner based on shader trace)
+    const MULT_W = 0.5;
+    const MULT_H = 0.5;
+    const DIV_CELL = 2.0;
 
-    // Calculated offsets
-    const renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
-    const renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
+    let renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
+    let renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
+
+    // THE FIX: 
+    // 1. Math.round() eliminates WebGL sub-pixel anti-aliasing gaps.
+    // 2. The -1 micro-offset pulls the cube diagonally up/left to counteract 
+    //    the visual "height bleed" of the isometric projection, bringing the 
+    //    Front/Left/Right edges back onto the tile without ruining the Back.
+    renderX = Math.round(renderX) - 1;
+    renderY = Math.round(renderY) - 1;
     
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
     const cubeHeight = playerHeight * 2.0;

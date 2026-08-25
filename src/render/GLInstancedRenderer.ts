@@ -3,6 +3,7 @@ import { PLAYER_ID } from '../config/Constants';
 import { FloorConfig } from '../config/FloorMap';
 import { MAP_TILE_DATA, getCurrentMapCols, getCurrentMapRows } from '../config/MapData';
 import { CELL_SIZE } from '../config/Constants';
+import { debug } from '../utils/DebugTools';
 
 // Vertex Shader Source - isometric transformation with cube extrusion
 const VS_SOURCE = `#version 300 es
@@ -549,17 +550,47 @@ export class GLInstancedRenderer {
     // Structural variables for bounding box math
     const pX = worldAny.px[PLAYER_ID];
     const pY = worldAny.py[PLAYER_ID];
-    const pW = worldAny.width[PLAYER_ID];
-    const pH = worldAny.height[PLAYER_ID];
+    const pW = worldAny.width[PLAYER_ID]; // 32
+    const pH = worldAny.height[PLAYER_ID]; // 32
 
-    // TUNING CONTROLS (Tweak these multipliers/dividers during testing)
-    const MULT_W = 0.5; // Controls width influence on X offset
-    const MULT_H = 0.5; // Controls height influence on Y offset
-    const DIV_CELL = 2; // Controls CELL_SIZE division factor
+    // Base alignment (proven to target Top-Left corner based on shader trace)
+    const MULT_W = 0.5;
+    const MULT_H = 0.5;
+    const DIV_CELL = 2.0;
 
-    // Calculated offsets
-    const renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
-    const renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
+    let renderX = pX + (pW * MULT_W) - (CELL_SIZE / DIV_CELL);
+    let renderY = pY + (pH * MULT_H) - (CELL_SIZE / DIV_CELL);
+
+    // THE FIX: 
+    // 1. Math.round() eliminates WebGL sub-pixel anti-aliasing gaps.
+    // 2. The -1 micro-offset pulls the cube diagonally up/left to counteract 
+    //    the visual "height bleed" of the isometric projection, bringing the \n    //    Front/Left/Right edges back onto the tile without ruining the Back.
+    renderX = Math.round(renderX) - 1;
+    renderY = Math.round(renderY) - 1;
+    
+    // --- DEBUG LOG START ---
+    // Only log if player is moving to prevent spam
+    const vx = worldAny.vx ? worldAny.vx[PLAYER_ID] : 0;
+    const vy = worldAny.vy ? worldAny.vy[PLAYER_ID] : 0;
+    
+    if (debug.isDebugEnabled && (vx !== 0 || vy !== 0)) {
+      const physCX = pX + (pW * 0.5);
+      const physCY = pY + (pH * 0.5);
+      
+      // Visual center based on the rendered quad size (CELL_SIZE)
+      const visCX = renderX + (CELL_SIZE * 0.5);
+      const visCY = renderY + (CELL_SIZE * 0.5);
+      
+      const deltaX = visCX - physCX;
+      const deltaY = visCY - physCY;
+
+      debug.log('RENDER DRIFT', 
+        `PhysCenter: (${physCX.toFixed(2)}, ${physCY.toFixed(2)}) | ` +
+        `VisCenter: (${visCX.toFixed(2)}, ${visCY.toFixed(2)}) | ` +
+        `Delta: (${deltaX.toFixed(2)}, ${deltaY.toFixed(2)})`
+      );
+    }
+    // --- DEBUG LOG END ---
     
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
     const cubeHeight = playerHeight * 2.0;

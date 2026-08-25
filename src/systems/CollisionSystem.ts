@@ -11,6 +11,7 @@ type World = {
 
 import { getCurrentWorldWidth, getCurrentWorldHeight, getCurrentMapRows, getCurrentMapCols } from '../config/MapData';
 import { isTileBlocking, TILE_SIZE } from '../config/MapData';
+import { debug } from '../utils/DebugTools';
 
 export class CollisionSystem {
   public update(world: World, dt: number, playerId: number = 0): void {
@@ -117,6 +118,20 @@ export class CollisionSystem {
         break;
       }
     }
+
+    // --- DEBUG LOG START ---
+    if (hasCollision && debug.isDebugEnabled) {
+      const footLeftDebug = nextX + (width * 0.2);
+      const footRightDebug = nextX + (width * 0.8);
+      const footTopDebug = nextY + (height * 0.75);
+      const footBottomDebug = nextY + height;
+      
+      // Floor validity check at next position
+      const floorValid = this.isBaseOnValidFloor(nextX, nextY, width, height);
+
+      debug.log('COLLISION', `NextPos: (${nextX.toFixed(2)}, ${nextY.toFixed(2)}) | Footprint: L:${footLeftDebug.toFixed(0)} R:${footRightDebug.toFixed(0)} T:${footTopDebug.toFixed(0)} B:${footBottomDebug.toFixed(0)} | FloorValid: ${floorValid}`);
+    }
+    // --- DEBUG LOG END ---
 
     // Simple slide: if collision detected, try axis-separated sliding
     if (hasCollision) {

@@ -547,10 +547,9 @@ export class GLInstancedRenderer {
     const playerHeight = worldAny.height[PLAYER_ID];
     
     // Calculate render Y offset to anchor the sprite base to the tile bottom
-    // renderY = worldY - (entityHeight - tileHeight) ensures the bottom base
-    // of the red block rests strictly inside the 32x32 physics cell
-    // TEST: Hardcode large offset to verify renderY is being used
-    const renderY = worldAny.py[PLAYER_ID] - 100;
+    // renderY = worldY - CELL_SIZE ensures the bottom base of the red block
+    // rests strictly inside the 32x32 physics cell (aligns visual with collision)
+    const renderY = worldAny.py[PLAYER_ID] - CELL_SIZE;
     
     // Pack single player entity: px, py, width, height, cubeHeight, rotation, elevation
     const cubeHeight = playerHeight * 2.0;
